@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="WarMap is a prototype strike-map dashboard with synchronized timeline, filters, leadership tracking, and source-aware event records."
+    />
+    <title>WarMap Strike Dashboard</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="WarMap home">
+          <span class="brand-mark">WM</span>
+          <span>
+            <strong>WarMap</strong>
+            <small>Regional strike intelligence prototype</small>
+          </span>
+        </a>
+        <div class="snapshot-strip" id="snapshotStrip" aria-live="polite"></div>
+        <nav class="top-actions" aria-label="Dashboard actions">
+          <button class="ghost-button" id="shareButton" type="button">Share</button>
+          <button class="ghost-button" id="briefButton" type="button">Brief</button>
+          <button class="ghost-button" id="infoButton" type="button">Info</button>
+          <a class="primary-button" href="/embed.html">Embed</a>
+        </nav>
+      </header>
+
+      <main class="workspace">
+        <aside class="control-panel" aria-label="Strike map controls">
+          <section class="module selected-module" aria-labelledby="selectedTitle">
+            <div class="module-heading">
+              <span>Selected event</span>
+              <span id="timelineIndex">Event 1 / 29</span>
+            </div>
+            <div id="eventCard" class="event-card"></div>
+            <div class="timeline-controls" aria-label="Timeline controls">
+              <button class="icon-button" id="previousEvent" type="button" title="Previous event">Prev</button>
+              <button class="icon-button" id="nextEvent" type="button" title="Next event">Next</button>
+              <button class="icon-button" data-delay="5000" type="button">5s</button>
+              <button class="icon-button is-active" data-delay="8000" type="button">8s</button>
+              <button class="icon-button" data-delay="12000" type="button">12s</button>
+              <button class="icon-button" id="pauseTimeline" type="button">Pause</button>
+            </div>
+          </section>
+
+          <section class="module" aria-labelledby="layersTitle">
+            <div class="module-heading">
+              <span id="layersTitle">Layers</span>
+              <span>Live UI</span>
+            </div>
+            <div class="toggle-grid">
+              <label><input type="checkbox" data-layer="strikes" checked /> Strikes</label>
+              <label><input type="checkbox" data-layer="assets" checked /> Assets</label>
+              <label><input type="checkbox" data-layer="feed" checked /> Feed</label>
+              <label><input type="checkbox" data-layer="leaders" checked /> Leaders</label>
+              <label><input type="checkbox" id="videoOnlyToggle" /> Video only</label>
+              <label><input type="checkbox" id="heatToggle" /> Heat</label>
+            </div>
+            <div class="filter-block">
+              <span class="filter-label">Filter by striker</span>
+              <div class="segmented-control" aria-label="Striker filters">
+                <button type="button" class="is-active" data-striker="us">US</button>
+                <button type="button" class="is-active" data-striker="israel">Israel</button>
+                <button type="button" class="is-active" data-striker="joint">Joint</button>
+                <button type="button" class="is-active" data-striker="iran">Iran</button>
+              </div>
+            </div>
+            <label class="search-row" for="eventSearch">
+              <span>Search</span>
+              <input id="eventSearch" type="search" placeholder="City, target, source" autocomplete="off" />
+            </label>
+          </section>
+
+          <section class="module event-list-module" aria-labelledby="confirmedEventsTitle">
+            <div class="module-heading">
+              <span id="confirmedEventsTitle">Confirmed events</span>
+              <span id="visibleCount">0 visible</span>
+            </div>
+            <div class="event-list" id="eventList"></div>
+          </section>
+        </aside>
+
+        <section class="map-stage" aria-label="Interactive regional map">
+          <div id="map"></div>
+          <div class="map-hud" id="mapHud"></div>
+          <div class="legend-panel" aria-label="Map legend">
+            <div class="legend-title">Map legend</div>
+            <div class="legend-grid" id="legendGrid"></div>
+          </div>
+        </section>
+
+        <aside class="intel-panel" aria-label="Leadership and asset intelligence">
+          <section class="module leaders-module" id="leadersModule" aria-labelledby="leadersTitle">
+            <div class="module-heading">
+              <span id="leadersTitle">Leadership tracker</span>
+              <span>Entity layer</span>
+            </div>
+            <div id="leaderList" class="leader-list"></div>
+          </section>
+          <section class="module assets-module" aria-labelledby="assetsTitle">
+            <div class="module-heading">
+              <span id="assetsTitle">US assets</span>
+              <span>Approximate</span>
+            </div>
+            <div id="assetList" class="asset-list"></div>
+          </section>
+          <section class="module feed-module" id="feedModule" aria-labelledby="feedTitle">
+            <div class="module-heading">
+              <span id="feedTitle">Activity feed</span>
+              <span>Snapshot</span>
+            </div>
+            <ol id="activityFeed" class="activity-feed"></ol>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <dialog id="briefDialog">
+      <article class="dialog-card">
+        <button class="dialog-close" type="button" data-close-dialog>Close</button>
+        <h2>Situation briefing</h2>
+        <div id="briefingContent"></div>
+      </article>
+    </dialog>
+
+    <dialog id="infoDialog">
+      <article class="dialog-card">
+        <button class="dialog-close" type="button" data-close-dialog>Close</button>
+        <h2>How to read this map</h2>
+        <div class="info-copy">
+          <p>Each marker combines a striker label with a target-type dot. Pulsing markers represent the active recent window in this prototype.</p>
+          <p>Confidence and source metadata are part of every event record so the map can later be backed by an editorial review flow.</p>
+          <p class="prototype-note">Prototype seed data is for implementation testing only. Replace it with vetted reporting before public use.</p>
+        </div>
+      </article>
+    </dialog>
+
+    <dialog id="shareDialog">
+      <article class="dialog-card">
+        <button class="dialog-close" type="button" data-close-dialog>Close</button>
+        <h2>Share snapshot</h2>
+        <p id="shareText"></p>
+        <button class="primary-button" id="copyShareLink" type="button">Copy link</button>
+      </article>
+    </dialog>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>
