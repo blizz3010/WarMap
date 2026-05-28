@@ -1,581 +1,512 @@
 import {
-  assets,
-  briefing,
+  categories,
   events,
-  leaders,
-  strikerLabels,
-  strikeEventCollection,
-  targetTypes
+  regions,
+  severities,
+  sourceTypes,
+  verificationStates
 } from "./data.js";
 
-const confidenceWeights = {
-  high: 1,
-  medium: 0.65,
-  low: 0.35
-};
-
-const statusLabels = {
-  alive: "Alive",
-  unknown: "Unknown",
-  eliminated: "Eliminated",
-  fled: "Fled"
-};
-
 const state = {
-  selectedEventId: events[0]?.id ?? null,
-  strikers: new Set(["us", "israel", "joint", "iran"]),
-  layers: {
-    strikes: true,
-    assets: true,
-    feed: true,
-    leaders: true
-  },
-  heat: false,
-  videoOnly: false,
+  regionId: "iran",
+  selectedEventId: events[0].id,
   search: "",
-  playTimer: null,
-  playIndex: 0,
-  timelineDelayMs: 8000
+  verifiedOnly: true,
+  officialOnly: false,
+  mediaOnly: false,
+  viewportOnly: false,
+  paused: false,
+  timeRange: "6h",
+  categories: new Set(Object.keys(categories)),
+  severities: new Set(Object.keys(severities)),
+  sourceTypes: new Set(Object.keys(sourceTypes)),
+  markers: new Map()
 };
 
 const els = {
-  activityFeed: document.querySelector("#activityFeed"),
-  assetList: document.querySelector("#assetList"),
-  briefButton: document.querySelector("#briefButton"),
-  briefDialog: document.querySelector("#briefDialog"),
-  briefingContent: document.querySelector("#briefingContent"),
-  copyShareLink: document.querySelector("#copyShareLink"),
-  eventCard: document.querySelector("#eventCard"),
-  eventList: document.querySelector("#eventList"),
-  eventSearch: document.querySelector("#eventSearch"),
-  feedModule: document.querySelector("#feedModule"),
-  heatToggle: document.querySelector("#heatToggle"),
-  infoButton: document.querySelector("#infoButton"),
-  infoDialog: document.querySelector("#infoDialog"),
-  leaderList: document.querySelector("#leaderList"),
-  leadersModule: document.querySelector("#leadersModule"),
-  mapHud: document.querySelector("#mapHud"),
-  nextEvent: document.querySelector("#nextEvent"),
-  pauseTimeline: document.querySelector("#pauseTimeline"),
-  previousEvent: document.querySelector("#previousEvent"),
-  shareButton: document.querySelector("#shareButton"),
-  shareDialog: document.querySelector("#shareDialog"),
-  shareText: document.querySelector("#shareText"),
-  snapshotStrip: document.querySelector("#snapshotStrip"),
-  timelineIndex: document.querySelector("#timelineIndex"),
-  videoOnlyToggle: document.querySelector("#videoOnlyToggle"),
-  visibleCount: document.querySelector("#visibleCount")
+  categoryFilters: document.querySelector("#categoryFilters"),
+  clustersToggle: document.querySelector("#clustersToggle"),
+  detailDrawer: document.querySelector("#detailDrawer"),
+  feedList: document.querySelector("#feedList"),
+  fitEvents: document.querySelector("#fitEvents"),
+  globalSearch: document.querySelector("#globalSearch"),
+  locateRegion: document.querySelector("#locateRegion"),
+  mapVisibleCount: document.querySelector("#mapVisibleCount"),
+  mediaCount: document.querySelector("#mediaCount"),
+  mediaOnlyToggle: document.querySelector("#mediaOnlyToggle"),
+  newEventsButton: document.querySelector("#newEventsButton"),
+  officialCount: document.querySelector("#officialCount"),
+  officialOnlyToggle: document.querySelector("#officialOnlyToggle"),
+  pauseStreamButton: document.querySelector("#pauseStreamButton"),
+  regionSelect: document.querySelector("#regionSelect"),
+  resetFilters: document.querySelector("#resetFilters"),
+  severityFilters: document.querySelector("#severityFilters"),
+  sourceFilters: document.querySelector("#sourceFilters"),
+  streamStatus: document.querySelector("#streamStatus"),
+  timeRange: document.querySelector("#timeRange"),
+  updatedAt: document.querySelector("#updatedAt"),
+  verifiedCount: document.querySelector("#verifiedCount"),
+  verifiedOnlyToggle: document.querySelector("#verifiedOnlyToggle"),
+  viewportOnlyToggle: document.querySelector("#viewportOnlyToggle"),
+  zoomIn: document.querySelector("#zoomIn"),
+  zoomOut: document.querySelector("#zoomOut")
 };
 
-const layers = {
-  strikes: L.layerGroup(),
-  assets: L.layerGroup(),
-  heat: null
-};
-
-const markersById = new Map();
 let map;
 
 init();
 
 function init() {
-  map = L.map("map", {
-    center: [31.8, 52.4],
-    zoom: 5,
-    minZoom: 3,
-    maxZoom: 12,
-    zoomControl: false,
-    preferCanvas: true
+  renderFilterControls();
+  renderRegionOptions();
+  bindControls();
+  initMap();
+  updateCounts();
+  render();
+}
+
+function initMap() {
+  const region = currentRegion();
+  map = new maplibregl.Map({
+    container: "map",
+    style: buildStyle("dark"),
+    center: region.center,
+    zoom: region.zoom,
+    attributionControl: false
   });
 
-  L.control.zoom({ position: "bottomright" }).addTo(map);
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+  map.on("moveend", () => {
+    if (state.viewportOnly) {
+      render();
+    }
+  });
 
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19,
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }).addTo(map);
+  map.on("load", () => {
+    fitToRegion(false);
+    render();
+  });
+}
 
-  layers.strikes.addTo(map);
-  layers.assets.addTo(map);
+function buildStyle(theme) {
+  const rasterTiles = {
+    dark: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    light: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+    satellite: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+  };
 
-  bindControls();
-  renderStaticPanels();
-  renderAll();
-  selectEvent(state.selectedEventId, false);
+  return {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: [rasterTiles[theme] ?? rasterTiles.dark],
+        tileSize: 256,
+        attribution: "OpenStreetMap contributors, CARTO"
+      }
+    },
+    layers: [
+      {
+        id: "base",
+        type: "raster",
+        source: "base",
+        minzoom: 0,
+        maxzoom: 19
+      }
+    ]
+  };
+}
+
+function renderRegionOptions() {
+  els.regionSelect.innerHTML = regions
+    .map((region) => `<option value="${region.id}">${region.name}</option>`)
+    .join("");
+  els.regionSelect.value = state.regionId;
+}
+
+function renderFilterControls() {
+  els.sourceFilters.innerHTML = Object.entries(sourceTypes)
+    .map(([key, label]) => filterLabel("source-type", key, label, countBy("sourceType", key)))
+    .join("");
+
+  els.severityFilters.innerHTML = Object.entries(severities)
+    .map(([key, severity]) => filterLabel("severity", key, severity.label, countBy("severity", key), severity.color))
+    .join("");
+
+  els.categoryFilters.innerHTML = Object.entries(categories)
+    .map(([key, category]) => filterLabel("category", key, category.label, countBy("category", key), category.color))
+    .join("");
+}
+
+function filterLabel(kind, key, label, count, color) {
+  return `
+    <label>
+      <input type="checkbox" data-filter-kind="${kind}" data-filter-key="${key}" checked />
+      <span class="legend-swatch" style="--swatch:${color ?? "#64748b"}"></span>
+      ${label}
+      <span>${count}</span>
+    </label>
+  `;
 }
 
 function bindControls() {
-  document.querySelectorAll("[data-striker]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const striker = button.dataset.striker;
-      if (state.strikers.has(striker)) {
-        state.strikers.delete(striker);
-        button.classList.remove("is-active");
-      } else {
-        state.strikers.add(striker);
-        button.classList.add("is-active");
-      }
-      renderAll();
-    });
+  els.globalSearch.addEventListener("input", () => {
+    state.search = els.globalSearch.value.trim().toLowerCase();
+    render();
   });
 
-  document.querySelectorAll("[data-layer]").forEach((input) => {
+  els.verifiedOnlyToggle.addEventListener("change", () => {
+    state.verifiedOnly = els.verifiedOnlyToggle.checked;
+    render();
+  });
+
+  els.officialOnlyToggle.addEventListener("change", () => {
+    state.officialOnly = els.officialOnlyToggle.checked;
+    render();
+  });
+
+  els.mediaOnlyToggle.addEventListener("change", () => {
+    state.mediaOnly = els.mediaOnlyToggle.checked;
+    render();
+  });
+
+  els.viewportOnlyToggle.addEventListener("change", () => {
+    state.viewportOnly = els.viewportOnlyToggle.checked;
+    render();
+  });
+
+  els.pauseStreamButton.addEventListener("click", () => {
+    state.paused = !state.paused;
+    els.pauseStreamButton.textContent = state.paused ? "Resume" : "Pause";
+    els.pauseStreamButton.setAttribute("aria-pressed", String(state.paused));
+    els.streamStatus.textContent = state.paused ? "Auto-update paused" : "Updates in real-time";
+  });
+
+  els.resetFilters.addEventListener("click", resetFilters);
+  els.timeRange.addEventListener("change", () => {
+    state.timeRange = els.timeRange.value;
+    render();
+  });
+
+  els.regionSelect.addEventListener("change", () => {
+    state.regionId = els.regionSelect.value;
+    fitToRegion(true);
+    render();
+  });
+
+  els.zoomIn.addEventListener("click", () => map.zoomIn());
+  els.zoomOut.addEventListener("click", () => map.zoomOut());
+  els.locateRegion.addEventListener("click", () => fitToRegion(true));
+  els.fitEvents.addEventListener("click", () => fitVisibleEvents());
+  els.newEventsButton.addEventListener("click", () => {
+    state.selectedEventId = filteredEvents(false)[0]?.id ?? state.selectedEventId;
+    render();
+  });
+
+  document.querySelectorAll("[data-filter-kind]").forEach((input) => {
     input.addEventListener("change", () => {
-      state.layers[input.dataset.layer] = input.checked;
-      renderAll();
+      const set = setForFilterKind(input.dataset.filterKind);
+      if (input.checked) {
+        set.add(input.dataset.filterKey);
+      } else {
+        set.delete(input.dataset.filterKey);
+      }
+      render();
     });
   });
 
-  document.querySelectorAll("[data-delay]").forEach((button) => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll("[data-delay]").forEach((item) => item.classList.remove("is-active"));
-      button.classList.add("is-active");
-      startTimeline(Number(button.dataset.delay));
+  document.querySelectorAll("input[name='basemap']").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        map.setStyle(buildStyle(input.value));
+      }
     });
   });
-
-  els.heatToggle.addEventListener("change", () => {
-    state.heat = els.heatToggle.checked;
-    renderAll();
-  });
-
-  els.videoOnlyToggle.addEventListener("change", () => {
-    state.videoOnly = els.videoOnlyToggle.checked;
-    renderAll();
-  });
-
-  els.eventSearch.addEventListener("input", () => {
-    state.search = els.eventSearch.value.trim().toLowerCase();
-    renderAll();
-  });
-
-  els.nextEvent.addEventListener("click", () => stepEvent(1));
-  els.previousEvent.addEventListener("click", () => stepEvent(-1));
-  els.pauseTimeline.addEventListener("click", stopTimeline);
-  els.briefButton.addEventListener("click", () => els.briefDialog.showModal());
-  els.infoButton.addEventListener("click", () => els.infoDialog.showModal());
-  els.shareButton.addEventListener("click", openShareDialog);
-
-  document.querySelectorAll("[data-close-dialog]").forEach((button) => {
-    button.addEventListener("click", () => button.closest("dialog").close());
-  });
-
-  els.copyShareLink.addEventListener("click", async () => {
-    await navigator.clipboard?.writeText(window.location.href);
-    els.copyShareLink.textContent = "Copied";
-    window.setTimeout(() => {
-      els.copyShareLink.textContent = "Copy link";
-    }, 1600);
-  });
 }
 
-function renderStaticPanels() {
-  const eventCount = events.length;
-  const videoCount = events.filter((feature) => feature.properties.hasVideo).length;
-  const recentCount = events.filter((feature) => feature.properties.last6h).length;
+function render() {
+  const visible = filteredEvents(true);
+  if (visible.length && !visible.some((item) => item.id === state.selectedEventId)) {
+    state.selectedEventId = visible[0].id;
+  }
 
-  els.snapshotStrip.innerHTML = `
-    <span><strong>${eventCount}</strong> events</span>
-    <span><strong>${videoCount}</strong> video-linked</span>
-    <span><strong>${recentCount}</strong> active-window</span>
-    <span><strong>${assets.length}</strong> assets</span>
-  `;
-
-  document.querySelector("#legendGrid").innerHTML = Object.entries(targetTypes)
-    .map(
-      ([key, type]) => `
-        <div class="legend-row">
-          <span class="legend-dot target-${key}"></span>
-          <span>${type.label}</span>
-        </div>
-      `
-    )
-    .join("");
-
-  els.leaderList.innerHTML = leaders.map(renderLeader).join("");
-  els.assetList.innerHTML = assets.map(renderAssetRow).join("");
-  els.briefingContent.innerHTML = briefing
-    .map(
-      (item) => `
-        <section>
-          <h3>${item.title}</h3>
-          <p>${item.body}</p>
-        </section>
-      `
-    )
-    .join("");
+  renderMarkers(visible);
+  renderFeed(visible);
+  renderDetail();
+  updateCounts();
+  els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${events.length.toLocaleString()} events`;
+  els.updatedAt.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function renderAll() {
-  const visible = visibleEvents();
-  renderStrikeLayer(visible);
-  renderAssetLayer();
-  renderHeatLayer(visible);
-  renderEventList(visible);
-  renderActivityFeed(visible);
-  renderLayerVisibility();
-  renderHud(visible);
-  ensureSelectionIsVisible(visible);
-}
+function filteredEvents(applyViewport) {
+  const bounds = map && applyViewport && state.viewportOnly ? map.getBounds() : null;
+  return events.filter((item) => {
+    const sourceTypeMatch = item.sources.some((source) => state.sourceTypes.has(source.type));
+    const officialMatch = !state.officialOnly || item.sources.some((source) => source.type === "official");
+    const verifiedMatch = !state.verifiedOnly || ["verified", "official", "corroborated"].includes(item.verification);
+    const mediaMatch = !state.mediaOnly || Boolean(item.media);
+    const viewportMatch = !bounds || bounds.contains([item.location.lon, item.location.lat]);
+    const searchMatch =
+      !state.search ||
+      `${item.title} ${item.summary} ${item.place} ${item.province} ${item.sources.map((source) => source.name).join(" ")}`
+        .toLowerCase()
+        .includes(state.search);
 
-function visibleEvents() {
-  return events.filter((feature) => {
-    const props = feature.properties;
-    const sourceText = props.sources.map((source) => source.label).join(" ");
-    const haystack = `${props.title} ${props.city} ${props.description} ${sourceText}`.toLowerCase();
     return (
-      state.strikers.has(props.striker) &&
-      (!state.videoOnly || props.hasVideo) &&
-      (!state.search || haystack.includes(state.search))
+      state.categories.has(item.category) &&
+      state.severities.has(item.severity) &&
+      sourceTypeMatch &&
+      officialMatch &&
+      verifiedMatch &&
+      mediaMatch &&
+      viewportMatch &&
+      searchMatch
     );
   });
 }
 
-function renderStrikeLayer(visible) {
-  layers.strikes.clearLayers();
-  markersById.clear();
+function renderMarkers(visible) {
+  const visibleIds = new Set(visible.map((item) => item.id));
 
-  if (!state.layers.strikes) {
-    return;
-  }
-
-  visible.forEach((feature) => {
-    const [lng, lat] = feature.geometry.coordinates;
-    const marker = L.marker([lat, lng], {
-      icon: strikeIcon(feature, feature.id === state.selectedEventId),
-      keyboard: true,
-      title: `${feature.properties.city}: ${feature.properties.title}`
-    });
-
-    marker.on("click", () => selectEvent(feature.id, true));
-    marker.bindTooltip(`${feature.properties.city}: ${feature.properties.title}`, {
-      direction: "top",
-      opacity: 0.92
-    });
-
-    marker.addTo(layers.strikes);
-    markersById.set(feature.id, marker);
-  });
-}
-
-function renderAssetLayer() {
-  layers.assets.clearLayers();
-
-  if (!state.layers.assets) {
-    return;
-  }
-
-  assets.forEach((asset) => {
-    const [lng, lat] = asset.coordinates;
-    L.marker([lat, lng], {
-      icon: assetIcon(),
-      title: asset.name
-    })
-      .bindTooltip(`${asset.name} - ${asset.location}`, {
-        direction: "top",
-        opacity: 0.92
-      })
-      .addTo(layers.assets);
-  });
-}
-
-function renderHeatLayer(visible) {
-  if (!window.L.heatLayer) {
-    return;
-  }
-
-  if (layers.heat) {
-    map.removeLayer(layers.heat);
-    layers.heat = null;
-  }
-
-  if (!state.heat) {
-    return;
-  }
-
-  const heatPoints = visible.map((feature) => {
-    const [lng, lat] = feature.geometry.coordinates;
-    const weight = confidenceWeights[feature.properties.confidence] ?? 0.5;
-    return [lat, lng, weight];
-  });
-
-  layers.heat = L.heatLayer(heatPoints, {
-    radius: 28,
-    blur: 22,
-    maxZoom: 9,
-    gradient: {
-      0.2: "#4da3ff",
-      0.45: "#f6d860",
-      0.75: "#f6a623",
-      1: "#f05252"
+  for (const [id, marker] of state.markers) {
+    if (!visibleIds.has(id)) {
+      marker.remove();
+      state.markers.delete(id);
     }
-  }).addTo(map);
+  }
+
+  visible.forEach((item) => {
+    if (state.markers.has(item.id)) {
+      updateMarkerClass(item);
+      return;
+    }
+
+    const markerNode = document.createElement("button");
+    markerNode.type = "button";
+    markerNode.className = markerClass(item);
+    markerNode.style.setProperty("--marker-color", categories[item.category].color);
+    markerNode.innerHTML = `<span>${categories[item.category].short}</span>`;
+    markerNode.title = `${item.place}: ${item.title}`;
+    markerNode.addEventListener("click", () => selectEvent(item.id, false));
+
+    const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
+      .setLngLat([item.location.lon, item.location.lat])
+      .addTo(map);
+
+    state.markers.set(item.id, marker);
+  });
 }
 
-function renderEventList(visible) {
-  els.visibleCount.textContent = `${visible.length} visible`;
-  els.eventList.innerHTML = visible
-    .map((feature, index) => {
-      const props = feature.properties;
-      const active = feature.id === state.selectedEventId ? "is-active" : "";
+function updateMarkerClass(item) {
+  const marker = state.markers.get(item.id);
+  if (marker) {
+    marker.getElement().className = markerClass(item);
+  }
+}
+
+function markerClass(item) {
+  return [
+    "incident-marker",
+    `severity-${item.severity}`,
+    item.id === state.selectedEventId ? "is-selected" : "",
+    item.verification === "reported" ? "is-reported" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function renderFeed(visible) {
+  els.feedList.innerHTML = visible
+    .map((item) => {
+      const category = categories[item.category];
+      const severity = severities[item.severity];
       return `
-        <button class="event-row ${active}" type="button" data-event-id="${feature.id}">
-          <span class="event-row-index">${String(index + 1).padStart(2, "0")}</span>
-          <span class="event-row-main">
-            <strong>${props.title}</strong>
-            <small>${props.city} - ${props.displayTime}</small>
-          </span>
-          <span class="event-row-badge target-${props.targetType}">${strikerLabels[props.striker]}</span>
-        </button>
+        <article class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}" style="--card-color:${category.color}">
+          <button type="button" data-event-id="${item.id}" class="feed-card-button">
+            <time>${item.timeLabel}<span>${item.relativeTime}</span></time>
+            <div class="feed-card-body">
+              <div class="place-line">
+                <span>${item.place}, ${item.province}</span>
+                <small>${verificationStates[item.verification]}</small>
+              </div>
+              <h3>${item.title}</h3>
+              <p>${item.summary}</p>
+              <div class="feed-meta">
+                <span style="color:${category.color}">${category.label}</span>
+                <span style="color:${severity.color}">${severity.label}</span>
+                <span>${item.sourceCount} sources</span>
+              </div>
+            </div>
+            ${item.media ? renderMediaThumb(item) : ""}
+            <span class="save-marker" aria-hidden="true"></span>
+          </button>
+        </article>
       `;
     })
     .join("");
 
-  els.eventList.querySelectorAll("[data-event-id]").forEach((row) => {
-    row.addEventListener("click", () => selectEvent(row.dataset.eventId, true));
+  els.feedList.querySelectorAll("[data-event-id]").forEach((button) => {
+    button.addEventListener("click", () => selectEvent(button.dataset.eventId, true));
   });
 }
 
-function renderActivityFeed(visible) {
-  els.activityFeed.innerHTML = visible
-    .slice(0, 8)
-    .map(
-      (feature) => `
-        <li>
-          <span>${feature.properties.displayTime}</span>
-          <button type="button" data-feed-event="${feature.id}">${feature.properties.city}: ${feature.properties.title}</button>
-        </li>
-      `
-    )
-    .join("");
-
-  els.activityFeed.querySelectorAll("[data-feed-event]").forEach((button) => {
-    button.addEventListener("click", () => selectEvent(button.dataset.feedEvent, true));
-  });
-}
-
-function renderLayerVisibility() {
-  if (state.layers.strikes && !map.hasLayer(layers.strikes)) {
-    layers.strikes.addTo(map);
-  }
-
-  if (!state.layers.strikes && map.hasLayer(layers.strikes)) {
-    map.removeLayer(layers.strikes);
-  }
-
-  if (state.layers.assets && !map.hasLayer(layers.assets)) {
-    layers.assets.addTo(map);
-  }
-
-  if (!state.layers.assets && map.hasLayer(layers.assets)) {
-    map.removeLayer(layers.assets);
-  }
-
-  els.feedModule.hidden = !state.layers.feed;
-  els.leadersModule.hidden = !state.layers.leaders;
-}
-
-function renderHud(visible) {
-  const targetCounts = visible.reduce((acc, feature) => {
-    acc[feature.properties.targetType] = (acc[feature.properties.targetType] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  els.mapHud.innerHTML = `
-    <span>Snapshot ${new Date(strikeEventCollection.meta.version).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
-    })}</span>
-    <span>${visible.length} mapped</span>
-    <span>${targetCounts.nuclear ?? 0} nuclear</span>
-    <span>${targetCounts.retaliation ?? 0} retaliation</span>
-  `;
-}
-
-function ensureSelectionIsVisible(visible) {
-  if (!visible.length) {
-    state.selectedEventId = null;
-    els.eventCard.innerHTML = `<p class="empty-state">No events match the current filters.</p>`;
-    els.timelineIndex.textContent = "Event 0 / 0";
-    return;
-  }
-
-  if (!visible.some((feature) => feature.id === state.selectedEventId)) {
-    selectEvent(visible[0].id, false);
-  } else {
-    renderSelectedEvent();
-  }
-}
-
-function selectEvent(eventId, flyTo) {
-  if (!eventId) {
-    return;
-  }
-
-  const feature = events.find((item) => item.id === eventId);
-  if (!feature) {
-    return;
-  }
-
-  state.selectedEventId = eventId;
-  const visible = visibleEvents();
-  state.playIndex = Math.max(0, visible.findIndex((item) => item.id === eventId));
-
-  if (flyTo) {
-    const [lng, lat] = feature.geometry.coordinates;
-    map.flyTo([lat, lng], Math.max(map.getZoom(), 6), { duration: 0.65 });
-  }
-
-  renderStrikeLayer(visible);
-  renderEventList(visible);
-  renderSelectedEvent();
-}
-
-function renderSelectedEvent() {
-  const feature = events.find((item) => item.id === state.selectedEventId);
-  const visible = visibleEvents();
-  if (!feature) {
-    return;
-  }
-
-  const props = feature.properties;
-  const index = visible.findIndex((item) => item.id === feature.id);
-  els.timelineIndex.textContent = `Event ${index + 1} / ${visible.length}`;
-  els.eventCard.innerHTML = `
-    <div class="event-kicker">${props.city}</div>
-    <h1 id="selectedTitle">${props.title}</h1>
-    <div class="event-meta">
-      <span>${props.displayTime}</span>
-      <span>${strikerLabels[props.striker]} strike</span>
-      <span class="confidence confidence-${props.confidence}">${props.confidence}</span>
-    </div>
-    <p>${props.description}</p>
-    <div class="detail-grid">
-      <span>Target type</span><strong>${targetTypes[props.targetType].label}</strong>
-      <span>Casualties</span><strong>${formatCasualties(props.casualties)}</strong>
-      <span>Video</span><strong>${props.hasVideo ? "Linked" : "None"}</strong>
-      <span>Coordinates</span><strong>${feature.geometry.coordinates[1].toFixed(3)}, ${feature.geometry.coordinates[0].toFixed(3)}</strong>
-    </div>
-    <div class="source-list">
-      ${props.sources
-        .map((source) =>
-          source.url
-            ? `<a href="${source.url}" target="_blank" rel="noreferrer">${source.label}</a>`
-            : `<span>${source.label}</span>`
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function stepEvent(direction) {
-  const visible = visibleEvents();
-  if (!visible.length) {
-    return;
-  }
-
-  const currentIndex = Math.max(0, visible.findIndex((feature) => feature.id === state.selectedEventId));
-  const nextIndex = (currentIndex + direction + visible.length) % visible.length;
-  selectEvent(visible[nextIndex].id, true);
-}
-
-function startTimeline(delayMs) {
-  stopTimeline();
-  state.timelineDelayMs = delayMs;
-  els.pauseTimeline.textContent = "Pause";
-
-  state.playTimer = window.setInterval(() => {
-    const visible = visibleEvents();
-    if (!visible.length) {
-      stopTimeline();
-      return;
-    }
-    state.playIndex = (state.playIndex + 1) % visible.length;
-    selectEvent(visible[state.playIndex].id, true);
-  }, delayMs);
-}
-
-function stopTimeline() {
-  if (state.playTimer) {
-    window.clearInterval(state.playTimer);
-  }
-  state.playTimer = null;
-  els.pauseTimeline.textContent = "Paused";
-}
-
-function strikeIcon(feature, selected) {
-  const props = feature.properties;
-  const pulse = props.last6h ? "is-pulsing" : "";
-  const active = selected ? "is-selected" : "";
-  return L.divIcon({
-    className: "strike-icon-root",
-    iconSize: [44, 48],
-    iconAnchor: [22, 34],
-    html: `
-      <div class="strike-pin ${pulse} ${active}">
-        <span class="strike-label">${strikerLabels[props.striker] ?? "?"}</span>
-        <span class="strike-dot target-${props.targetType}"></span>
-      </div>
-    `
-  });
-}
-
-function assetIcon() {
-  return L.divIcon({
-    className: "asset-icon-root",
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    html: `<div class="asset-pin" aria-label="US asset">*</div>`
-  });
-}
-
-function renderLeader(leader) {
-  const initials = leader.name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
+function renderMediaThumb(item) {
   return `
-    <article class="leader-row">
-      <div class="leader-avatar">${initials}</div>
+    <div class="media-thumb media-${item.media.tone}" aria-label="${item.media.label}">
+      <span>${categories[item.category].short}</span>
+    </div>
+  `;
+}
+
+function renderDetail() {
+  const item = events.find((eventItem) => eventItem.id === state.selectedEventId);
+  if (!item) {
+    els.detailDrawer.innerHTML = `<p class="empty-state">No event selected.</p>`;
+    return;
+  }
+
+  const category = categories[item.category];
+  const severity = severities[item.severity];
+  els.detailDrawer.style.setProperty("--detail-color", category.color);
+  els.detailDrawer.innerHTML = `
+    <header class="detail-header">
       <div>
-        <strong>${leader.name}</strong>
-        <span>${leader.role}</span>
-        <small>${leader.organization}</small>
-        <p>${leader.summary}</p>
+        <time>${item.timeLabel}</time>
+        <h2>${item.title}</h2>
+        <span>${item.place}, ${item.province}</span>
       </div>
-      <span class="status-badge status-${leader.status}">${statusLabels[leader.status]}</span>
-    </article>
+      <button type="button" id="closeDetail">Close</button>
+    </header>
+    <nav class="detail-tabs" aria-label="Event detail tabs">
+      <button type="button" class="is-active">Details</button>
+      <button type="button">Sources (${item.sourceCount})</button>
+      <button type="button">Timeline</button>
+      <button type="button">Map</button>
+      <button type="button">Revisions (${item.updates.length})</button>
+    </nav>
+    <div class="detail-grid">
+      <section>
+        <h3>Summary</h3>
+        <p>${item.summary}</p>
+        <dl class="detail-facts">
+          <div><dt>Category</dt><dd style="color:${category.color}">${category.label}</dd></div>
+          <div><dt>Severity</dt><dd style="color:${severity.color}">${severity.label}</dd></div>
+          <div><dt>Confidence</dt><dd>${Math.round(item.confidence * 100)}%</dd></div>
+          <div><dt>Precision</dt><dd>${item.location.precision}</dd></div>
+        </dl>
+        <ol class="update-trail">
+          ${item.updates.map((update, index) => `<li><span>${index + 1}</span>${update}</li>`).join("")}
+        </ol>
+      </section>
+      <aside>
+        <h3>Verification</h3>
+        <div class="verification-badge">${verificationStates[item.verification]}</div>
+        <dl class="side-facts">
+          <div><dt>First seen</dt><dd>${formatDate(item.firstSeenAt)}</dd></div>
+          <div><dt>Last update</dt><dd>${formatDate(item.lastUpdatedAt)}</dd></div>
+          <div><dt>Location</dt><dd>${item.location.lat.toFixed(3)}, ${item.location.lon.toFixed(3)}</dd></div>
+        </dl>
+        <h3>Sources</h3>
+        <ul class="source-list">
+          ${item.sources.map((source) => `<li><strong>${source.name}</strong><span>${sourceTypes[source.type]} - ${source.trustTier}</span></li>`).join("")}
+        </ul>
+      </aside>
+    </div>
   `;
+
+  document.querySelector("#closeDetail")?.addEventListener("click", () => {
+    els.detailDrawer.classList.toggle("is-collapsed");
+  });
 }
 
-function renderAssetRow(asset) {
-  return `
-    <article class="asset-row">
-      <strong>${asset.name}</strong>
-      <span>${asset.type} - ${asset.location}</span>
-      <small>${asset.note}</small>
-    </article>
-  `;
-}
-
-function formatCasualties(casualties) {
-  if (casualties.killed == null && casualties.injured == null) {
-    return "Not stated";
+function selectEvent(eventId, panTo) {
+  state.selectedEventId = eventId;
+  const item = events.find((eventItem) => eventItem.id === eventId);
+  if (item && panTo) {
+    map.easeTo({
+      center: [item.location.lon, item.location.lat],
+      zoom: Math.max(map.getZoom(), 6.2),
+      duration: 600
+    });
   }
-  return `${casualties.killed ?? "?"} killed / ${casualties.injured ?? "?"} injured`;
+  render();
 }
 
-function openShareDialog() {
-  const visible = visibleEvents();
-  const selected = events.find((feature) => feature.id === state.selectedEventId);
-  els.shareText.textContent = selected
-    ? `${visible.length} mapped events visible. Selected: ${selected.properties.city} - ${selected.properties.title}.`
-    : `${visible.length} mapped events visible.`;
-  els.shareDialog.showModal();
+function resetFilters() {
+  state.search = "";
+  state.verifiedOnly = true;
+  state.officialOnly = false;
+  state.mediaOnly = false;
+  state.viewportOnly = false;
+  state.categories = new Set(Object.keys(categories));
+  state.severities = new Set(Object.keys(severities));
+  state.sourceTypes = new Set(Object.keys(sourceTypes));
+  els.globalSearch.value = "";
+  els.verifiedOnlyToggle.checked = true;
+  els.officialOnlyToggle.checked = false;
+  els.mediaOnlyToggle.checked = false;
+  els.viewportOnlyToggle.checked = false;
+  document.querySelectorAll("[data-filter-kind]").forEach((input) => {
+    input.checked = true;
+  });
+  render();
+}
+
+function fitToRegion(animated) {
+  const region = currentRegion();
+  map.fitBounds(
+    [
+      [region.bounds[0], region.bounds[1]],
+      [region.bounds[2], region.bounds[3]]
+    ],
+    { padding: 36, duration: animated ? 700 : 0 }
+  );
+}
+
+function fitVisibleEvents() {
+  const visible = filteredEvents(false);
+  if (!visible.length) {
+    fitToRegion(true);
+    return;
+  }
+
+  const bounds = new maplibregl.LngLatBounds();
+  visible.forEach((item) => bounds.extend([item.location.lon, item.location.lat]));
+  map.fitBounds(bounds, { padding: 74, maxZoom: 7.2, duration: 700 });
+}
+
+function currentRegion() {
+  return regions.find((region) => region.id === state.regionId) ?? regions[0];
+}
+
+function setForFilterKind(kind) {
+  if (kind === "category") return state.categories;
+  if (kind === "severity") return state.severities;
+  return state.sourceTypes;
+}
+
+function countBy(field, key) {
+  if (field === "sourceType") {
+    return events.filter((item) => item.sources.some((source) => source.type === key)).length;
+  }
+  return events.filter((item) => item[field] === key).length;
+}
+
+function updateCounts() {
+  els.verifiedCount.textContent = events.filter((item) =>
+    ["verified", "official", "corroborated"].includes(item.verification)
+  ).length;
+  els.officialCount.textContent = events.filter((item) =>
+    item.sources.some((source) => source.type === "official")
+  ).length;
+  els.mediaCount.textContent = events.filter((item) => item.media).length;
+}
+
+function formatDate(value) {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { assets, events, leaders, targetTypes } from "../src/data.js";
+import { categories, events, regions, severities, sourceTypes } from "../src/data.js";
 
 const requiredFiles = ["index.html", "embed.html", "src/app.js", "src/embed.js", "src/styles.css"];
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -11,32 +11,41 @@ for (const file of requiredFiles) {
 
 const ids = new Set();
 
-for (const feature of events) {
-  if (ids.has(feature.id)) {
-    throw new Error(`Duplicate event id: ${feature.id}`);
+for (const event of events) {
+  if (ids.has(event.id)) {
+    throw new Error(`Duplicate event id: ${event.id}`);
   }
-  ids.add(feature.id);
+  ids.add(event.id);
 
-  const [lng, lat] = feature.geometry.coordinates;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error(`Invalid coordinates for ${feature.id}`);
+  if (!categories[event.category]) {
+    throw new Error(`Unknown category for ${event.id}`);
   }
 
-  if (!targetTypes[feature.properties.targetType]) {
-    throw new Error(`Unknown target type for ${feature.id}`);
+  if (!severities[event.severity]) {
+    throw new Error(`Unknown severity for ${event.id}`);
+  }
+
+  if (!event.sources.length) {
+    throw new Error(`Event has no sources: ${event.id}`);
+  }
+
+  for (const source of event.sources) {
+    if (!sourceTypes[source.type]) {
+      throw new Error(`Unknown source type for ${event.id}: ${source.type}`);
+    }
+  }
+
+  if (!Number.isFinite(event.location.lat) || !Number.isFinite(event.location.lon)) {
+    throw new Error(`Invalid coordinates for ${event.id}`);
   }
 }
 
-if (events.length !== 29) {
-  throw new Error(`Expected 29 prototype timeline events, found ${events.length}`);
+if (events.length < 16) {
+  throw new Error(`Expected at least 16 live feed events, found ${events.length}`);
 }
 
-if (assets.length < 4) {
-  throw new Error("Expected at least four asset markers");
+if (regions.length < 3) {
+  throw new Error("Expected at least three region presets");
 }
 
-if (leaders.length < 8) {
-  throw new Error("Expected at least eight leader tracker entries");
-}
-
-console.log(`Static checks passed: ${events.length} events, ${assets.length} assets, ${leaders.length} leaders.`);
+console.log(`Static checks passed: ${events.length} events, ${regions.length} regions, ${Object.keys(categories).length} categories.`);

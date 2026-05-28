@@ -1,63 +1,41 @@
-import { assets, events, strikerLabels, targetTypes } from "./data.js";
+import { categories, events, regions } from "./data.js";
 
-const map = L.map("embedMap", {
-  center: [31.8, 52.4],
-  zoom: 4,
-  minZoom: 3,
-  maxZoom: 10,
-  zoomControl: false,
-  preferCanvas: true
+const region = regions[0];
+const map = new maplibregl.Map({
+  container: "embedMap",
+  style: {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "OpenStreetMap contributors, CARTO"
+      }
+    },
+    layers: [{ id: "base", type: "raster", source: "base" }]
+  },
+  center: region.center,
+  zoom: 3.85,
+  attributionControl: false
 });
 
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-  maxZoom: 19,
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-}).addTo(map);
+map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
-events.forEach((feature) => {
-  const [lng, lat] = feature.geometry.coordinates;
-  L.marker([lat, lng], {
-    icon: strikeIcon(feature)
-  })
-    .bindTooltip(`${feature.properties.city}: ${feature.properties.title}`)
-    .addTo(map);
-});
-
-assets.forEach((asset) => {
-  const [lng, lat] = asset.coordinates;
-  L.marker([lat, lng], {
-    icon: L.divIcon({
-      className: "asset-icon-root",
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-      html: `<div class="asset-pin embed-asset">*</div>`
-    })
-  })
-    .bindTooltip(asset.name)
-    .addTo(map);
-});
-
-document.querySelector("#embedCount").textContent = `${events.length} events, ${assets.length} assets`;
-document.querySelector("#embedTicker").innerHTML = events
-  .slice(0, 5)
-  .map(
-    (feature) =>
-      `<span>${feature.properties.displayTime} - ${feature.properties.city}: ${feature.properties.title}</span>`
-  )
-  .join("");
-
-function strikeIcon(feature) {
-  const props = feature.properties;
-  return L.divIcon({
-    className: "strike-icon-root",
-    iconSize: [38, 42],
-    iconAnchor: [19, 31],
-    html: `
-      <div class="strike-pin ${props.last6h ? "is-pulsing" : ""}">
-        <span class="strike-label">${strikerLabels[props.striker] ?? "?"}</span>
-        <span class="strike-dot target-${props.targetType}" style="--target-color:${targetTypes[props.targetType].color}"></span>
-      </div>
-    `
+map.on("load", () => {
+  events.slice(0, 14).forEach((eventItem) => {
+    const node = document.createElement("span");
+    node.className = "embed-marker";
+    node.style.setProperty("--marker-color", categories[eventItem.category].color);
+    node.textContent = categories[eventItem.category].short;
+    new maplibregl.Marker({ element: node, anchor: "center" })
+      .setLngLat([eventItem.location.lon, eventItem.location.lat])
+      .addTo(map);
   });
-}
+});
+
+document.querySelector("#embedCount").textContent = `${events.length} live events`;
+document.querySelector("#embedFeed").innerHTML = events
+  .slice(0, 5)
+  .map((eventItem) => `<span>${eventItem.timeLabel} - ${eventItem.place}: ${eventItem.title}</span>`)
+  .join("");

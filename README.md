@@ -1,20 +1,21 @@
-# WarMap
+# WarMap Live
 
-WarMap is a first-pass strike-map dashboard prototype inspired by the supplied Iran Strike Map implementation analysis.
+WarMap Live is a Liveuamap-style live news map and feed prototype.
 
-It proves the core product shape:
+This rebuild shifts the project away from the original strike-only dashboard and toward a continuously updating news-map product:
 
-- regional Leaflet map with custom striker-plus-target markers
-- synchronized selected event card, event list, and autoplay timeline
-- target type legend, striker filters, video-only filtering, asset layer, and heat mode
-- leadership tracker and activity feed as separate non-geographic intelligence layers
-- embeddable map surface at `/embed.html`
+- region selector, top navigation, time/key controls, and global search
+- dense map canvas with colored incident markers
+- reverse-chronological feed synchronized with selected map events
+- filter rail for verification, source type, severity, category, media, and viewport-only mode
+- event detail drawer with summary, source list, geocode precision, confidence, update trail, and verification state
+- compact embed view at `/embed`
 
-The seed data is for implementation testing only. It is based on the supplied PDF and the visible reference-site surface, not a verified live reporting feed. Replace it with vetted editorial data before public use.
+The event data is synthetic prototype content shaped from the supplied research brief and observable Liveuamap-style interface. Replace it with a provenance-first ingestion pipeline before public use.
 
 ## Local development
 
-This prototype has no npm dependencies. It uses Leaflet and map tiles from public CDNs.
+This app is dependency-light and uses MapLibre GL JS from a CDN.
 
 ```bash
 node scripts/serve.mjs
@@ -28,8 +29,14 @@ Open `http://localhost:5173`.
 node scripts/check-static.mjs
 ```
 
-The check validates that the static app files load and that the seed event, asset, and leader datasets have the shape expected by the dashboard.
+The check validates the static app files and the event, region, category, severity, and source metadata used by the dashboard.
 
-## Deployment
+## Production direction
 
-The app is Vercel-ready as a static project. The included `vercel.json` runs the static data check as the build command and serves the repository root as the output directory.
+The supplied research recommends a provenance-first event platform:
+
+- source registry and connector families for REST, RSS, CAP, HTML, and streaming sources
+- PostgreSQL/PostGIS as the source of truth
+- OpenSearch for feed/search/faceting
+- queue-backed ingestion, extraction, geocoding, deduplication, and editorial review
+- public `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` APIs
