@@ -16,6 +16,7 @@ const state = {
   mediaOnly: false,
   viewportOnly: false,
   filtersOpen: false,
+  layersOpen: false,
   detailOpen: false,
   paused: false,
   timeRange: "6h",
@@ -27,14 +28,16 @@ const state = {
 
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
-  clustersToggle: document.querySelector("#clustersToggle"),
   detailDrawer: document.querySelector("#detailDrawer"),
   feedList: document.querySelector("#feedList"),
   closeFilters: document.querySelector("#closeFilters"),
+  closeLayers: document.querySelector("#closeLayers"),
   filterRail: document.querySelector("#filterRail"),
   filterToggle: document.querySelector("#filterToggle"),
   fitEvents: document.querySelector("#fitEvents"),
   globalSearch: document.querySelector("#globalSearch"),
+  layerPanel: document.querySelector("#layerPanel"),
+  layersToggle: document.querySelector("#layersToggle"),
   locateRegion: document.querySelector("#locateRegion"),
   mapVisibleCount: document.querySelector("#mapVisibleCount"),
   mediaCount: document.querySelector("#mediaCount"),
@@ -97,7 +100,12 @@ function buildStyle(theme) {
   const rasterTiles = {
     dark: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
     light: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-    satellite: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+  };
+  const attributions = {
+    dark: "OpenStreetMap contributors, CARTO",
+    light: "OpenStreetMap contributors, CARTO",
+    satellite: "Esri, Maxar, Earthstar Geographics, and the GIS User Community"
   };
 
   return {
@@ -107,7 +115,7 @@ function buildStyle(theme) {
         type: "raster",
         tiles: [rasterTiles[theme] ?? rasterTiles.dark],
         tileSize: 256,
-        attribution: "OpenStreetMap contributors, CARTO"
+        attribution: attributions[theme] ?? attributions.dark
       }
     },
     layers: [
@@ -177,6 +185,8 @@ function bindControls() {
 
   els.filterToggle.addEventListener("click", () => setFiltersOpen(!state.filtersOpen));
   els.closeFilters.addEventListener("click", () => setFiltersOpen(false));
+  els.layersToggle.addEventListener("click", () => setLayersOpen(!state.layersOpen));
+  els.closeLayers.addEventListener("click", () => setLayersOpen(false));
 
   els.viewportOnlyToggle.addEventListener("change", () => {
     state.viewportOnly = els.viewportOnlyToggle.checked;
@@ -478,6 +488,9 @@ function resetFilters() {
 
 function setFiltersOpen(open) {
   state.filtersOpen = open;
+  if (open) {
+    state.layersOpen = false;
+  }
   renderChromeState();
   window.setTimeout(() => {
     if (map) {
@@ -486,11 +499,25 @@ function setFiltersOpen(open) {
   }, 260);
 }
 
+function setLayersOpen(open) {
+  state.layersOpen = open;
+  if (open) {
+    state.filtersOpen = false;
+  }
+  renderChromeState();
+}
+
 function renderChromeState() {
   document.body.classList.toggle("filters-open", state.filtersOpen);
+  document.body.classList.toggle("layers-open", state.layersOpen);
   els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
+  els.filterRail.inert = !state.filtersOpen;
   els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
   els.filterToggle.textContent = state.filtersOpen ? "Hide filters" : "Filters";
+  els.layerPanel.setAttribute("aria-hidden", String(!state.layersOpen));
+  els.layerPanel.inert = !state.layersOpen;
+  els.layersToggle.setAttribute("aria-pressed", String(state.layersOpen));
+  els.layersToggle.textContent = state.layersOpen ? "Hide layers" : "Layers";
 }
 
 function fitToRegion(animated) {

@@ -42,6 +42,7 @@
 
         <div class="top-meta" aria-label="Map settings">
           <button type="button" id="filterToggle" aria-pressed="false">Filters</button>
+          <button type="button" id="layersToggle" aria-pressed="false">Layers</button>
           <button type="button" id="languageButton">EN</button>
           <button type="button" id="timeButton">UTC+3</button>
           <button type="button" id="pauseStreamButton" aria-pressed="false">Pause</button>
@@ -113,13 +114,14 @@
             <button type="button" id="fitEvents">Fit</button>
           </div>
 
-          <div class="basemap-card" aria-label="Basemap controls">
-            <label><input type="radio" name="basemap" value="dark" checked /> Dark</label>
-            <label><input type="radio" name="basemap" value="light" /> Light</label>
+          <div class="basemap-card" id="layerPanel" aria-label="Map layers" aria-hidden="true">
+            <div class="layer-heading">
+              <h2>Layers</h2>
+              <button type="button" id="closeLayers">Close</button>
+            </div>
+            <label><input type="radio" name="basemap" value="dark" checked /> Dark map</label>
+            <label><input type="radio" name="basemap" value="light" /> Light map</label>
             <label><input type="radio" name="basemap" value="satellite" /> Satellite</label>
-            <hr />
-            <label><input type="checkbox" id="labelsToggle" checked /> Labels</label>
-            <label><input type="checkbox" id="clustersToggle" checked /> Clusters</label>
           </div>
 
           <div class="map-status">
