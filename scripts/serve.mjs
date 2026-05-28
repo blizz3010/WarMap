@@ -2,6 +2,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import eventsHandler from "../api/events.js";
 
 const root = normalize(join(fileURLToPath(new URL("..", import.meta.url))));
 const port = Number(process.env.PORT || 5173);
@@ -15,8 +16,24 @@ const contentTypes = {
   ".txt": "text/plain; charset=utf-8"
 };
 
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+  if (url.pathname === "/api/events") {
+    request.query = Object.fromEntries(url.searchParams);
+    await eventsHandler(request, {
+      setHeader: (key, value) => response.setHeader(key, value),
+      status(code) {
+        response.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        response.setHeader("content-type", "application/json; charset=utf-8");
+        response.end(JSON.stringify(payload));
+      }
+    });
+    return;
+  }
+
   const pathname = decodeURIComponent(url.pathname);
   let filePath = join(root, pathname === "/" ? "index.html" : pathname);
 

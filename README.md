@@ -9,9 +9,10 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - reverse-chronological feed synchronized with selected map events
 - filter rail for verification, source type, severity, category, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, and verification state
+- Vercel `/api/events` endpoint that pulls open-web leads from GDELT and RSS fallback feeds
 - compact embed view at `/embed`
 
-The event data is synthetic prototype content shaped from the supplied research brief and observable Liveuamap-style interface. Replace it with a provenance-first ingestion pipeline before public use.
+The app now attempts to load real open-web news leads first. These are not verified incidents: they are article-derived leads normalized onto the map for review. If the live sources fail or return no mapped items, the UI falls back to synthetic prototype content from `src/data.js`.
 
 ## Local development
 
@@ -30,6 +31,17 @@ node scripts/check-static.mjs
 ```
 
 The check validates the static app files and the event, region, category, severity, and source metadata used by the dashboard.
+
+## Live feed prototype
+
+`/api/events` returns event-shaped JSON:
+
+- primary source attempt: GDELT DOC 2.0 article search
+- fallback sources: BBC Middle East RSS and Al Jazeera RSS
+- local geocoding: known Iran, Gulf, and regional place aliases
+- verification state: `reported` by default, because these are source leads
+
+The browser and embed views fetch `/api/events?region=iran` and keep the static data as a safe fallback.
 
 ## Production direction
 

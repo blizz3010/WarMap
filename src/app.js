@@ -1,6 +1,6 @@
 import {
   categories,
-  events,
+  events as fallbackEvents,
   regions,
   severities,
   sourceTypes,
@@ -11,7 +11,7 @@ const state = {
   regionId: "iran",
   selectedEventId: null,
   search: "",
-  verifiedOnly: true,
+  verifiedOnly: false,
   officialOnly: false,
   mediaOnly: false,
   viewportOnly: false,
@@ -23,6 +23,11 @@ const state = {
   categories: new Set(Object.keys(categories)),
   severities: new Set(Object.keys(severities)),
   sourceTypes: new Set(Object.keys(sourceTypes)),
+  events: fallbackEvents,
+  feedMeta: {
+    source: "Prototype data",
+    verification: "synthetic fallback"
+  },
   markers: new Map()
 };
 
@@ -61,6 +66,7 @@ const els = {
 };
 
 let map;
+let liveRequestId = 0;
 
 init();
 
@@ -71,6 +77,7 @@ function init() {
   initMap();
   updateCounts();
   render();
+  loadLiveEvents();
 }
 
 function initMap() {
@@ -210,6 +217,7 @@ function bindControls() {
     state.regionId = els.regionSelect.value;
     fitToRegion(true);
     render();
+    loadLiveEvents();
   });
 
   els.zoomIn.addEventListener("click", () => map.zoomIn());
@@ -224,6 +232,18 @@ function bindControls() {
     render();
   });
 
+  bindFilterInputControls();
+
+  document.querySelectorAll("input[name='basemap']").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        map.setStyle(buildStyle(input.value));
+      }
+    });
+  });
+}
+
+function bindFilterInputControls() {
   document.querySelectorAll("[data-filter-kind]").forEach((input) => {
     input.addEventListener("change", () => {
       const set = setForFilterKind(input.dataset.filterKind);
@@ -235,14 +255,60 @@ function bindControls() {
       render();
     });
   });
+}
 
-  document.querySelectorAll("input[name='basemap']").forEach((input) => {
-    input.addEventListener("change", () => {
-      if (input.checked) {
-        map.setStyle(buildStyle(input.value));
-      }
+async function loadLiveEvents() {
+  const region = state.regionId;
+  const requestId = (liveRequestId += 1);
+  els.streamStatus.textContent = "Loading open-web news leads";
+
+  try {
+    const response = await fetch(`/api/events?region=${encodeURIComponent(region)}`, {
+      headers: { Accept: "application/json" }
     });
-  });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || `Live feed returned ${response.status}`);
+    }
+    if (!Array.isArray(payload.events) || payload.events.length === 0) {
+      throw new Error("Live feed returned no mapped events");
+    }
+    if (requestId !== liveRequestId) {
+      return;
+    }
+
+    state.events = payload.events;
+    state.feedMeta = payload.meta ?? {
+      source: "Live open-web feed",
+      verification: "open-web leads, not confirmed incidents"
+    };
+    state.selectedEventId = null;
+    state.detailOpen = false;
+    state.verifiedOnly = false;
+    els.verifiedOnlyToggle.checked = false;
+    resetFilterSets();
+    renderFilterControls();
+    bindFilterInputControls();
+    render();
+    els.streamStatus.textContent = `Live open-web feed - ${payload.events.length} leads`;
+  } catch (error) {
+    if (requestId !== liveRequestId) {
+      return;
+    }
+    state.events = fallbackEvents;
+    state.feedMeta = {
+      source: "Prototype data",
+      verification: "live feed unavailable",
+      error: error instanceof Error ? error.message : "Unknown live feed error"
+    };
+    state.selectedEventId = null;
+    state.detailOpen = false;
+    resetFilterSets();
+    renderFilterControls();
+    bindFilterInputControls();
+    render();
+    els.streamStatus.textContent = "Prototype fallback - live feed unavailable";
+  }
 }
 
 function render() {
@@ -257,13 +323,13 @@ function render() {
   renderDetail();
   renderChromeState();
   updateCounts();
-  els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${events.length.toLocaleString()} events`;
+  els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${state.events.length.toLocaleString()} events`;
   els.updatedAt.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 function filteredEvents(applyViewport) {
   const bounds = map && applyViewport && state.viewportOnly ? map.getBounds() : null;
-  return events.filter((item) => {
+  return state.events.filter((item) => {
     const sourceTypeMatch = item.sources.some((source) => state.sourceTypes.has(source.type));
     const officialMatch = !state.officialOnly || item.sources.some((source) => source.type === "official");
     const verifiedMatch = !state.verifiedOnly || ["verified", "official", "corroborated"].includes(item.verification);
@@ -345,19 +411,19 @@ function renderFeed(visible) {
       const severity = severities[item.severity];
       return `
         <article class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}" style="--card-color:${category.color}">
-          <button type="button" data-event-id="${item.id}" class="feed-card-button">
-            <time>${item.timeLabel}<span>${item.relativeTime}</span></time>
+          <button type="button" data-event-id="${escapeAttr(item.id)}" class="feed-card-button">
+            <time>${escapeHtml(item.timeLabel)}<span>${escapeHtml(item.relativeTime)}</span></time>
             <div class="feed-card-body">
               <div class="place-line">
-                <span>${item.place}, ${item.province}</span>
-                <small>${verificationStates[item.verification]}</small>
+                <span>${escapeHtml(item.place)}, ${escapeHtml(item.province)}</span>
+                <small>${escapeHtml(verificationStates[item.verification] ?? item.verification)}</small>
               </div>
-              <h3>${item.title}</h3>
-              <p>${item.summary}</p>
+              <h3>${escapeHtml(item.title)}</h3>
+              <p>${escapeHtml(item.summary)}</p>
               <div class="feed-meta">
                 <span style="color:${category.color}">${category.label}</span>
                 <span style="color:${severity.color}">${severity.label}</span>
-                <span>${item.sourceCount} sources</span>
+                <span>${sourceCountLabel(item.sourceCount)}</span>
               </div>
             </div>
             ${item.media ? renderMediaThumb(item) : ""}
@@ -375,14 +441,14 @@ function renderFeed(visible) {
 
 function renderMediaThumb(item) {
   return `
-    <div class="media-thumb media-${item.media.tone}" aria-label="${item.media.label}">
+    <div class="media-thumb media-${escapeAttr(item.media.tone)}" aria-label="${escapeAttr(item.media.label)}">
       <span>${categories[item.category].short}</span>
     </div>
   `;
 }
 
 function renderDetail() {
-  const item = events.find((eventItem) => eventItem.id === state.selectedEventId);
+  const item = state.events.find((eventItem) => eventItem.id === state.selectedEventId);
   if (!item) {
     els.detailDrawer.classList.remove("is-open");
     els.detailDrawer.setAttribute("aria-hidden", "true");
@@ -398,9 +464,9 @@ function renderDetail() {
   els.detailDrawer.innerHTML = `
     <header class="detail-header">
       <div>
-        <time>${item.timeLabel}</time>
-        <h2>${item.title}</h2>
-        <span>${item.place}, ${item.province}</span>
+        <time>${escapeHtml(item.timeLabel)}</time>
+        <h2>${escapeHtml(item.title)}</h2>
+        <span>${escapeHtml(item.place)}, ${escapeHtml(item.province)}</span>
       </div>
       <button type="button" id="closeDetail">Close</button>
     </header>
@@ -414,20 +480,20 @@ function renderDetail() {
     <div class="detail-grid">
       <section>
         <h3>Summary</h3>
-        <p>${item.summary}</p>
+        <p>${escapeHtml(item.summary)}</p>
         <dl class="detail-facts">
           <div><dt>Category</dt><dd style="color:${category.color}">${category.label}</dd></div>
           <div><dt>Severity</dt><dd style="color:${severity.color}">${severity.label}</dd></div>
           <div><dt>Confidence</dt><dd>${Math.round(item.confidence * 100)}%</dd></div>
-          <div><dt>Precision</dt><dd>${item.location.precision}</dd></div>
+          <div><dt>Precision</dt><dd>${escapeHtml(item.location.precision)}</dd></div>
         </dl>
         <ol class="update-trail">
-          ${item.updates.map((update, index) => `<li><span>${index + 1}</span>${update}</li>`).join("")}
+          ${item.updates.map((update, index) => `<li><span>${index + 1}</span>${escapeHtml(update)}</li>`).join("")}
         </ol>
       </section>
       <aside>
         <h3>Verification</h3>
-        <div class="verification-badge">${verificationStates[item.verification]}</div>
+        <div class="verification-badge">${escapeHtml(verificationStates[item.verification] ?? item.verification)}</div>
         <dl class="side-facts">
           <div><dt>First seen</dt><dd>${formatDate(item.firstSeenAt)}</dd></div>
           <div><dt>Last update</dt><dd>${formatDate(item.lastUpdatedAt)}</dd></div>
@@ -435,7 +501,7 @@ function renderDetail() {
         </dl>
         <h3>Sources</h3>
         <ul class="source-list">
-          ${item.sources.map((source) => `<li><strong>${source.name}</strong><span>${sourceTypes[source.type]} - ${source.trustTier}</span></li>`).join("")}
+          ${item.sources.map((source) => renderSource(source)).join("")}
         </ul>
       </aside>
     </div>
@@ -449,7 +515,7 @@ function renderDetail() {
 function selectEvent(eventId, panTo) {
   state.selectedEventId = eventId;
   state.detailOpen = true;
-  const item = events.find((eventItem) => eventItem.id === eventId);
+  const item = state.events.find((eventItem) => eventItem.id === eventId);
   if (item && panTo) {
     map.easeTo({
       center: [item.location.lon, item.location.lat],
@@ -468,15 +534,13 @@ function closeDetail() {
 
 function resetFilters() {
   state.search = "";
-  state.verifiedOnly = true;
+  state.verifiedOnly = false;
   state.officialOnly = false;
   state.mediaOnly = false;
   state.viewportOnly = false;
-  state.categories = new Set(Object.keys(categories));
-  state.severities = new Set(Object.keys(severities));
-  state.sourceTypes = new Set(Object.keys(sourceTypes));
+  resetFilterSets();
   els.globalSearch.value = "";
-  els.verifiedOnlyToggle.checked = true;
+  els.verifiedOnlyToggle.checked = false;
   els.officialOnlyToggle.checked = false;
   els.mediaOnlyToggle.checked = false;
   els.viewportOnlyToggle.checked = false;
@@ -484,6 +548,12 @@ function resetFilters() {
     input.checked = true;
   });
   render();
+}
+
+function resetFilterSets() {
+  state.categories = new Set(Object.keys(categories));
+  state.severities = new Set(Object.keys(severities));
+  state.sourceTypes = new Set(Object.keys(sourceTypes));
 }
 
 function setFiltersOpen(open) {
@@ -555,19 +625,32 @@ function setForFilterKind(kind) {
 
 function countBy(field, key) {
   if (field === "sourceType") {
-    return events.filter((item) => item.sources.some((source) => source.type === key)).length;
+    return state.events.filter((item) => item.sources.some((source) => source.type === key)).length;
   }
-  return events.filter((item) => item[field] === key).length;
+  return state.events.filter((item) => item[field] === key).length;
 }
 
 function updateCounts() {
-  els.verifiedCount.textContent = events.filter((item) =>
+  els.verifiedCount.textContent = state.events.filter((item) =>
     ["verified", "official", "corroborated"].includes(item.verification)
   ).length;
-  els.officialCount.textContent = events.filter((item) =>
+  els.officialCount.textContent = state.events.filter((item) =>
     item.sources.some((source) => source.type === "official")
   ).length;
-  els.mediaCount.textContent = events.filter((item) => item.media).length;
+  els.mediaCount.textContent = state.events.filter((item) => item.media).length;
+}
+
+function renderSource(source) {
+  const label = escapeHtml(source.name);
+  const url = safeUrl(source.url);
+  const sourceTitle = url
+    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}</a>`
+    : `<strong>${label}</strong>`;
+  return `<li>${sourceTitle}<span>${escapeHtml(sourceTypes[source.type] ?? source.type)} - ${escapeHtml(source.trustTier)}</span></li>`;
+}
+
+function sourceCountLabel(count) {
+  return `${count} ${count === 1 ? "source" : "sources"}`;
 }
 
 function formatDate(value) {
@@ -577,4 +660,30 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return entities[character];
+  });
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
 }

@@ -1,0 +1,216 @@
+import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+
+const RSS_FEEDS = [
+  {
+    name: "BBC Middle East",
+    url: "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+    country: "United Kingdom"
+  },
+  {
+    name: "Al Jazeera",
+    url: "https://www.aljazeera.com/xml/rss/all.xml",
+    country: "Qatar"
+  }
+];
+
+const REGION_TERMS = {
+  iran: ["iran", "iranian", "tehran", "isfahan", "irgc", "revolutionary guard", "khamenei", "hormuz"],
+  "middle-east": ["iran", "israel", "gaza", "lebanon", "syria", "iraq", "yemen", "hormuz", "red sea"],
+  gulf: ["iran", "kuwait", "qatar", "bahrain", "uae", "saudi", "persian gulf", "arabian gulf", "hormuz", "tanker"]
+};
+
+const WATCH_TERMS = [
+  "airstrike",
+  "attack",
+  "blast",
+  "dead",
+  "drone",
+  "explosion",
+  "irgc",
+  "killed",
+  "military",
+  "missile",
+  "nuclear",
+  "port",
+  "protest",
+  "sanction",
+  "security",
+  "strike",
+  "tanker",
+  "war"
+];
+
+export default async function handler(request, response) {
+  if (request.method && request.method !== "GET") {
+    response.setHeader("Allow", "GET");
+    response.status(405).json({ error: "METHOD_NOT_ALLOWED" });
+    return;
+  }
+
+  const region = String(request.query?.region ?? DEFAULT_REGION_ID);
+  const maxRecords = Math.min(Number(request.query?.maxRecords ?? 75) || 75, 100);
+  const generatedAt = new Date();
+
+  try {
+    const [gdeltResult, rssResult] = await Promise.allSettled([
+      fetchGdeltArticles(region, maxRecords),
+      fetchRssArticles(region)
+    ]);
+
+    const articles = [
+      ...(gdeltResult.status === "fulfilled" ? gdeltResult.value : []),
+      ...(rssResult.status === "fulfilled" ? rssResult.value : [])
+    ];
+
+    const events = normalizeArticlesToEvents(articles, {
+      now: generatedAt,
+      region,
+      limit: 50
+    });
+
+    if (!events.length) {
+      const reasons = [gdeltResult, rssResult]
+        .filter((result) => result.status === "rejected")
+        .map((result) => result.reason?.message ?? "unknown upstream error")
+        .join("; ");
+      throw new Error(reasons || "No relevant live articles found");
+    }
+
+    response.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=300");
+    response.status(200).json({
+      events,
+      meta: {
+        generatedAt: generatedAt.toISOString(),
+        region,
+        source: "GDELT DOC 2.0 plus RSS fallback",
+        sourceUrl: "https://api.gdeltproject.org/api/v2/doc/doc",
+        rssFeeds: RSS_FEEDS.map((feed) => feed.url),
+        upstreamArticles: articles.length,
+        returnedEvents: events.length,
+        gdeltStatus: gdeltResult.status,
+        rssStatus: rssResult.status,
+        verification: "open-web leads, not confirmed incidents"
+      }
+    });
+  } catch (error) {
+    response.setHeader("Cache-Control", "no-store");
+    response.status(502).json({
+      events: [],
+      error: "LIVE_FEED_UNAVAILABLE",
+      message: error instanceof Error ? error.message : "Unknown upstream error"
+    });
+  }
+}
+
+async function fetchGdeltArticles(region, maxRecords) {
+  const gdeltUrl = buildGdeltUrl(region, maxRecords);
+  const upstream = await fetchWithTimeout(gdeltUrl, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "WarMapLive/0.1 prototype contact=https://github.com/blizz3010/WarMap"
+    },
+    timeoutMs: 3500
+  });
+
+  if (!upstream.ok) {
+    throw new Error(`GDELT returned ${upstream.status}`);
+  }
+
+  const payload = await upstream.json();
+  return Array.isArray(payload.articles) ? payload.articles : [];
+}
+
+async function fetchRssArticles(region) {
+  const feedResults = await Promise.allSettled(
+    RSS_FEEDS.map(async (feed) => {
+      const upstream = await fetchWithTimeout(feed.url, {
+        headers: {
+          Accept: "application/rss+xml, application/xml, text/xml",
+          "User-Agent": "WarMapLive/0.1 prototype contact=https://github.com/blizz3010/WarMap"
+        },
+        timeoutMs: 5000
+      });
+      if (!upstream.ok) {
+        throw new Error(`${feed.name} returned ${upstream.status}`);
+      }
+      return extractRssItems(await upstream.text(), feed, region);
+    })
+  );
+
+  return feedResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+}
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  try {
+    return await fetch(url, {
+      headers: options.headers,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function extractRssItems(xml, feed, region) {
+  return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
+    .map((match) => rssItemToArticle(match[0], feed))
+    .filter((article) => article.title && article.url)
+    .filter((article) => isRelevantArticle(article, region))
+    .slice(0, 30);
+}
+
+function rssItemToArticle(itemXml, feed) {
+  const url = decodeXml(readTag(itemXml, "link") || readTag(itemXml, "guid"));
+  return {
+    title: decodeXml(readTag(itemXml, "title")),
+    description: stripTags(decodeXml(readTag(itemXml, "description"))),
+    url,
+    domain: domainFromUrl(url),
+    sourceName: feed.name,
+    sourcecountry: feed.country,
+    language: "English",
+    pubDate: decodeXml(readTag(itemXml, "pubDate")),
+    socialimage: decodeXml(readMediaUrl(itemXml))
+  };
+}
+
+function isRelevantArticle(article, region) {
+  const text = `${article.title} ${article.description}`.toLowerCase();
+  const regionTerms = REGION_TERMS[region] ?? REGION_TERMS[DEFAULT_REGION_ID];
+  return regionTerms.some((term) => text.includes(term)) && WATCH_TERMS.some((term) => text.includes(term));
+}
+
+function readTag(xml, tagName) {
+  const match = xml.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+  return match ? match[1].replace(/^<!\[CDATA\[|\]\]>$/g, "").trim() : "";
+}
+
+function readMediaUrl(xml) {
+  const match = xml.match(/<media:(?:thumbnail|content)\b[^>]*\surl=["']([^"']+)["'][^>]*>/i);
+  return match?.[1] ?? "";
+}
+
+function decodeXml(value) {
+  return String(value ?? "")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&apos;", "'")
+    .trim();
+}
+
+function stripTags(value) {
+  return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function domainFromUrl(value) {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
