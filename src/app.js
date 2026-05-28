@@ -19,7 +19,7 @@ const state = {
   layersOpen: false,
   detailOpen: false,
   paused: false,
-  timeRange: "6h",
+  timeRange: "30d",
   categories: new Set(Object.keys(categories)),
   severities: new Set(Object.keys(severities)),
   sourceTypes: new Set(Object.keys(sourceTypes)),
@@ -67,6 +67,36 @@ const els = {
 
 let map;
 let liveRequestId = 0;
+
+const IRAN_FOCUS_GEOJSON = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: { name: "Iran" },
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [44.05, 39.7],
+            [48.2, 39.1],
+            [53.2, 38.8],
+            [57.4, 37.2],
+            [61.2, 35.0],
+            [62.2, 31.3],
+            [60.8, 27.0],
+            [57.3, 25.2],
+            [53.0, 26.2],
+            [49.5, 29.1],
+            [46.2, 32.0],
+            [44.3, 35.7],
+            [44.05, 39.7]
+          ]
+        ]
+      }
+    }
+  ]
+};
 
 init();
 
@@ -123,6 +153,10 @@ function buildStyle(theme) {
         tiles: [rasterTiles[theme] ?? rasterTiles.dark],
         tileSize: 256,
         attribution: attributions[theme] ?? attributions.dark
+      },
+      iranFocus: {
+        type: "geojson",
+        data: IRAN_FOCUS_GEOJSON
       }
     },
     layers: [
@@ -132,6 +166,25 @@ function buildStyle(theme) {
         source: "base",
         minzoom: 0,
         maxzoom: 19
+      },
+      {
+        id: "iran-focus-fill",
+        type: "fill",
+        source: "iranFocus",
+        paint: {
+          "fill-color": theme === "light" ? "#f97316" : "#ff3b3b",
+          "fill-opacity": theme === "satellite" ? 0.12 : 0.08
+        }
+      },
+      {
+        id: "iran-focus-line",
+        type: "line",
+        source: "iranFocus",
+        paint: {
+          "line-color": theme === "light" ? "#c2410c" : "#ff5757",
+          "line-width": 2.2,
+          "line-opacity": 0.78
+        }
       }
     ]
   };
@@ -211,6 +264,7 @@ function bindControls() {
   els.timeRange.addEventListener("change", () => {
     state.timeRange = els.timeRange.value;
     render();
+    loadLiveEvents();
   });
 
   els.regionSelect.addEventListener("change", () => {
@@ -263,15 +317,19 @@ async function loadLiveEvents() {
   els.streamStatus.textContent = "Loading open-web news leads";
 
   try {
-    const response = await fetch(`/api/events?region=${encodeURIComponent(region)}`, {
+    const params = new URLSearchParams({
+      region,
+      lookback: lookbackForApi(state.timeRange)
+    });
+    const response = await fetch(`/api/events?${params.toString()}`, {
       headers: { Accept: "application/json" }
     });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.message || `Live feed returned ${response.status}`);
     }
-    if (!Array.isArray(payload.events) || payload.events.length === 0) {
-      throw new Error("Live feed returned no mapped events");
+    if (!Array.isArray(payload.events)) {
+      throw new Error("Live feed returned an invalid event list");
     }
     if (requestId !== liveRequestId) {
       return;
@@ -290,7 +348,10 @@ async function loadLiveEvents() {
     renderFilterControls();
     bindFilterInputControls();
     render();
-    els.streamStatus.textContent = `Live open-web feed - ${payload.events.length} leads`;
+    els.streamStatus.textContent =
+      payload.events.length > 0
+        ? `Live open-web feed - ${payload.events.length} leads / ${rangeLabel(state.timeRange)}`
+        : `No live leads in ${rangeLabel(state.timeRange)}`;
   } catch (error) {
     if (requestId !== liveRequestId) {
       return;
@@ -329,12 +390,14 @@ function render() {
 
 function filteredEvents(applyViewport) {
   const bounds = map && applyViewport && state.viewportOnly ? map.getBounds() : null;
+  const minTimestamp = minTimestampForRange(state.timeRange);
   return state.events.filter((item) => {
     const sourceTypeMatch = item.sources.some((source) => state.sourceTypes.has(source.type));
     const officialMatch = !state.officialOnly || item.sources.some((source) => source.type === "official");
     const verifiedMatch = !state.verifiedOnly || ["verified", "official", "corroborated"].includes(item.verification);
     const mediaMatch = !state.mediaOnly || Boolean(item.media);
     const viewportMatch = !bounds || bounds.contains([item.location.lon, item.location.lat]);
+    const timeMatch = !minTimestamp || eventTimestamp(item) >= minTimestamp;
     const searchMatch =
       !state.search ||
       `${item.title} ${item.summary} ${item.place} ${item.province} ${item.sources.map((source) => source.name).join(" ")}`
@@ -349,6 +412,7 @@ function filteredEvents(applyViewport) {
       verifiedMatch &&
       mediaMatch &&
       viewportMatch &&
+      timeMatch &&
       searchMatch
     );
   });
@@ -405,6 +469,11 @@ function markerClass(item) {
 }
 
 function renderFeed(visible) {
+  if (!visible.length) {
+    els.feedList.innerHTML = `<p class="empty-state">No events match this time range and filter set.</p>`;
+    return;
+  }
+
   els.feedList.innerHTML = visible
     .map((item) => {
       const category = categories[item.category];
@@ -538,16 +607,19 @@ function resetFilters() {
   state.officialOnly = false;
   state.mediaOnly = false;
   state.viewportOnly = false;
+  state.timeRange = "30d";
   resetFilterSets();
   els.globalSearch.value = "";
   els.verifiedOnlyToggle.checked = false;
   els.officialOnlyToggle.checked = false;
   els.mediaOnlyToggle.checked = false;
   els.viewportOnlyToggle.checked = false;
+  els.timeRange.value = state.timeRange;
   document.querySelectorAll("[data-filter-kind]").forEach((input) => {
     input.checked = true;
   });
   render();
+  loadLiveEvents();
 }
 
 function resetFilterSets() {
@@ -597,7 +669,11 @@ function fitToRegion(animated) {
       [region.bounds[0], region.bounds[1]],
       [region.bounds[2], region.bounds[3]]
     ],
-    { padding: 36, duration: animated ? 700 : 0 }
+    {
+      padding: region.fitPadding ?? 36,
+      maxZoom: region.maxZoom,
+      duration: animated ? 700 : 0
+    }
   );
 }
 
@@ -651,6 +727,49 @@ function renderSource(source) {
 
 function sourceCountLabel(count) {
   return `${count} ${count === 1 ? "source" : "sources"}`;
+}
+
+function minTimestampForRange(range) {
+  if (range === "all") {
+    return null;
+  }
+  const duration = rangeDurationMs(range);
+  return duration ? Date.now() - duration : null;
+}
+
+function rangeDurationMs(range) {
+  const match = String(range).match(/^(\d+)([hd])$/);
+  if (!match) {
+    return null;
+  }
+  const amount = Number(match[1]);
+  const unit = match[2];
+  return amount * (unit === "h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
+}
+
+function eventTimestamp(item) {
+  const timestamp = new Date(item.firstSeenAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function lookbackForApi(range) {
+  if (range === "all") {
+    return "180d";
+  }
+  return ["1h", "6h", "24h", "7d", "30d", "90d"].includes(range) ? range : "30d";
+}
+
+function rangeLabel(range) {
+  const labels = {
+    "1h": "1h",
+    "6h": "6h",
+    "24h": "24h",
+    "7d": "7d",
+    "30d": "30d",
+    "90d": "90d",
+    all: "all available"
+  };
+  return labels[range] ?? "30d";
 }
 
 function formatDate(value) {

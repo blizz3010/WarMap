@@ -13,6 +13,8 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Event detail drawer: stable event object presentation with summary, source list, geocode precision, confidence, update trail, first-seen and last-updated metadata.
 - Embed view: compact map and ticker at `/embed`.
 - Live feed endpoint: `/api/events` fetches open-web article leads, normalizes them into the same event shape, and lets the client fall back to static prototype data if upstream sources fail.
+- Iran focus mode: default map bounds, zoom, and a subtle country highlight keep Iran visually dominant while still allowing nearby regional markers.
+- Longer event history: date filtering now supports 30-day, 90-day, and all-available windows and passes the requested lookback into the live endpoint.
 
 ## Data shape
 
@@ -42,3 +44,4 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Location is inferred from a small alias table, so ambiguous regional stories may land on a country centroid.
 - Source count is article count for this prototype; production should cluster multiple documents into one event before marking anything corroborated.
 - The current endpoint intentionally labels normalized live items as `reported` until a real verification workflow exists.
+- Empty time windows stay empty instead of substituting synthetic events, so short live windows do not mislead users.

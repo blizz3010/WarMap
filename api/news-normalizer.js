@@ -41,16 +41,24 @@ const SOURCE_TYPE_RULES = [
   { type: "media", patterns: ["reuters", "apnews", "bbc", "aljazeera", "france24", "dw.com", "rferl", "iranintl", "timesofisrael", "presstv", "irna"] }
 ];
 
-export function buildGdeltUrl(regionId = DEFAULT_REGION_ID, maxRecords = 75) {
+export function buildGdeltUrl(regionId = DEFAULT_REGION_ID, maxRecords = 75, lookback = "30d") {
   const params = new URLSearchParams({
     query: REGION_QUERIES[regionId] ?? REGION_QUERIES[DEFAULT_REGION_ID],
     mode: "ArtList",
     format: "json",
     maxrecords: String(maxRecords),
-    timespan: "24h",
+    timespan: normalizeLookback(lookback),
     sort: "DateDesc"
   });
   return `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`;
+}
+
+export function normalizeLookback(value = "30d") {
+  const raw = String(value);
+  if (raw === "all") {
+    return "180d";
+  }
+  return /^(1h|6h|24h|7d|30d|90d|180d)$/.test(raw) ? raw : "30d";
 }
 
 export function normalizeArticlesToEvents(articles, options = {}) {

@@ -40,6 +40,7 @@ The check validates the static app files and the event, region, category, severi
 - fallback sources: BBC Middle East RSS and Al Jazeera RSS
 - local geocoding: known Iran, Gulf, and regional place aliases
 - verification state: `reported` by default, because these are source leads
+- lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
 The browser and embed views fetch `/api/events?region=iran` and keep the static data as a safe fallback.
 

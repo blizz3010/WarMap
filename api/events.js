@@ -1,4 +1,4 @@
-import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeArticlesToEvents, normalizeLookback } from "./news-normalizer.js";
 
 const RSS_FEEDS = [
   {
@@ -49,12 +49,13 @@ export default async function handler(request, response) {
 
   const region = String(request.query?.region ?? DEFAULT_REGION_ID);
   const maxRecords = Math.min(Number(request.query?.maxRecords ?? 75) || 75, 100);
+  const lookback = normalizeLookback(request.query?.lookback ?? "30d");
   const generatedAt = new Date();
 
   try {
     const [gdeltResult, rssResult] = await Promise.allSettled([
-      fetchGdeltArticles(region, maxRecords),
-      fetchRssArticles(region)
+      fetchGdeltArticles(region, maxRecords, lookback),
+      fetchRssArticles(region, lookback)
     ]);
 
     const articles = [
@@ -68,12 +69,12 @@ export default async function handler(request, response) {
       limit: 50
     });
 
-    if (!events.length) {
-      const reasons = [gdeltResult, rssResult]
-        .filter((result) => result.status === "rejected")
-        .map((result) => result.reason?.message ?? "unknown upstream error")
-        .join("; ");
-      throw new Error(reasons || "No relevant live articles found");
+    const upstreamErrors = [gdeltResult, rssResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason?.message ?? "unknown upstream error");
+
+    if (!events.length && upstreamErrors.length === 2) {
+      throw new Error(upstreamErrors.join("; "));
     }
 
     response.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=300");
@@ -82,6 +83,7 @@ export default async function handler(request, response) {
       meta: {
         generatedAt: generatedAt.toISOString(),
         region,
+        lookback,
         source: "GDELT DOC 2.0 plus RSS fallback",
         sourceUrl: "https://api.gdeltproject.org/api/v2/doc/doc",
         rssFeeds: RSS_FEEDS.map((feed) => feed.url),
@@ -89,6 +91,7 @@ export default async function handler(request, response) {
         returnedEvents: events.length,
         gdeltStatus: gdeltResult.status,
         rssStatus: rssResult.status,
+        upstreamErrors,
         verification: "open-web leads, not confirmed incidents"
       }
     });
@@ -102,8 +105,8 @@ export default async function handler(request, response) {
   }
 }
 
-async function fetchGdeltArticles(region, maxRecords) {
-  const gdeltUrl = buildGdeltUrl(region, maxRecords);
+async function fetchGdeltArticles(region, maxRecords, lookback) {
+  const gdeltUrl = buildGdeltUrl(region, maxRecords, lookback);
   const upstream = await fetchWithTimeout(gdeltUrl, {
     headers: {
       Accept: "application/json",
@@ -120,7 +123,7 @@ async function fetchGdeltArticles(region, maxRecords) {
   return Array.isArray(payload.articles) ? payload.articles : [];
 }
 
-async function fetchRssArticles(region) {
+async function fetchRssArticles(region, lookback) {
   const feedResults = await Promise.allSettled(
     RSS_FEEDS.map(async (feed) => {
       const upstream = await fetchWithTimeout(feed.url, {
@@ -133,7 +136,7 @@ async function fetchRssArticles(region) {
       if (!upstream.ok) {
         throw new Error(`${feed.name} returned ${upstream.status}`);
       }
-      return extractRssItems(await upstream.text(), feed, region);
+      return extractRssItems(await upstream.text(), feed, region, lookback);
     })
   );
 
@@ -153,10 +156,12 @@ async function fetchWithTimeout(url, options) {
   }
 }
 
-function extractRssItems(xml, feed, region) {
+function extractRssItems(xml, feed, region, lookback) {
+  const minTimestamp = Date.now() - lookbackDurationMs(lookback);
   return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
     .map((match) => rssItemToArticle(match[0], feed))
     .filter((article) => article.title && article.url)
+    .filter((article) => !article.pubDate || Date.parse(article.pubDate) >= minTimestamp)
     .filter((article) => isRelevantArticle(article, region))
     .slice(0, 30);
 }
@@ -213,4 +218,13 @@ function domainFromUrl(value) {
   } catch {
     return "";
   }
+}
+
+function lookbackDurationMs(lookback) {
+  const match = String(lookback).match(/^(\d+)([hd])$/);
+  if (!match) {
+    return 30 * 24 * 60 * 60 * 1000;
+  }
+  const amount = Number(match[1]);
+  return amount * (match[2] === "h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
 }
