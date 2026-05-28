@@ -191,7 +191,7 @@ a {
 
 .live-workspace {
   display: grid;
-  grid-template-columns: 244px minmax(460px, 1fr) 492px;
+  grid-template-columns: minmax(460px, 1fr) 492px;
   min-height: 0;
 }
 
@@ -203,9 +203,32 @@ a {
 }
 
 .filter-rail {
+  position: absolute;
+  top: 54px;
+  bottom: 0;
+  left: 0;
+  z-index: 15;
+  width: 244px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transform: translateX(-100%);
+  transition: transform 180ms ease, opacity 180ms ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.filters-open .filter-rail {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .rail-heading {
@@ -431,9 +454,11 @@ input[type="radio"] {
 }
 
 .feed-panel {
+  position: relative;
   display: grid;
-  grid-template-rows: 48px minmax(0, 1fr) minmax(270px, 34vh);
+  grid-template-rows: 48px minmax(0, 1fr);
   border-left: 1px solid var(--line);
+  overflow: hidden;
 }
 
 .feed-header {
@@ -594,14 +619,26 @@ input[type="radio"] {
 }
 
 .detail-drawer {
-  min-height: 0;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  max-height: min(520px, 62%);
   overflow: auto;
   border-top: 1px solid var(--detail-color, var(--accent));
   background: #090d13;
+  box-shadow: 0 -24px 80px rgba(0, 0, 0, 0.55);
+  transform: translateY(105%);
+  transition: transform 190ms ease, opacity 190ms ease;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.detail-drawer.is-collapsed {
-  display: none;
+.detail-drawer.is-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .detail-header {
@@ -850,7 +887,7 @@ dd {
   }
 
   .live-workspace {
-    grid-template-columns: 222px minmax(420px, 1fr) 420px;
+    grid-template-columns: minmax(420px, 1fr) 420px;
   }
 }
 
@@ -891,11 +928,16 @@ dd {
     flex-direction: column;
     max-height: none;
     border-left: 0;
+    overflow: visible;
   }
 
   .filter-rail {
+    position: fixed;
+    top: 0;
+    width: min(330px, 88vw);
     order: 3;
     border-right: 0;
+    border-left: 1px solid var(--line);
   }
 
   .feed-list {
@@ -903,7 +945,10 @@ dd {
   }
 
   .detail-drawer {
-    min-height: auto;
+    position: fixed;
+    max-height: 78vh;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
   }
 
   .basemap-card {

@@ -9,12 +9,14 @@ import {
 
 const state = {
   regionId: "iran",
-  selectedEventId: events[0].id,
+  selectedEventId: null,
   search: "",
   verifiedOnly: true,
   officialOnly: false,
   mediaOnly: false,
   viewportOnly: false,
+  filtersOpen: false,
+  detailOpen: false,
   paused: false,
   timeRange: "6h",
   categories: new Set(Object.keys(categories)),
@@ -28,6 +30,9 @@ const els = {
   clustersToggle: document.querySelector("#clustersToggle"),
   detailDrawer: document.querySelector("#detailDrawer"),
   feedList: document.querySelector("#feedList"),
+  closeFilters: document.querySelector("#closeFilters"),
+  filterRail: document.querySelector("#filterRail"),
+  filterToggle: document.querySelector("#filterToggle"),
   fitEvents: document.querySelector("#fitEvents"),
   globalSearch: document.querySelector("#globalSearch"),
   locateRegion: document.querySelector("#locateRegion"),
@@ -170,6 +175,9 @@ function bindControls() {
     render();
   });
 
+  els.filterToggle.addEventListener("click", () => setFiltersOpen(!state.filtersOpen));
+  els.closeFilters.addEventListener("click", () => setFiltersOpen(false));
+
   els.viewportOnlyToggle.addEventListener("change", () => {
     state.viewportOnly = els.viewportOnlyToggle.checked;
     render();
@@ -199,7 +207,10 @@ function bindControls() {
   els.locateRegion.addEventListener("click", () => fitToRegion(true));
   els.fitEvents.addEventListener("click", () => fitVisibleEvents());
   els.newEventsButton.addEventListener("click", () => {
-    state.selectedEventId = filteredEvents(false)[0]?.id ?? state.selectedEventId;
+    const firstEvent = filteredEvents(false)[0];
+    if (firstEvent) {
+      selectEvent(firstEvent.id, true);
+    }
     render();
   });
 
@@ -226,13 +237,15 @@ function bindControls() {
 
 function render() {
   const visible = filteredEvents(true);
-  if (visible.length && !visible.some((item) => item.id === state.selectedEventId)) {
-    state.selectedEventId = visible[0].id;
+  if (state.selectedEventId && !visible.some((item) => item.id === state.selectedEventId)) {
+    state.selectedEventId = null;
+    state.detailOpen = false;
   }
 
   renderMarkers(visible);
   renderFeed(visible);
   renderDetail();
+  renderChromeState();
   updateCounts();
   els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${events.length.toLocaleString()} events`;
   els.updatedAt.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
@@ -361,13 +374,17 @@ function renderMediaThumb(item) {
 function renderDetail() {
   const item = events.find((eventItem) => eventItem.id === state.selectedEventId);
   if (!item) {
-    els.detailDrawer.innerHTML = `<p class="empty-state">No event selected.</p>`;
+    els.detailDrawer.classList.remove("is-open");
+    els.detailDrawer.setAttribute("aria-hidden", "true");
+    els.detailDrawer.innerHTML = "";
     return;
   }
 
   const category = categories[item.category];
   const severity = severities[item.severity];
   els.detailDrawer.style.setProperty("--detail-color", category.color);
+  els.detailDrawer.classList.toggle("is-open", state.detailOpen);
+  els.detailDrawer.setAttribute("aria-hidden", String(!state.detailOpen));
   els.detailDrawer.innerHTML = `
     <header class="detail-header">
       <div>
@@ -415,12 +432,13 @@ function renderDetail() {
   `;
 
   document.querySelector("#closeDetail")?.addEventListener("click", () => {
-    els.detailDrawer.classList.toggle("is-collapsed");
+    closeDetail();
   });
 }
 
 function selectEvent(eventId, panTo) {
   state.selectedEventId = eventId;
+  state.detailOpen = true;
   const item = events.find((eventItem) => eventItem.id === eventId);
   if (item && panTo) {
     map.easeTo({
@@ -429,6 +447,12 @@ function selectEvent(eventId, panTo) {
       duration: 600
     });
   }
+  render();
+}
+
+function closeDetail() {
+  state.detailOpen = false;
+  state.selectedEventId = null;
   render();
 }
 
@@ -450,6 +474,23 @@ function resetFilters() {
     input.checked = true;
   });
   render();
+}
+
+function setFiltersOpen(open) {
+  state.filtersOpen = open;
+  renderChromeState();
+  window.setTimeout(() => {
+    if (map) {
+      map.resize();
+    }
+  }, 260);
+}
+
+function renderChromeState() {
+  document.body.classList.toggle("filters-open", state.filtersOpen);
+  els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
+  els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
+  els.filterToggle.textContent = state.filtersOpen ? "Hide filters" : "Filters";
 }
 
 function fitToRegion(animated) {

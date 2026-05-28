@@ -41,6 +41,7 @@
         </nav>
 
         <div class="top-meta" aria-label="Map settings">
+          <button type="button" id="filterToggle" aria-pressed="false">Filters</button>
           <button type="button" id="languageButton">EN</button>
           <button type="button" id="timeButton">UTC+3</button>
           <button type="button" id="pauseStreamButton" aria-pressed="false">Pause</button>
@@ -53,10 +54,13 @@
       </header>
 
       <main class="live-workspace">
-        <aside class="filter-rail" aria-label="News map filters">
+        <aside class="filter-rail" id="filterRail" aria-label="News map filters" aria-hidden="true">
           <div class="rail-heading">
             <h2>Filters</h2>
-            <button type="button" id="resetFilters">Reset</button>
+            <div class="rail-actions">
+              <button type="button" id="resetFilters">Reset</button>
+              <button type="button" id="closeFilters">Close</button>
+            </div>
           </div>
 
           <section class="filter-section">
@@ -133,7 +137,7 @@
 
           <div class="feed-list" id="feedList"></div>
 
-          <article class="detail-drawer" id="detailDrawer" aria-label="Selected event details"></article>
+          <article class="detail-drawer" id="detailDrawer" aria-label="Selected event details" aria-hidden="true"></article>
         </aside>
       </main>
     </div>
