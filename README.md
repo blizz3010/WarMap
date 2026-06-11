@@ -9,7 +9,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - reverse-chronological feed synchronized with selected map events and visible original source links
 - filter rail for verification, source type, severity, category, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
-- Vercel `/api/events` endpoint that pulls open-web leads from GDELT and registry-backed RSS feeds
+- Vercel `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive` endpoints for live leads, review candidates, detail records, and approved seed history
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - compact embed view at `/embed`
 
@@ -42,10 +42,19 @@ The check validates the static app files and the event, region, category, severi
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
 - candidate extraction: event category, severity, actor side, place, summary, source metadata, and review status
 - duplicate matching: same-place, same-category, close-time article candidates can merge into a corroborated review item
+- editorial fields: candidate/needs-review/approved status, publication status, duplicate key, priority, visible targets, and required actions
 - verification state: `reported` by default, because these are source leads
 - lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
-The browser and embed views fetch `/api/events?region=iran` and keep the static data as a safe fallback.
+The browser and embed views fetch `/api/events?region=iran&publication=all` and keep the static data as a safe fallback. `publication=published` returns only approved events when a persistent editorial store is added.
+
+## Editorial API slice
+
+- `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
+- `/api/event?id=...&region=...` returns one event detail record by id or slug.
+- `/api/archive?region=iran` returns approved seed events grouped by day.
+
+The queue is read-only in this prototype. Live approvals still need authenticated storage before candidates can be promoted from the review queue into the public map/archive automatically.
 
 ## Production direction
 

@@ -55,6 +55,17 @@ export const SOURCE_REGISTRY = [
     regions: ["ukraine", "ukraine-east", "ukraine-south", "ukraine-north", "black-sea"]
   },
   {
+    id: "ukraine-president-rss",
+    name: "President of Ukraine",
+    collector: "rss",
+    sourceType: "official",
+    trustTier: "primary source",
+    country: "Ukraine",
+    status: "active",
+    url: "https://www.president.gov.ua/en/rss/news/all.rss",
+    regions: ["ukraine", "ukraine-east", "ukraine-south", "ukraine-north", "black-sea"]
+  },
+  {
     id: "ukrinform-rss",
     name: "Ukrinform",
     collector: "rss",

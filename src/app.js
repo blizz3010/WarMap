@@ -347,6 +347,8 @@ function bindControls() {
       }
     });
   });
+
+  window.addEventListener("hashchange", () => selectHashEventIfAvailable(true));
 }
 
 function setActivePanel(panel) {
@@ -380,7 +382,8 @@ async function loadLiveEvents() {
   try {
     const params = new URLSearchParams({
       region,
-      lookback: lookbackForApi(state.timeRange)
+      lookback: lookbackForApi(state.timeRange),
+      publication: "all"
     });
     const response = await fetch(`/api/events?${params.toString()}`, {
       headers: { Accept: "application/json" }
@@ -409,6 +412,7 @@ async function loadLiveEvents() {
     renderFilterControls();
     bindFilterInputControls();
     render();
+    selectHashEventIfAvailable(false);
     els.streamStatus.textContent =
       payload.events.length > 0
         ? `Live open-web feed - ${payload.events.length} leads / ${rangeLabel(state.timeRange)}`
@@ -729,6 +733,8 @@ function renderDetail() {
   const severity = severities[item.severity];
   const side = actorSides[item.side] ?? actorSides.unknown;
   const review = reviewInfo(item);
+  const detailLink = eventHashLink(item);
+  const apiLink = eventApiLink(item);
   els.detailDrawer.style.setProperty("--detail-color", category.color);
   els.detailDrawer.classList.toggle("is-open", state.detailOpen);
   els.detailDrawer.setAttribute("aria-hidden", String(!state.detailOpen));
@@ -773,11 +779,16 @@ function renderDetail() {
         </dl>
         <h3>Review Queue</h3>
         <div class="review-card">
-          <strong>${escapeHtml(review.status)}</strong>
-          <span>${escapeHtml(review.queue)}</span>
+          <strong>${escapeHtml(review.statusLabel)}</strong>
+          <span>${escapeHtml(review.queue)} - ${escapeHtml(review.publicationLabel)} - ${escapeHtml(review.priority)}</span>
+          <span>${escapeHtml(review.duplicateKey)}</span>
           <ul>
             ${review.requiredActions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
           </ul>
+        </div>
+        <div class="detail-links">
+          <a href="${escapeAttr(detailLink)}">Detail link</a>
+          <a href="${escapeAttr(apiLink)}" target="_blank" rel="noreferrer noopener">API record</a>
         </div>
         <h3>Sources</h3>
         <ul class="source-list">
@@ -793,7 +804,7 @@ function renderDetail() {
 }
 
 function renderIntelPanel(visible = filteredEvents(true)) {
-  if (!["key", "time"].includes(state.activePanel)) {
+  if (!["key", "time", "review"].includes(state.activePanel)) {
     els.intelPanel.classList.remove("is-open");
     els.intelPanel.setAttribute("aria-hidden", "true");
     els.intelPanel.innerHTML = "";
@@ -802,12 +813,70 @@ function renderIntelPanel(visible = filteredEvents(true)) {
 
   els.intelPanel.classList.add("is-open");
   els.intelPanel.setAttribute("aria-hidden", "false");
-  els.intelPanel.innerHTML = state.activePanel === "key" ? renderKeyPanel() : renderTimePanel(visible);
+  els.intelPanel.innerHTML =
+    state.activePanel === "key" ? renderKeyPanel() : state.activePanel === "review" ? renderReviewPanel(visible) : renderTimePanel(visible);
   els.intelPanel.querySelector("[data-close-intel]")?.addEventListener("click", () => {
     state.activePanel = "feed";
     renderChromeState();
     renderIntelPanel(visible);
   });
+  els.intelPanel.querySelectorAll("[data-review-event-id]").forEach((button) => {
+    button.addEventListener("click", () => selectEvent(button.dataset.reviewEventId, true));
+  });
+}
+
+function renderReviewPanel(visible) {
+  const reviewItems = visible
+    .filter((item) => reviewInfo(item).publicationStatus !== "published")
+    .sort((left, right) => reviewPriorityRank(reviewInfo(right).priority) - reviewPriorityRank(reviewInfo(left).priority))
+    .slice(0, 12);
+  const publishedCount = visible.filter((item) => reviewInfo(item).publicationStatus === "published").length;
+  const queueCount = visible.length - publishedCount;
+
+  return `
+    <header class="intel-heading">
+      <div>
+        <span>Editorial</span>
+        <h2>Review Queue</h2>
+      </div>
+      <button type="button" data-close-intel>Close</button>
+    </header>
+    <section class="intel-stats">
+      <div><strong>${queueCount}</strong><span>Queued</span></div>
+      <div><strong>${publishedCount}</strong><span>Published</span></div>
+      <div><strong>${visible.length}</strong><span>Visible</span></div>
+    </section>
+    <section class="intel-section">
+      <h3>Candidates</h3>
+      <ul class="review-queue-list">
+        ${
+          reviewItems
+            .map((item) => {
+              const review = reviewInfo(item);
+              const category = categories[item.category];
+              return `
+                <li style="--review-color:${category.color}">
+                  <button type="button" data-review-event-id="${escapeAttr(item.id)}">
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <span>${escapeHtml(review.statusLabel)} - ${escapeHtml(review.priority)} - ${escapeHtml(item.place)}</span>
+                  </button>
+                  <small>${escapeHtml(review.requiredActions[0] ?? "Review source")}</small>
+                </li>
+              `;
+            })
+            .join("") || "<li><span>No review candidates in this view</span></li>"
+        }
+      </ul>
+    </section>
+    <section class="intel-section">
+      <h3>Approval Gate</h3>
+      <ul class="pipeline-list">
+        <li><strong>Queue</strong><span>Every candidate enters review with source links and duplicate key</span></li>
+        <li><strong>Approve</strong><span>Only approved records publish to map, feed, detail, archive, and API</span></li>
+        <li><strong>Correct</strong><span>Corrections and retractions remain visible through archive and API</span></li>
+      </ul>
+    </section>
+  `;
 }
 
 function renderKeyPanel() {
@@ -914,12 +983,16 @@ function selectEvent(eventId, panTo) {
       duration: 600
     });
   }
+  syncEventHash(eventId);
   render();
 }
 
 function closeDetail() {
   state.detailOpen = false;
   state.selectedEventId = null;
+  if (window.location.hash.startsWith("#event=")) {
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
   render();
 }
 
@@ -974,7 +1047,7 @@ function setLayersOpen(open) {
 function renderChromeState() {
   document.body.classList.toggle("filters-open", state.filtersOpen);
   document.body.classList.toggle("layers-open", state.layersOpen);
-  document.body.classList.toggle("intel-open", ["key", "time"].includes(state.activePanel));
+  document.body.classList.toggle("intel-open", ["key", "time", "review"].includes(state.activePanel));
   els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
   els.filterRail.inert = !state.filtersOpen;
   els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
@@ -1079,11 +1152,21 @@ function sourceCountLabel(count) {
 function reviewInfo(item) {
   return {
     status: item.review?.status ?? "candidate",
+    statusLabel: item.review?.statusLabel ?? titleCase(item.review?.status ?? "candidate"),
     queue: item.review?.queue ?? "open-source intake",
+    publicationStatus: item.review?.publicationStatus ?? "review_only",
+    publicationLabel: item.review?.publicationLabel ?? titleCase(item.review?.publicationStatus ?? "review_only"),
+    priority: item.review?.priority ?? "normal",
+    duplicateKey: item.review?.duplicateKey ?? `${item.country}-${item.province}-${item.place}-${item.category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    visibleOn: item.review?.visibleOn ?? ["review queue", "api"],
     requiredActions: item.review?.requiredActions?.length
       ? item.review.requiredActions
       : ["Confirm source reliability", "Check location precision", "Review duplicate matches"]
   };
+}
+
+function reviewPriorityRank(priority) {
+  return { low: 1, normal: 2, high: 3, urgent: 4 }[priority] ?? 0;
 }
 
 function minTimestampForRange(range) {
@@ -1153,6 +1236,40 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function eventHashLink(item) {
+  return `#event=${encodeURIComponent(item.id)}`;
+}
+
+function eventApiLink(item) {
+  const params = new URLSearchParams({
+    id: item.id,
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/api/event?${params.toString()}`;
+}
+
+function syncEventHash(eventId) {
+  const nextHash = `#event=${encodeURIComponent(eventId)}`;
+  if (window.location.hash !== nextHash) {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+  }
+}
+
+function selectHashEventIfAvailable(panTo) {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const eventId = params.get("event");
+  if (eventId && state.events.some((item) => item.id === eventId)) {
+    selectEvent(eventId, panTo);
+  }
+}
+
+function titleCase(value) {
+  return String(value ?? "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function safeUrl(value) {

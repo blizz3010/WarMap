@@ -262,6 +262,7 @@ function event({
 }) {
   const sources = sourceIds.map((sourceId) => sourceCatalog[sourceId]);
   const isApproved = ["verified", "official"].includes(verification);
+  const publicationStatus = isApproved ? "published" : "review_only";
   return {
     id,
     slug: id.replace(/^evt_/, ""),
@@ -286,10 +287,24 @@ function event({
     side,
     review: {
       status: isApproved ? "approved" : "candidate",
+      statusLabel: isApproved ? "Approved" : "Candidate",
       queue: isApproved ? "published map" : "open-source review",
+      publicationStatus,
+      publicationLabel: isApproved ? "Published" : "Review only",
+      priority: severity === "critical" ? "urgent" : severity === "high" ? "high" : severity === "medium" ? "normal" : "low",
+      duplicateKey: [country, province, place, category, baseDate].join("-").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      visibleOn: isApproved ? ["map", "feed", "detail", "archive", "api"] : ["review queue", "api"],
+      assignee: "editorial desk",
       requiredActions: isApproved
         ? ["Monitor for corrections"]
-        : ["Confirm source reliability", "Check location precision", "Review duplicate matches"]
+        : ["Confirm source reliability", "Check location precision", "Review duplicate matches"],
+      checklist: [
+        { key: "source-visible", label: "Original source link retained", done: true },
+        { key: "location", label: "Location precision assigned", done: true },
+        { key: "dedupe", label: "Duplicate key generated", done: true },
+        { key: "approval", label: "Editorial approval recorded", done: isApproved }
+      ],
+      decidedAt: isApproved ? `${baseDate}T${time}:45+03:00` : null
     },
     media: media
       ? {

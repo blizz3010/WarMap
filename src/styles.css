@@ -1043,6 +1043,79 @@ dd {
   padding-left: 16px;
 }
 
+.detail-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: -2px 0 12px;
+}
+
+.detail-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.detail-links a:hover {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fecaca;
+}
+
+.review-queue-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-queue-list li {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--review-color, var(--accent));
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.review-queue-list button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.review-queue-list strong,
+.review-queue-list span,
+.review-queue-list small {
+  overflow-wrap: anywhere;
+}
+
+.review-queue-list strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.review-queue-list span,
+.review-queue-list small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .side-facts {
   display: grid;
   gap: 7px;

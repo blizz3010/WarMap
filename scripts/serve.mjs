@@ -2,7 +2,10 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import archiveHandler from "../api/archive.js";
+import eventHandler from "../api/event.js";
 import eventsHandler from "../api/events.js";
+import reviewQueueHandler from "../api/review-queue.js";
 
 const root = normalize(join(fileURLToPath(new URL("..", import.meta.url))));
 const port = Number(process.env.PORT || 5173);
@@ -16,11 +19,19 @@ const contentTypes = {
   ".txt": "text/plain; charset=utf-8"
 };
 
+const apiHandlers = new Map([
+  ["/api/archive", archiveHandler],
+  ["/api/event", eventHandler],
+  ["/api/events", eventsHandler],
+  ["/api/review-queue", reviewQueueHandler]
+]);
+
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
-  if (url.pathname === "/api/events") {
+  const apiHandler = apiHandlers.get(url.pathname);
+  if (apiHandler) {
     request.query = Object.fromEntries(url.searchParams);
-    await eventsHandler(request, {
+    await apiHandler(request, {
       setHeader: (key, value) => response.setHeader(key, value),
       status(code) {
         response.statusCode = code;

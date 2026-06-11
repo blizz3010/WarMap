@@ -1,3 +1,5 @@
+import { enrichEditorialEvent } from "./editorial-workflow.js";
+
 export const DEFAULT_REGION_ID = "iran";
 
 const REGION_QUERIES = {
@@ -123,7 +125,9 @@ export function normalizeArticlesToEvents(articles, options = {}) {
     .filter(Boolean)
     .sort((a, b) => eventTimestamp(b) - eventTimestamp(a));
 
-  return mergeDuplicateEvents(candidates).slice(0, options.limit ?? 50);
+  return mergeDuplicateEvents(candidates)
+    .map((event) => enrichEditorialEvent(event))
+    .slice(0, options.limit ?? 50);
 }
 
 function normalizeArticle(article, now, seenUrls, region) {
@@ -191,6 +195,8 @@ function normalizeArticle(article, now, seenUrls, region) {
     review: {
       status: "candidate",
       queue: "open-source intake",
+      publicationStatus: "review_only",
+      visibleOn: ["review queue", "api"],
       requiredActions: ["Confirm source reliability", "Check location precision", "Review duplicate matches"]
     }
   };
@@ -215,6 +221,9 @@ function mergeDuplicateEvents(candidates) {
     duplicate.verification = duplicate.sourceCount > 1 ? "corroborated" : duplicate.verification;
     duplicate.review.status = "needs-review";
     duplicate.review.queue = "duplicate review";
+    duplicate.review.publicationStatus = "review_only";
+    duplicate.review.visibleOn = ["review queue", "api"];
+    duplicate.review.requiredActions = ["Resolve duplicate matches", "Confirm location precision", "Approve or split candidate"];
     duplicate.lastUpdatedAt = maxIsoDate(duplicate.lastUpdatedAt, candidate.lastUpdatedAt);
 
     if (SEVERITY_RANK[candidate.severity] > SEVERITY_RANK[duplicate.severity]) {
@@ -337,7 +346,7 @@ function buildSummary(article, sourceName) {
   if (description) {
     return description.slice(0, 220);
   }
-  return `${sourceName} published an open-web report matched to the live Iran watch query. Treat this as a source lead until corroborated.`;
+  return `${sourceName} published an open-web report matched to the selected theater watch query. Treat this as a source lead until corroborated.`;
 }
 
 function formatIranTime(date) {

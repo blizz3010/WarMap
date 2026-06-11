@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
+import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
 import { activeRssFeedsForRegion, SOURCE_REGISTRY } from "../api/source-registry.js";
 
@@ -10,8 +11,13 @@ const requiredFiles = [
   "src/app.js",
   "src/embed.js",
   "src/styles.css",
+  "api/archive.js",
+  "api/collectors.js",
+  "api/editorial-workflow.js",
+  "api/event.js",
   "api/events.js",
   "api/news-normalizer.js",
+  "api/review-queue.js",
   "api/source-registry.js"
 ];
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -48,6 +54,10 @@ for (const event of events) {
     throw new Error(`Event has no review queue metadata: ${event.id}`);
   }
 
+  if (!event.review?.publicationStatus || !event.review?.duplicateKey || !event.review?.visibleOn?.length) {
+    throw new Error(`Event has incomplete publication metadata: ${event.id}`);
+  }
+
   for (const source of event.sources) {
     if (!sourceTypes[source.type]) {
       throw new Error(`Unknown source type for ${event.id}: ${source.type}`);
@@ -73,6 +83,10 @@ if (!regions.some((region) => region.id === "ukraine-east")) {
 
 if (!activeRssFeedsForRegion("ukraine").length || SOURCE_REGISTRY.length < 6) {
   throw new Error("Expected active Ukraine RSS sources in the source registry");
+}
+
+if (!activeRssFeedsForRegion("ukraine").some((source) => source.id === "ukraine-president-rss")) {
+  throw new Error("Expected official Ukraine presidential RSS collector");
 }
 
 const sampleLiveEvents = normalizeArticlesToEvents(
@@ -110,6 +124,22 @@ const sampleUkraineEvents = normalizeArticlesToEvents(
 
 if (sampleUkraineEvents.length !== 1 || sampleUkraineEvents[0].place !== "Kharkiv" || sampleUkraineEvents[0].side !== "russia") {
   throw new Error("Live news normalizer failed Ukraine theater mapping");
+}
+
+if (sampleUkraineEvents[0].review.publicationStatus !== "review_only" || !sampleUkraineEvents[0].review.duplicateKey) {
+  throw new Error("Live news normalizer failed editorial queue metadata");
+}
+
+const queue = reviewQueueFromEvents(events);
+const published = publishedEventsFromEvents(events);
+const archive = archiveFromEvents(events);
+
+if (!queue.candidates.length) {
+  throw new Error("Expected fallback candidates in the review queue");
+}
+
+if (!published.length || !archive.length) {
+  throw new Error("Expected approved events in the published archive");
 }
 
 if (!buildGdeltUrl("iran").startsWith("https://api.gdeltproject.org/api/v2/doc/doc?")) {

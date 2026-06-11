@@ -1,9 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
-import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
-import { activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
-
-const PUBLICATION_MODES = new Set(["all", "review", "published"]);
+import { registrySummary } from "./source-registry.js";
+import { reviewQueueFromEvents } from "./editorial-workflow.js";
 
 export default async function handler(request, response) {
   if (request.method && request.method !== "GET") {
@@ -14,7 +12,6 @@ export default async function handler(request, response) {
 
   const region = String(request.query?.region ?? DEFAULT_REGION_ID);
   const maxRecords = Math.min(Number(request.query?.maxRecords ?? 75) || 75, 100);
-  const publication = normalizePublicationMode(request.query?.publication);
   const generatedAt = new Date();
 
   try {
@@ -23,50 +20,37 @@ export default async function handler(request, response) {
       maxRecords,
       lookback: request.query?.lookback ?? "30d"
     });
-
-    const normalizedEvents = normalizeArticlesToEvents(collection.articles, {
+    const events = normalizeArticlesToEvents(collection.articles, {
       now: generatedAt,
       region,
-      limit: 50
+      limit: 75
     });
-    const events = eventsForPublication(normalizedEvents, publication);
 
-    if (!normalizedEvents.length && collection.upstreamErrors.length >= 2) {
+    if (!events.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
     }
 
-    response.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=300");
+    const queue = reviewQueueFromEvents(events);
+    response.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=300");
     response.status(200).json({
-      events,
+      candidates: queue.candidates,
+      summary: queue.summary,
       meta: {
         generatedAt: generatedAt.toISOString(),
         region,
         lookback: collection.lookback,
-        publication,
-        source: "GDELT DOC 2.0 plus RSS fallback",
-        sourceUrl: "https://api.gdeltproject.org/api/v2/doc/doc",
         sourceRegistry: registrySummary(region),
-        rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
         upstreamArticles: collection.articles.length,
-        returnedEvents: events.length,
-        editorial: editorialSummary(normalizedEvents),
-        gdeltStatus: collection.gdeltStatus,
-        rssStatus: collection.rssStatus,
         upstreamErrors: collection.upstreamErrors,
-        verification: "open-web leads, not confirmed incidents"
+        verification: "editorial queue for open-web leads"
       }
     });
   } catch (error) {
     response.setHeader("Cache-Control", "no-store");
     response.status(502).json({
-      events: [],
-      error: "LIVE_FEED_UNAVAILABLE",
+      candidates: [],
+      error: "REVIEW_QUEUE_UNAVAILABLE",
       message: error instanceof Error ? error.message : "Unknown upstream error"
     });
   }
-}
-
-function normalizePublicationMode(value) {
-  const mode = String(value ?? "all").toLowerCase();
-  return PUBLICATION_MODES.has(mode) ? mode : "all";
 }
