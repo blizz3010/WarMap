@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import archiveHandler from "../api/archive.js";
 import eventHandler from "../api/event.js";
 import eventsHandler from "../api/events.js";
+import platformConfigHandler from "../api/platform-config.js";
 import reviewActionHandler from "../api/review-action.js";
 import reviewQueueHandler from "../api/review-queue.js";
 
@@ -24,6 +25,7 @@ const apiHandlers = new Map([
   ["/api/archive", archiveHandler],
   ["/api/event", eventHandler],
   ["/api/events", eventsHandler],
+  ["/api/platform-config", platformConfigHandler],
   ["/api/review-action", reviewActionHandler],
   ["/api/review-queue", reviewQueueHandler]
 ]);

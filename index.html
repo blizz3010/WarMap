@@ -38,6 +38,7 @@
           <button type="button" data-focus-panel="map">Map</button>
           <button type="button" data-focus-panel="time">Time</button>
           <button type="button" data-focus-panel="review">Review</button>
+          <button type="button" data-focus-panel="alerts">Alerts</button>
           <button type="button" data-focus-panel="key">Key</button>
         </nav>
 
@@ -126,6 +127,10 @@
             <label><input type="radio" name="basemap" value="dark" checked /> Dark map</label>
             <label><input type="radio" name="basemap" value="light" /> Light map</label>
             <label><input type="radio" name="basemap" value="satellite" /> Satellite</label>
+            <section class="layer-section" aria-label="Premium layer roadmap">
+              <h3>Premium overlays</h3>
+              <div class="premium-layer-list" id="premiumLayerList"></div>
+            </section>
           </div>
 
           <aside class="map-intel-panel" id="intelPanel" aria-label="Map intelligence panel" aria-hidden="true"></aside>

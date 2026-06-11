@@ -10,8 +10,9 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - filter rail for verification, source type, severity, category, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, and `/api/archive` endpoints for live leads, review actions, detail records, and approved history
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, detail records, approved history, and platform capability metadata
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
+- alert, language, and paid-layer scaffolding with clear active/planned status boundaries
 - compact embed view at `/embed`
 
 The app now attempts to load real open-web news leads first. These are not verified incidents: they are article-derived leads normalized onto the map for review. If the live sources fail or return no mapped items, the UI falls back to synthetic prototype content from `src/data.js`.
@@ -76,6 +77,17 @@ EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
 When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
 
 For the browser review panel, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN` or `localStorage.setItem("warmap.editorialToken", token)` before using the Approve/Hold/Reject buttons.
+
+## Platform capability registry
+
+`/api/platform-config` returns the non-event product surfaces used by the shell:
+
+- language options, active/default locale, and planned RTL languages
+- local browser-alert preference capability plus planned email and webhook delivery
+- included and planned-paid map layers
+- explicit boundaries for missing push delivery, translation catalogs, billing, entitlements, and licensed layer datasets
+
+The current UI persists alert preferences, selected language, and time display mode in the browser. It does not send server-side notifications or unlock paid layers.
 
 ## Collector configuration
 

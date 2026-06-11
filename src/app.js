@@ -20,6 +20,11 @@ const state = {
   layersOpen: false,
   detailOpen: false,
   activePanel: "feed",
+  language: readStoredValue("warmap.language", "en"),
+  timeZoneMode: readStoredValue("warmap.timeZoneMode", "utc3"),
+  notificationPrefs: readNotificationPrefs(),
+  platformConfig: null,
+  platformMessage: "",
   paused: false,
   timeRange: "30d",
   categories: new Set(Object.keys(categories)),
@@ -45,6 +50,7 @@ const els = {
   fitEvents: document.querySelector("#fitEvents"),
   globalSearch: document.querySelector("#globalSearch"),
   layerPanel: document.querySelector("#layerPanel"),
+  languageButton: document.querySelector("#languageButton"),
   intelPanel: document.querySelector("#intelPanel"),
   layersToggle: document.querySelector("#layersToggle"),
   locateRegion: document.querySelector("#locateRegion"),
@@ -55,12 +61,14 @@ const els = {
   officialCount: document.querySelector("#officialCount"),
   officialOnlyToggle: document.querySelector("#officialOnlyToggle"),
   pauseStreamButton: document.querySelector("#pauseStreamButton"),
+  premiumLayerList: document.querySelector("#premiumLayerList"),
   regionSelect: document.querySelector("#regionSelect"),
   resetFilters: document.querySelector("#resetFilters"),
   severityFilters: document.querySelector("#severityFilters"),
   sourceFilters: document.querySelector("#sourceFilters"),
   streamStatus: document.querySelector("#streamStatus"),
   timeRange: document.querySelector("#timeRange"),
+  timeButton: document.querySelector("#timeButton"),
   updatedAt: document.querySelector("#updatedAt"),
   verifiedCount: document.querySelector("#verifiedCount"),
   verifiedOnlyToggle: document.querySelector("#verifiedOnlyToggle"),
@@ -72,6 +80,39 @@ const els = {
 
 let map;
 let liveRequestId = 0;
+
+const PLATFORM_CONFIG_FALLBACK = {
+  schemaVersion: "platform-config.fallback",
+  languages: [
+    { id: "en", label: "English", shortLabel: "EN", locale: "en-US", status: "active", direction: "ltr" },
+    { id: "uk", label: "Ukrainian", shortLabel: "UK", locale: "uk-UA", status: "planned", direction: "ltr" },
+    { id: "fa", label: "Persian", shortLabel: "FA", locale: "fa-IR", status: "planned", direction: "rtl" },
+    { id: "ar", label: "Arabic", shortLabel: "AR", locale: "ar", status: "planned", direction: "rtl" },
+    { id: "ru", label: "Russian", shortLabel: "RU", locale: "ru-RU", status: "planned", direction: "ltr" }
+  ],
+  notificationChannels: [
+    { id: "browser", label: "Browser alerts", status: "local-ready", description: "Local browser preference only." },
+    { id: "email", label: "Email digests", status: "planned", description: "Server delivery is not configured." },
+    { id: "webhook", label: "Webhook alerts", status: "planned", description: "Server delivery is not configured." }
+  ],
+  paidLayers: [
+    { id: "satellite-basemap", label: "Satellite basemap", status: "included", description: "Included basemap option." },
+    { id: "frontline-overlay", label: "Frontline overlays", status: "planned-paid", description: "Requires verified geometry." },
+    { id: "air-alert-polygons", label: "Air-alert polygons", status: "planned-paid", description: "Requires official alert feeds." },
+    { id: "incident-heatmap", label: "Incident heatmap", status: "planned-paid", description: "Requires approved event storage." }
+  ],
+  operationalBoundaries: {
+    notifications: "No server-side notification delivery is configured in this prototype.",
+    localization: "Language selection is local until a translation catalog is added.",
+    paidLayers: "Paid layer records are metadata only until billing and entitlements exist."
+  }
+};
+
+const TIME_ZONE_MODES = [
+  { id: "utc3", label: "UTC+3" },
+  { id: "local", label: "Local" },
+  { id: "utc", label: "UTC" }
+];
 
 const FOCUS_GEOJSON_BY_FAMILY = {
   iran: {
@@ -136,12 +177,16 @@ const FOCUS_GEOJSON_BY_FAMILY = {
 init();
 
 function init() {
+  state.platformConfig = PLATFORM_CONFIG_FALLBACK;
   renderFilterControls();
   renderRegionOptions();
+  renderPlatformChrome();
+  renderPremiumLayers();
   bindControls();
   initMap();
   updateCounts();
   render();
+  loadPlatformConfig();
   loadLiveEvents();
 }
 
@@ -295,6 +340,8 @@ function bindControls() {
   els.closeFilters.addEventListener("click", () => setFiltersOpen(false));
   els.layersToggle.addEventListener("click", () => setLayersOpen(!state.layersOpen));
   els.closeLayers.addEventListener("click", () => setLayersOpen(false));
+  els.languageButton.addEventListener("click", cycleLanguage);
+  els.timeButton.addEventListener("click", cycleTimeZoneMode);
 
   els.viewportOnlyToggle.addEventListener("change", () => {
     state.viewportOnly = els.viewportOnlyToggle.checked;
@@ -373,6 +420,27 @@ function bindFilterInputControls() {
       render();
     });
   });
+}
+
+async function loadPlatformConfig() {
+  try {
+    const response = await fetch("/api/platform-config", {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || `Platform config returned ${response.status}`);
+    }
+    state.platformConfig = normalizePlatformConfig(payload);
+  } catch (error) {
+    state.platformConfig = PLATFORM_CONFIG_FALLBACK;
+    state.platformMessage = error instanceof Error ? `Using local platform defaults: ${error.message}` : "Using local platform defaults";
+  }
+
+  ensureKnownLanguage();
+  renderPlatformChrome();
+  renderPremiumLayers();
+  renderIntelPanel(filteredEvents(true));
 }
 
 async function loadLiveEvents() {
@@ -808,7 +876,7 @@ function renderDetail() {
 }
 
 function renderIntelPanel(visible = filteredEvents(true)) {
-  if (!["key", "time", "review"].includes(state.activePanel)) {
+  if (!["key", "time", "review", "alerts"].includes(state.activePanel)) {
     els.intelPanel.classList.remove("is-open");
     els.intelPanel.setAttribute("aria-hidden", "true");
     els.intelPanel.innerHTML = "";
@@ -818,7 +886,13 @@ function renderIntelPanel(visible = filteredEvents(true)) {
   els.intelPanel.classList.add("is-open");
   els.intelPanel.setAttribute("aria-hidden", "false");
   els.intelPanel.innerHTML =
-    state.activePanel === "key" ? renderKeyPanel() : state.activePanel === "review" ? renderReviewPanel(visible) : renderTimePanel(visible);
+    state.activePanel === "key"
+      ? renderKeyPanel()
+      : state.activePanel === "review"
+        ? renderReviewPanel(visible)
+        : state.activePanel === "alerts"
+          ? renderAlertsPanel(visible)
+          : renderTimePanel(visible);
   els.intelPanel.querySelector("[data-close-intel]")?.addEventListener("click", () => {
     state.activePanel = "feed";
     renderChromeState();
@@ -830,6 +904,7 @@ function renderIntelPanel(visible = filteredEvents(true)) {
   els.intelPanel.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => submitReviewAction(button));
   });
+  bindPlatformPanelControls();
 }
 
 function renderReviewPanel(visible) {
@@ -1210,6 +1285,124 @@ function renderTimePanel(visible) {
   `;
 }
 
+function renderAlertsPanel(visible) {
+  const config = platformConfig();
+  const prefs = state.notificationPrefs;
+  const activeLang = activeLanguage();
+  const alertableCount = visible.filter((item) => severityRank(item.severity) >= severityRank(prefs.minSeverity)).length;
+  const localChannel = config.notificationChannels.find((channel) => channel.id === "browser");
+  const plannedChannels = config.notificationChannels.filter((channel) => channel.id !== "browser");
+  const lockedLayerCount = config.paidLayers.filter((layer) => layer.status === "planned-paid").length;
+
+  return `
+    <header class="intel-heading">
+      <div>
+        <span>Alerts</span>
+        <h2>Notification and Language Setup</h2>
+      </div>
+      <button type="button" data-close-intel>Close</button>
+    </header>
+    <section class="intel-stats">
+      <div><strong>${alertableCount}</strong><span>Would alert</span></div>
+      <div><strong>${config.languages.length}</strong><span>Languages</span></div>
+      <div><strong>${lockedLayerCount}</strong><span>Locked layers</span></div>
+    </section>
+    ${state.platformMessage ? `<p class="editorial-message">${escapeHtml(state.platformMessage)}</p>` : ""}
+    <section class="intel-section">
+      <h3>Browser Alerts</h3>
+      <label class="preference-row">
+        <input type="checkbox" data-notification-pref="browser" ${prefs.browser ? "checked" : ""} />
+        <span>
+          <strong>${escapeHtml(localChannel?.label ?? "Browser alerts")}</strong>
+          <small>${escapeHtml(notificationPermissionLabel())}</small>
+        </span>
+      </label>
+      <label class="preference-row">
+        <input type="checkbox" data-notification-pref="regionOnly" ${prefs.regionOnly ? "checked" : ""} />
+        <span>
+          <strong>Current theater only</strong>
+          <small>${escapeHtml(currentRegion().name)}</small>
+        </span>
+      </label>
+      <div class="choice-group" aria-label="Minimum alert severity">
+        ${Object.entries(severities)
+          .sort((left, right) => (left[1].rank ?? 0) - (right[1].rank ?? 0))
+          .map(
+            ([key, severity]) => `
+              <button type="button" data-notification-severity="${escapeAttr(key)}" class="${prefs.minSeverity === key ? "is-active" : ""}">
+                ${escapeHtml(severity.label)}
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+      <button type="button" class="permission-button" data-request-notification-permission>
+        Request browser permission
+      </button>
+      <p>${escapeHtml(config.operationalBoundaries.notifications)}</p>
+    </section>
+    <section class="intel-section">
+      <h3>Language</h3>
+      <p>${escapeHtml(activeLang.label)} selected. ${escapeHtml(config.operationalBoundaries.localization)}</p>
+      <div class="language-option-list">
+        ${config.languages
+          .map(
+            (language) => `
+              <button type="button" data-language-option="${escapeAttr(language.id)}" class="${language.id === state.language ? "is-active" : ""}">
+                <strong>${escapeHtml(language.shortLabel ?? language.id.toUpperCase())}</strong>
+                <span>${escapeHtml(language.label)}</span>
+                <small>${escapeHtml(statusLabel(language.status))}</small>
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+    <section class="intel-section">
+      <h3>Planned Delivery Channels</h3>
+      <ul class="capability-list">
+        ${plannedChannels
+          .map(
+            (channel) => `
+              <li>
+                <strong>${escapeHtml(channel.label)}</strong>
+                <span>${escapeHtml(statusLabel(channel.status))}</span>
+                <small>${escapeHtml(channel.description)}</small>
+              </li>
+            `
+          )
+          .join("") || "<li><span>No planned channels configured</span></li>"}
+      </ul>
+    </section>
+  `;
+}
+
+function bindPlatformPanelControls() {
+  els.intelPanel.querySelectorAll("[data-language-option]").forEach((button) => {
+    button.addEventListener("click", () => setLanguage(button.dataset.languageOption));
+  });
+
+  els.intelPanel.querySelectorAll("[data-notification-pref]").forEach((input) => {
+    input.addEventListener("change", () => {
+      updateNotificationPrefs(
+        { [input.dataset.notificationPref]: input.checked },
+        "Alert preferences saved locally"
+      );
+    });
+  });
+
+  els.intelPanel.querySelectorAll("[data-notification-severity]").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateNotificationPrefs(
+        { minSeverity: button.dataset.notificationSeverity },
+        `${severities[button.dataset.notificationSeverity]?.label ?? "Severity"} threshold saved`
+      );
+    });
+  });
+
+  els.intelPanel.querySelector("[data-request-notification-permission]")?.addEventListener("click", requestNotificationPermission);
+}
+
 function selectEvent(eventId, panTo) {
   state.selectedEventId = eventId;
   state.detailOpen = true;
@@ -1285,7 +1478,7 @@ function setLayersOpen(open) {
 function renderChromeState() {
   document.body.classList.toggle("filters-open", state.filtersOpen);
   document.body.classList.toggle("layers-open", state.layersOpen);
-  document.body.classList.toggle("intel-open", ["key", "time", "review"].includes(state.activePanel));
+  document.body.classList.toggle("intel-open", ["key", "time", "review", "alerts"].includes(state.activePanel));
   els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
   els.filterRail.inert = !state.filtersOpen;
   els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
@@ -1297,6 +1490,159 @@ function renderChromeState() {
   els.topTabs.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.focusPanel === state.activePanel);
   });
+}
+
+function platformConfig() {
+  return state.platformConfig ?? PLATFORM_CONFIG_FALLBACK;
+}
+
+function normalizePlatformConfig(payload) {
+  const fallback = PLATFORM_CONFIG_FALLBACK;
+  return {
+    ...fallback,
+    ...payload,
+    languages: Array.isArray(payload.languages) && payload.languages.length ? payload.languages : fallback.languages,
+    notificationChannels:
+      Array.isArray(payload.notificationChannels) && payload.notificationChannels.length
+        ? payload.notificationChannels
+        : fallback.notificationChannels,
+    paidLayers: Array.isArray(payload.paidLayers) && payload.paidLayers.length ? payload.paidLayers : fallback.paidLayers,
+    operationalBoundaries: {
+      ...fallback.operationalBoundaries,
+      ...(payload.operationalBoundaries ?? {})
+    }
+  };
+}
+
+function activeLanguage() {
+  return platformConfig().languages.find((language) => language.id === state.language) ?? platformConfig().languages[0];
+}
+
+function ensureKnownLanguage() {
+  if (!platformConfig().languages.some((language) => language.id === state.language)) {
+    state.language = "en";
+    writeStoredValue("warmap.language", state.language);
+  }
+}
+
+function renderPlatformChrome() {
+  const language = activeLanguage();
+  document.documentElement.lang = language.locale ?? language.id;
+  document.documentElement.dir = language.direction ?? "ltr";
+  els.languageButton.textContent = language.shortLabel ?? language.id.toUpperCase();
+  els.languageButton.title = `${language.label} - ${statusLabel(language.status)}`;
+
+  const timeMode = activeTimeZoneMode();
+  els.timeButton.textContent = timeMode.label;
+  els.timeButton.title = `Time display: ${timeMode.label}`;
+}
+
+function renderPremiumLayers() {
+  if (!els.premiumLayerList) {
+    return;
+  }
+
+  els.premiumLayerList.innerHTML = platformConfig().paidLayers
+    .map(
+      (layer) => `
+        <label class="premium-layer-row ${layer.status === "planned-paid" ? "is-locked" : ""}">
+          <input type="checkbox" ${layer.status === "included" ? "checked" : ""} disabled />
+          <span>
+            <strong>${escapeHtml(layer.label)}</strong>
+            <small>${escapeHtml(layer.description)}</small>
+          </span>
+          <em>${escapeHtml(statusLabel(layer.status))}</em>
+        </label>
+      `
+    )
+    .join("");
+}
+
+function cycleLanguage() {
+  const languages = platformConfig().languages;
+  const currentIndex = Math.max(0, languages.findIndex((language) => language.id === state.language));
+  const nextLanguage = languages[(currentIndex + 1) % languages.length];
+  setLanguage(nextLanguage.id);
+}
+
+function setLanguage(languageId) {
+  const language = platformConfig().languages.find((item) => item.id === languageId);
+  if (!language) {
+    return;
+  }
+
+  state.language = language.id;
+  writeStoredValue("warmap.language", language.id);
+  state.platformMessage =
+    language.status === "active"
+      ? `${language.label} selected`
+      : `${language.label} selected locally; full translation catalog is planned`;
+  renderPlatformChrome();
+  renderIntelPanel(filteredEvents(true));
+}
+
+function activeTimeZoneMode() {
+  return TIME_ZONE_MODES.find((mode) => mode.id === state.timeZoneMode) ?? TIME_ZONE_MODES[0];
+}
+
+function cycleTimeZoneMode() {
+  const currentIndex = Math.max(0, TIME_ZONE_MODES.findIndex((mode) => mode.id === state.timeZoneMode));
+  state.timeZoneMode = TIME_ZONE_MODES[(currentIndex + 1) % TIME_ZONE_MODES.length].id;
+  writeStoredValue("warmap.timeZoneMode", state.timeZoneMode);
+  state.platformMessage = `${activeTimeZoneMode().label} time display selected`;
+  renderPlatformChrome();
+  render();
+}
+
+function updateNotificationPrefs(patch, message) {
+  const nextPrefs = {
+    ...state.notificationPrefs,
+    ...patch
+  };
+  if (!severities[nextPrefs.minSeverity]) {
+    nextPrefs.minSeverity = "high";
+  }
+
+  state.notificationPrefs = nextPrefs;
+  writeStoredValue("warmap.notificationPrefs", JSON.stringify(nextPrefs));
+  state.platformMessage = message;
+  renderIntelPanel(filteredEvents(true));
+}
+
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    state.platformMessage = "Browser notifications are not supported in this browser";
+    renderIntelPanel(filteredEvents(true));
+    return;
+  }
+
+  try {
+    const permission = await window.Notification.requestPermission();
+    state.platformMessage = `Browser notification permission: ${permission}`;
+    if (permission !== "granted") {
+      state.notificationPrefs.browser = false;
+      writeStoredValue("warmap.notificationPrefs", JSON.stringify(state.notificationPrefs));
+    }
+  } catch (error) {
+    state.platformMessage = error instanceof Error ? error.message : "Notification permission request failed";
+  }
+
+  renderIntelPanel(filteredEvents(true));
+}
+
+function notificationPermissionLabel() {
+  if (!("Notification" in window)) {
+    return "Browser permission unsupported";
+  }
+  return `Browser permission ${window.Notification.permission}`;
+}
+
+function severityRank(severity) {
+  return severities[severity]?.rank ?? 0;
+}
+
+function statusLabel(status) {
+  return titleCase(String(status ?? "planned").replace("local-ready", "local ready").replace("planned-paid", "planned paid"));
 }
 
 function fitToRegion(animated) {
@@ -1466,12 +1812,27 @@ function rangeLabel(range) {
 }
 
 function formatDate(value) {
-  return new Date(value).toLocaleString([], {
+  const options = {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  });
+  };
+  const timeZone = timeZoneForMode(state.timeZoneMode);
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+  return new Date(value).toLocaleString([], options);
+}
+
+function timeZoneForMode(mode) {
+  if (mode === "utc") {
+    return "UTC";
+  }
+  if (mode === "utc3") {
+    return "Europe/Kyiv";
+  }
+  return "";
 }
 
 function escapeHtml(value) {
@@ -1542,6 +1903,51 @@ function safeUrl(value) {
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
   } catch {
     return "";
+  }
+}
+
+function readStoredValue(key, fallback) {
+  try {
+    return window.localStorage?.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredValue(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {
+    // Local storage can be blocked in private browsing or embedded contexts.
+  }
+}
+
+function defaultNotificationPrefs() {
+  return {
+    browser: false,
+    regionOnly: true,
+    minSeverity: "high"
+  };
+}
+
+function readNotificationPrefs() {
+  const defaults = defaultNotificationPrefs();
+  try {
+    const parsed = JSON.parse(readStoredValue("warmap.notificationPrefs", "{}"));
+    const prefs = {
+      ...defaults,
+      ...(parsed && typeof parsed === "object" ? parsed : {})
+    };
+    if (!severities[prefs.minSeverity]) {
+      prefs.minSeverity = defaults.minSeverity;
+    }
+    return {
+      browser: Boolean(prefs.browser),
+      regionOnly: Boolean(prefs.regionOnly),
+      minSeverity: prefs.minSeverity
+    };
+  } catch {
+    return defaults;
   }
 }
 

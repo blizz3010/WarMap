@@ -9,6 +9,7 @@ import {
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
+import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import {
   activeOfficialFeedsForRegion,
   activeRssFeedsForRegion,
@@ -34,6 +35,7 @@ const requiredFiles = [
   "api/events.js",
   "api/review-action.js",
   "api/news-normalizer.js",
+  "api/platform-config.js",
   "api/review-queue.js",
   "api/source-registry.js"
 ];
@@ -112,6 +114,22 @@ if (!activeOfficialFeedsForRegion("ukraine").some((source) => source.id === "ukr
 
 if (!plannedSocialApiSourcesForRegion("ukraine").length) {
   throw new Error("Expected planned compliant social API collector family");
+}
+
+if (!PLATFORM_CONFIG.languages.some((language) => language.id === "en" && language.status === "active")) {
+  throw new Error("Expected active English language configuration");
+}
+
+if (!PLATFORM_CONFIG.languages.some((language) => language.status === "planned" && language.direction === "rtl")) {
+  throw new Error("Expected planned RTL language support configuration");
+}
+
+if (!PLATFORM_CONFIG.notificationChannels.some((channel) => channel.id === "browser" && channel.status === "local-ready")) {
+  throw new Error("Expected local browser notification channel configuration");
+}
+
+if (!PLATFORM_CONFIG.paidLayers.some((layer) => layer.status === "planned-paid")) {
+  throw new Error("Expected planned paid map layer configuration");
 }
 
 const sampleLiveEvents = normalizeArticlesToEvents(

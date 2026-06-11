@@ -152,6 +152,15 @@ a {
   min-width: 0;
 }
 
+.top-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.top-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .top-tabs button,
 .top-meta button,
 .rail-heading button,
@@ -368,7 +377,7 @@ input[type="radio"] {
   top: 16px;
   right: 16px;
   z-index: 15;
-  width: 190px;
+  width: 292px;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -410,6 +419,77 @@ input[type="radio"] {
 .basemap-card hr {
   border: 0;
   border-top: 1px solid var(--line);
+}
+
+.layer-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.layer-section h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.premium-layer-list {
+  display: grid;
+  gap: 7px;
+}
+
+.basemap-card .premium-layer-row {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: start;
+  min-height: 44px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.premium-layer-row input {
+  margin-top: 2px;
+}
+
+.premium-layer-row strong,
+.premium-layer-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.premium-layer-row strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.premium-layer-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.premium-layer-row em {
+  align-self: start;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.premium-layer-row.is-locked em {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.08);
 }
 
 .map-intel-panel {
@@ -515,6 +595,127 @@ input[type="radio"] {
 
 .status-list li {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.capability-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capability-list li,
+.preference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.preference-row {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.capability-list strong,
+.capability-list span,
+.capability-list small,
+.preference-row strong,
+.preference-row small {
+  overflow-wrap: anywhere;
+}
+
+.capability-list strong,
+.preference-row strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.capability-list span {
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.capability-list small,
+.preference-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.capability-list small {
+  grid-column: 1 / -1;
+}
+
+.choice-group,
+.language-option-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.choice-group button,
+.language-option-list button,
+.permission-button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.choice-group button.is-active,
+.language-option-list button.is-active {
+  border-color: rgba(59, 130, 246, 0.65);
+  color: var(--text);
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.language-option-list button {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  text-align: left;
+}
+
+.language-option-list strong,
+.language-option-list span,
+.language-option-list small {
+  overflow-wrap: anywhere;
+}
+
+.language-option-list strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.language-option-list span {
+  color: #d7dde8;
+  font-size: 11px;
+}
+
+.language-option-list small {
+  color: var(--dim);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.permission-button {
+  width: 100%;
+  margin-top: 8px;
+  color: #bfdbfe;
 }
 
 .taxonomy-list small,
