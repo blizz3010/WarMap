@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
+import { applyEditorialDecisions, normalizeDecisionPayload } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
 import { activeRssFeedsForRegion, SOURCE_REGISTRY } from "../api/source-registry.js";
 
@@ -13,9 +14,12 @@ const requiredFiles = [
   "src/styles.css",
   "api/archive.js",
   "api/collectors.js",
+  "api/editorial-decisions.js",
+  "api/editorial-store.js",
   "api/editorial-workflow.js",
   "api/event.js",
   "api/events.js",
+  "api/review-action.js",
   "api/news-normalizer.js",
   "api/review-queue.js",
   "api/source-registry.js"
@@ -133,6 +137,17 @@ if (sampleUkraineEvents[0].review.publicationStatus !== "review_only" || !sample
 const queue = reviewQueueFromEvents(events);
 const published = publishedEventsFromEvents(events);
 const archive = archiveFromEvents(events);
+const approvedSampleDecision = normalizeDecisionPayload(
+  {
+    action: "approve",
+    eventId: sampleUkraineEvents[0].id,
+    duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+    sourceUrl: sampleUkraineEvents[0].sources[0].url,
+    notes: "static approval overlay smoke test"
+  },
+  { now: new Date("2026-05-28T02:03:03Z") }
+);
+const approvedSampleEvents = applyEditorialDecisions(sampleUkraineEvents, [approvedSampleDecision]);
 
 if (!queue.candidates.length) {
   throw new Error("Expected fallback candidates in the review queue");
@@ -140,6 +155,14 @@ if (!queue.candidates.length) {
 
 if (!published.length || !archive.length) {
   throw new Error("Expected approved events in the published archive");
+}
+
+if (
+  approvedSampleEvents[0].review.publicationStatus !== "published" ||
+  !publishedEventsFromEvents(approvedSampleEvents).length ||
+  reviewQueueFromEvents(approvedSampleEvents).candidates.length
+) {
+  throw new Error("Editorial approval decisions did not publish and remove the sample candidate from queue");
 }
 
 if (!buildGdeltUrl("iran").startsWith("https://api.gdeltproject.org/api/v2/doc/doc?")) {

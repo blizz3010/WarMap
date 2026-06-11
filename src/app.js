@@ -26,6 +26,7 @@ const state = {
   severities: new Set(Object.keys(severities)),
   sourceTypes: new Set(Object.keys(sourceTypes)),
   events: fallbackEvents,
+  editorialMessage: "",
   feedMeta: {
     source: "Prototype data",
     verification: "synthetic fallback"
@@ -820,8 +821,11 @@ function renderIntelPanel(visible = filteredEvents(true)) {
     renderChromeState();
     renderIntelPanel(visible);
   });
-  els.intelPanel.querySelectorAll("[data-review-event-id]").forEach((button) => {
-    button.addEventListener("click", () => selectEvent(button.dataset.reviewEventId, true));
+  els.intelPanel.querySelectorAll("[data-review-open-event-id]").forEach((button) => {
+    button.addEventListener("click", () => selectEvent(button.dataset.reviewOpenEventId, true));
+  });
+  els.intelPanel.querySelectorAll("[data-review-action]").forEach((button) => {
+    button.addEventListener("click", () => submitReviewAction(button.dataset.reviewEventId, button.dataset.reviewAction));
   });
 }
 
@@ -846,6 +850,7 @@ function renderReviewPanel(visible) {
       <div><strong>${publishedCount}</strong><span>Published</span></div>
       <div><strong>${visible.length}</strong><span>Visible</span></div>
     </section>
+    ${state.editorialMessage ? `<p class="editorial-message">${escapeHtml(state.editorialMessage)}</p>` : ""}
     <section class="intel-section">
       <h3>Candidates</h3>
       <ul class="review-queue-list">
@@ -856,10 +861,15 @@ function renderReviewPanel(visible) {
               const category = categories[item.category];
               return `
                 <li style="--review-color:${category.color}">
-                  <button type="button" data-review-event-id="${escapeAttr(item.id)}">
+                  <button type="button" data-review-open-event-id="${escapeAttr(item.id)}">
                     <strong>${escapeHtml(item.title)}</strong>
                     <span>${escapeHtml(review.statusLabel)} - ${escapeHtml(review.priority)} - ${escapeHtml(item.place)}</span>
                   </button>
+                  <div class="review-actions">
+                    <button type="button" data-review-action="approve" data-review-event-id="${escapeAttr(item.id)}">Approve</button>
+                    <button type="button" data-review-action="needs-review" data-review-event-id="${escapeAttr(item.id)}">Hold</button>
+                    <button type="button" data-review-action="reject" data-review-event-id="${escapeAttr(item.id)}">Reject</button>
+                  </div>
                   <small>${escapeHtml(review.requiredActions[0] ?? "Review source")}</small>
                 </li>
               `;
@@ -877,6 +887,111 @@ function renderReviewPanel(visible) {
       </ul>
     </section>
   `;
+}
+
+async function submitReviewAction(eventId, action) {
+  const item = state.events.find((eventItem) => eventItem.id === eventId);
+  if (!item || !action) {
+    return;
+  }
+
+  const review = reviewInfo(item);
+  state.editorialMessage = `${titleCase(action)} submitted`;
+  renderIntelPanel(filteredEvents(true));
+
+  try {
+    const response = await fetch("/api/review-action", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        action,
+        eventId: item.id,
+        duplicateKey: review.duplicateKey,
+        sourceUrl: item.sources[0]?.url ?? "",
+        notes: `Action from WarMap review panel for ${item.place}`
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || `Review action returned ${response.status}`);
+    }
+
+    applyClientDecision(item.id, payload.decision);
+    state.editorialMessage = payload.persisted
+      ? `${titleCase(action)} saved`
+      : `${titleCase(action)} accepted for this runtime`;
+    render();
+  } catch (error) {
+    state.editorialMessage = error instanceof Error ? error.message : "Review action failed";
+    renderIntelPanel(filteredEvents(true));
+  }
+}
+
+function applyClientDecision(eventId, decision) {
+  state.events = state.events.map((item) => {
+    if (item.id !== eventId) {
+      return item;
+    }
+
+    const action = decision.action;
+    const review = reviewInfo(item);
+    const baseReview = {
+      ...item.review,
+      decisionId: decision.id,
+      decisionNotes: decision.notes,
+      decidedAt: decision.createdAt,
+      assignee: decision.reviewer ?? review.assignee
+    };
+
+    if (action === "approve") {
+      return {
+        ...item,
+        verification: "verified",
+        review: {
+          ...baseReview,
+          status: "approved",
+          statusLabel: "Approved",
+          queue: "published map",
+          publicationStatus: "published",
+          publicationLabel: "Published",
+          visibleOn: ["map", "feed", "detail", "archive", "api"],
+          requiredActions: ["Monitor for corrections", "Keep original source links visible"]
+        }
+      };
+    }
+
+    if (action === "reject") {
+      return {
+        ...item,
+        review: {
+          ...baseReview,
+          status: "rejected",
+          statusLabel: "Rejected",
+          queue: "withheld",
+          publicationStatus: "withheld",
+          publicationLabel: "Withheld",
+          visibleOn: ["review queue", "api"],
+          requiredActions: ["Keep source in audit history", "Record rejection reason"]
+        }
+      };
+    }
+
+    return {
+      ...item,
+      review: {
+        ...baseReview,
+        status: "needs-review",
+        statusLabel: "Needs review",
+        queue: "editorial review",
+        publicationStatus: "review_only",
+        publicationLabel: "Review only",
+        visibleOn: ["review queue", "api"],
+        requiredActions: ["Resolve duplicate matches", "Confirm location precision", "Approve or reject candidate"]
+      }
+    };
+  });
 }
 
 function renderKeyPanel() {
@@ -1159,6 +1274,7 @@ function reviewInfo(item) {
     priority: item.review?.priority ?? "normal",
     duplicateKey: item.review?.duplicateKey ?? `${item.country}-${item.province}-${item.place}-${item.category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     visibleOn: item.review?.visibleOn ?? ["review queue", "api"],
+    assignee: item.review?.assignee ?? "editorial desk",
     requiredActions: item.review?.requiredActions?.length
       ? item.review.requiredActions
       : ["Confirm source reliability", "Check location precision", "Review duplicate matches"]

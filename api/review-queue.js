@@ -1,4 +1,5 @@
 import { collectOpenWebArticles } from "./collectors.js";
+import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { registrySummary } from "./source-registry.js";
 import { reviewQueueFromEvents } from "./editorial-workflow.js";
@@ -25,12 +26,14 @@ export default async function handler(request, response) {
       region,
       limit: 75
     });
+    const decisions = await loadEditorialDecisions();
+    const decidedEvents = applyEditorialDecisions(events, decisions);
 
     if (!events.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
     }
 
-    const queue = reviewQueueFromEvents(events);
+    const queue = reviewQueueFromEvents(decidedEvents);
     response.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=300");
     response.status(200).json({
       candidates: queue.candidates,
@@ -41,6 +44,7 @@ export default async function handler(request, response) {
         lookback: collection.lookback,
         sourceRegistry: registrySummary(region),
         upstreamArticles: collection.articles.length,
+        editorialDecisions: decisions.length,
         upstreamErrors: collection.upstreamErrors,
         verification: "editorial queue for open-web leads"
       }

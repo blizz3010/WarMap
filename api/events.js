@@ -1,5 +1,6 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
+import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
 
@@ -29,7 +30,9 @@ export default async function handler(request, response) {
       region,
       limit: 50
     });
-    const events = eventsForPublication(normalizedEvents, publication);
+    const decisions = await loadEditorialDecisions();
+    const decidedEvents = applyEditorialDecisions(normalizedEvents, decisions);
+    const events = eventsForPublication(decidedEvents, publication);
 
     if (!normalizedEvents.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
@@ -49,7 +52,8 @@ export default async function handler(request, response) {
         rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
         upstreamArticles: collection.articles.length,
         returnedEvents: events.length,
-        editorial: editorialSummary(normalizedEvents),
+        editorial: editorialSummary(decidedEvents),
+        editorialDecisions: decisions.length,
         gdeltStatus: collection.gdeltStatus,
         rssStatus: collection.rssStatus,
         upstreamErrors: collection.upstreamErrors,

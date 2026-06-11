@@ -56,11 +56,13 @@ export function eventsForPublication(events, publicationMode = "all") {
 }
 
 export function reviewQueueFromEvents(events) {
-  const candidates = eventsForPublication(events, "review").sort((left, right) => {
-    const priorityCompare = priorityRank(right.review.priority) - priorityRank(left.review.priority);
-    if (priorityCompare) return priorityCompare;
-    return timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt);
-  });
+  const candidates = eventsForPublication(events, "review")
+    .filter((event) => event.review.publicationStatus === "review_only")
+    .sort((left, right) => {
+      const priorityCompare = priorityRank(right.review.priority) - priorityRank(left.review.priority);
+      if (priorityCompare) return priorityCompare;
+      return timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt);
+    });
 
   return {
     candidates,

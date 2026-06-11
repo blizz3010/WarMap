@@ -1,5 +1,6 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { enrichEditorialEvents } from "./editorial-workflow.js";
+import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { events as seedEvents } from "../src/data.js";
 
@@ -17,14 +18,16 @@ export default async function handler(request, response) {
   }
 
   const region = String(request.query?.region ?? DEFAULT_REGION_ID);
-  const seedMatch = findEvent(enrichEditorialEvents(seedEvents), id);
+  const decisions = await loadEditorialDecisions();
+  const seedMatch = findEvent(enrichEditorialEvents(applyEditorialDecisions(seedEvents, decisions)), id);
   if (seedMatch) {
     response.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=600");
     response.status(200).json({
       event: seedMatch,
       meta: {
         generatedAt: new Date().toISOString(),
-        source: "approved seed archive"
+        source: "approved seed archive",
+        editorialDecisions: decisions.length
       }
     });
     return;
@@ -42,7 +45,7 @@ export default async function handler(request, response) {
       region,
       limit: 100
     });
-    const liveMatch = findEvent(liveEvents, id);
+    const liveMatch = findEvent(applyEditorialDecisions(liveEvents, decisions), id);
 
     if (!liveMatch) {
       response.status(404).json({ error: "EVENT_NOT_FOUND" });
@@ -55,6 +58,7 @@ export default async function handler(request, response) {
       meta: {
         generatedAt: generatedAt.toISOString(),
         source: "live review candidate",
+        editorialDecisions: decisions.length,
         upstreamArticles: collection.articles.length,
         upstreamErrors: collection.upstreamErrors
       }

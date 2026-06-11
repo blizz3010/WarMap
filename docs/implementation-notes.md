@@ -15,7 +15,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Key/Time/Review panels: icon taxonomy, side/color legend, source registry status, review queue counts, and candidate queue cards.
 - Embed view: compact map and ticker at `/embed`.
 - Live feed endpoint: `/api/events` fetches open-web article leads from GDELT and registry-backed RSS sources, normalizes them into the same event shape, and lets the client fall back to static prototype data if upstream sources fail.
-- Editorial endpoints: `/api/review-queue`, `/api/event`, and `/api/archive` expose review candidates, detail records, and approved seed history.
+- Editorial endpoints: `/api/review-queue`, `/api/review-action`, `/api/event`, and `/api/archive` expose review candidates, approval/rejection actions, detail records, and approved history.
 - Iran focus mode: default map bounds, zoom, and a subtle country highlight keep Iran visually dominant while still allowing nearby regional markers.
 - Longer event history: date filtering now supports 30-day, 90-day, and all-available windows and passes the requested lookback into the live endpoint.
 
@@ -41,7 +41,7 @@ Liveuamap's public About page describes proprietary AI crawlers, expert analysts
 3. Queue every candidate for editorial actions: verify, reject, merge, split, correct time, correct location, update severity, approve, correct, or retract.
 4. Publish approved items to the map, synchronized feed, detail drawer/page, archive, and versioned API while keeping original source links visible.
 
-The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, review metadata, read-only queue API, detail API, and approved seed archive. It does not yet persist authenticated editorial decisions, so live candidate approval remains a production storage/auth step.
+The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, review metadata, queue API, local review-action storage, detail API, and approved archive. On Vercel the review-action endpoint intentionally refuses writes until an authenticated durable decision-store adapter is added.
 
 ## Production next steps
 
@@ -50,7 +50,7 @@ The current prototype implements the collector registry, deterministic extractio
 3. Expand the source registry into connector SDKs for official feeds, licensed wires, RSS, APIs, and approved social/open-web leads.
 4. Persist documents, claims, events, event updates, and media assets in PostgreSQL/PostGIS.
 5. Add an SSE endpoint for public event invalidations.
-6. Add authenticated persistence for editorial queue actions: verify, merge, split, correct location, correct time, approve, correct, and retract.
+6. Connect `POST /api/review-action` to durable authenticated storage for production reviewers, then add merge/split and reviewer assignment screens.
 7. Replace thumbnail placeholders with licensed or owned media assets and attribution text.
 
 ## Current live-feed limitations

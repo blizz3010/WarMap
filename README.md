@@ -9,7 +9,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - reverse-chronological feed synchronized with selected map events and visible original source links
 - filter rail for verification, source type, severity, category, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
-- Vercel `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive` endpoints for live leads, review candidates, detail records, and approved seed history
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, and `/api/archive` endpoints for live leads, review actions, detail records, and approved history
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - compact embed view at `/embed`
 
@@ -51,10 +51,11 @@ The browser and embed views fetch `/api/events?region=iran&publication=all` and 
 ## Editorial API slice
 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
+- `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, and `retract` decisions keyed by event id, duplicate key, or source URL.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
-- `/api/archive?region=iran` returns approved seed events grouped by day.
+- `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 
-The queue is read-only in this prototype. Live approvals still need authenticated storage before candidates can be promoted from the review queue into the public map/archive automatically.
+Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses writes until a durable authenticated decision-store adapter is added, rather than accepting anonymous public edits.
 
 ## Production direction
 
