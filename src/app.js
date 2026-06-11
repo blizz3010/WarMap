@@ -903,7 +903,8 @@ async function submitReviewAction(eventId, action) {
     const response = await fetch("/api/review-action", {
       method: "POST",
       headers: {
-        "content-type": "application/json"
+        "content-type": "application/json",
+        ...editorialAuthHeaders()
       },
       body: JSON.stringify({
         action,
@@ -992,6 +993,14 @@ function applyClientDecision(eventId, decision) {
       }
     };
   });
+}
+
+function editorialAuthHeaders() {
+  const token =
+    window.WARMAP_EDITORIAL_TOKEN ||
+    window.localStorage?.getItem("warmap.editorialToken") ||
+    "";
+  return token ? { authorization: `Bearer ${token}` } : {};
 }
 
 function renderKeyPanel() {

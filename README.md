@@ -55,7 +55,22 @@ The browser and embed views fetch `/api/events?region=iran&publication=all` and 
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 
-Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses writes until a durable authenticated decision-store adapter is added, rather than accepting anonymous public edits.
+Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured.
+
+Optional GitHub-backed production review storage uses the GitHub Contents API and no extra npm dependency:
+
+```bash
+EDITORIAL_STORE_PROVIDER=github
+EDITORIAL_GITHUB_TOKEN=github_pat_with_contents_write
+EDITORIAL_GITHUB_REPO=owner/repo
+EDITORIAL_GITHUB_BRANCH=main
+EDITORIAL_GITHUB_PATH=editorial/decisions.json
+EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
+```
+
+When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
+
+For the browser review panel, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN` or `localStorage.setItem("warmap.editorialToken", token)` before using the Approve/Hold/Reject buttons.
 
 ## Production direction
 

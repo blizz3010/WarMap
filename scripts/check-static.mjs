@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
-import { applyEditorialDecisions, normalizeDecisionPayload } from "../api/editorial-store.js";
+import {
+  applyEditorialDecisions,
+  authorizeEditorialRequest,
+  editorialStoreCapabilities,
+  normalizeDecisionPayload
+} from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
 import { activeRssFeedsForRegion, SOURCE_REGISTRY } from "../api/source-registry.js";
 
@@ -165,8 +170,58 @@ if (
   throw new Error("Editorial approval decisions did not publish and remove the sample candidate from queue");
 }
 
+withTemporaryEditorialEnv(() => {
+  process.env.VERCEL = "1";
+  process.env.EDITORIAL_STORE_PROVIDER = "github";
+  process.env.EDITORIAL_GITHUB_TOKEN = "fake-token";
+  process.env.EDITORIAL_GITHUB_REPO = "owner/repo";
+  process.env.EDITORIAL_GITHUB_BRANCH = "main";
+  delete process.env.EDITORIAL_REVIEW_TOKEN;
+
+  const capabilities = editorialStoreCapabilities();
+  if (capabilities.mode !== "github-contents" || !capabilities.canWrite || !capabilities.authRequired) {
+    throw new Error("GitHub editorial store capabilities are incomplete");
+  }
+
+  const missingToken = authorizeEditorialRequest({ headers: {} });
+  if (missingToken.ok || missingToken.code !== "EDITORIAL_AUTH_NOT_CONFIGURED") {
+    throw new Error("Durable editorial store should require EDITORIAL_REVIEW_TOKEN");
+  }
+
+  process.env.EDITORIAL_REVIEW_TOKEN = "review-secret";
+  const authorized = authorizeEditorialRequest({ headers: { authorization: "Bearer review-secret" } });
+  if (!authorized.ok || authorized.authMode !== "token") {
+    throw new Error("Durable editorial store token authorization failed");
+  }
+});
+
 if (!buildGdeltUrl("iran").startsWith("https://api.gdeltproject.org/api/v2/doc/doc?")) {
   throw new Error("GDELT URL builder returned an unexpected endpoint");
 }
 
 console.log(`Static checks passed: ${events.length} events, ${regions.length} regions, ${Object.keys(categories).length} categories.`);
+
+function withTemporaryEditorialEnv(callback) {
+  const keys = [
+    "VERCEL",
+    "EDITORIAL_STORE_PROVIDER",
+    "EDITORIAL_GITHUB_TOKEN",
+    "EDITORIAL_GITHUB_REPO",
+    "EDITORIAL_GITHUB_BRANCH",
+    "EDITORIAL_GITHUB_PATH",
+    "EDITORIAL_REVIEW_TOKEN"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}

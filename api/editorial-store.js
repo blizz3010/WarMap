@@ -4,12 +4,30 @@ import { STATIC_EDITORIAL_DECISIONS } from "./editorial-decisions.js";
 
 export const EDITORIAL_ACTIONS = new Set(["approve", "reject", "needs-review", "correct", "retract"]);
 
+const GITHUB_API_VERSION = "2022-11-28";
 const memoryDecisions = [];
 const defaultStorePath = join(process.cwd(), ".data", "editorial-decisions.json");
 
 export function editorialStoreCapabilities() {
   const hasToken = Boolean(process.env.EDITORIAL_REVIEW_TOKEN);
   const isVercel = Boolean(process.env.VERCEL);
+  const githubStore = githubStoreConfig();
+  if (githubStore) {
+    return {
+      mode: githubStore.configured ? "github-contents" : "github-contents-unconfigured",
+      canWrite: githubStore.configured,
+      authRequired: true,
+      tokenConfigured: hasToken,
+      storePath: null,
+      github: {
+        repo: githubStore.repo,
+        branch: githubStore.branch,
+        path: githubStore.path,
+        configured: githubStore.configured
+      }
+    };
+  }
+
   const canWriteLocalFile = !isVercel;
 
   return {
@@ -22,8 +40,10 @@ export function editorialStoreCapabilities() {
 }
 
 export async function loadEditorialDecisions() {
+  const durableDecisions = await readDurableDecisions();
   return dedupeDecisions([
     ...STATIC_EDITORIAL_DECISIONS,
+    ...durableDecisions,
     ...readLocalDecisions(),
     ...memoryDecisions
   ]);
@@ -32,9 +52,19 @@ export async function loadEditorialDecisions() {
 export async function saveEditorialDecision(decision) {
   const normalized = normalizeDecision(decision);
   const capabilities = editorialStoreCapabilities();
-  memoryDecisions.push(normalized);
+
+  if (capabilities.mode === "github-contents") {
+    await saveGithubDecision(normalized);
+    memoryDecisions.push(normalized);
+    return {
+      decision: normalized,
+      persisted: true,
+      capabilities: editorialStoreCapabilities()
+    };
+  }
 
   if (!capabilities.canWrite) {
+    memoryDecisions.push(normalized);
     return {
       decision: normalized,
       persisted: false,
@@ -47,6 +77,7 @@ export async function saveEditorialDecision(decision) {
   const path = editorialStorePath();
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(decisions, null, 2)}\n`, "utf8");
+  memoryDecisions.push(normalized);
 
   return {
     decision: normalized,
@@ -100,12 +131,22 @@ export function authorizeEditorialRequest(request) {
       ok: false,
       status: 503,
       code: "EDITORIAL_STORE_NOT_CONFIGURED",
-      message: "Configure EDITORIAL_DECISIONS_PATH locally or a durable editorial store before accepting review actions.",
+      message: "Configure EDITORIAL_DECISIONS_PATH locally or EDITORIAL_STORE_PROVIDER=github with repository settings before accepting review actions.",
       capabilities
     };
   }
 
   if (!configuredToken) {
+    if (capabilities.authRequired) {
+      return {
+        ok: false,
+        status: 503,
+        code: "EDITORIAL_AUTH_NOT_CONFIGURED",
+        message: "Configure EDITORIAL_REVIEW_TOKEN before enabling durable editorial writes.",
+        capabilities
+      };
+    }
+
     return { ok: true, capabilities, authMode: "local-dev" };
   }
 
@@ -269,6 +310,127 @@ function readLocalDecisions() {
 
 function editorialStorePath() {
   return process.env.EDITORIAL_DECISIONS_PATH || defaultStorePath;
+}
+
+async function readDurableDecisions() {
+  const githubStore = githubStoreConfig();
+  if (!githubStore?.configured) {
+    return [];
+  }
+
+  try {
+    const file = await readGithubDecisionFile(githubStore);
+    return file.decisions;
+  } catch {
+    return [];
+  }
+}
+
+async function saveGithubDecision(decision) {
+  const githubStore = githubStoreConfig();
+  if (!githubStore?.configured) {
+    throw new Error("GitHub editorial store is not fully configured");
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const current = await readGithubDecisionFile(githubStore);
+    const decisions = dedupeDecisions([...current.decisions.filter((item) => item.id !== decision.id), decision]);
+    const response = await fetch(githubContentsUrl(githubStore), {
+      method: "PUT",
+      headers: githubHeaders(githubStore),
+      body: JSON.stringify({
+        message: `Record WarMap editorial decision ${decision.id}`,
+        content: Buffer.from(`${JSON.stringify(decisions, null, 2)}\n`, "utf8").toString("base64"),
+        branch: githubStore.branch,
+        ...(current.sha ? { sha: current.sha } : {})
+      })
+    });
+
+    if (response.status === 409 && attempt === 0) {
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(`GitHub editorial store returned ${response.status}`);
+    }
+
+    return;
+  }
+
+  throw new Error("GitHub editorial store update conflicted");
+}
+
+async function readGithubDecisionFile(githubStore) {
+  const response = await fetch(githubContentsUrl(githubStore, { includeRef: true }), {
+    headers: githubHeaders(githubStore)
+  });
+
+  if (response.status === 404) {
+    return { decisions: [], sha: null };
+  }
+
+  if (!response.ok) {
+    throw new Error(`GitHub editorial store returned ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const content = Buffer.from(String(payload.content ?? "").replace(/\s/g, ""), "base64").toString("utf8").trim();
+  if (!content) {
+    return { decisions: [], sha: payload.sha ?? null };
+  }
+
+  const parsed = JSON.parse(content);
+  return {
+    decisions: Array.isArray(parsed) ? parsed.map((item) => normalizeDecision(item)) : [],
+    sha: payload.sha ?? null
+  };
+}
+
+function githubStoreConfig() {
+  const provider = clean(process.env.EDITORIAL_STORE_PROVIDER).toLowerCase();
+  if (provider !== "github") {
+    return null;
+  }
+
+  const token = process.env.EDITORIAL_GITHUB_TOKEN || process.env.GITHUB_TOKEN || "";
+  const repo = clean(process.env.EDITORIAL_GITHUB_REPO || vercelRepoName());
+  const branch = clean(process.env.EDITORIAL_GITHUB_BRANCH || "main");
+  const path = clean(process.env.EDITORIAL_GITHUB_PATH || "editorial/decisions.json");
+
+  return {
+    provider,
+    token,
+    repo,
+    branch,
+    path,
+    configured: Boolean(token && repo && branch && path)
+  };
+}
+
+function vercelRepoName() {
+  const owner = clean(process.env.VERCEL_GIT_REPO_OWNER);
+  const slug = clean(process.env.VERCEL_GIT_REPO_SLUG);
+  return owner && slug ? `${owner}/${slug}` : "";
+}
+
+function githubContentsUrl(githubStore, options = {}) {
+  const path = githubStore.path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  const url = `https://api.github.com/repos/${githubStore.repo}/contents/${path}`;
+  return options.includeRef ? `${url}?ref=${encodeURIComponent(githubStore.branch)}` : url;
+}
+
+function githubHeaders(githubStore) {
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${githubStore.token}`,
+    "Content-Type": "application/json",
+    "User-Agent": "WarMapLive/0.1 editorial-store",
+    "X-GitHub-Api-Version": GITHUB_API_VERSION
+  };
 }
 
 function dedupeDecisions(decisions) {

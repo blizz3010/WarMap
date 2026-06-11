@@ -41,7 +41,7 @@ Liveuamap's public About page describes proprietary AI crawlers, expert analysts
 3. Queue every candidate for editorial actions: verify, reject, merge, split, correct time, correct location, update severity, approve, correct, or retract.
 4. Publish approved items to the map, synchronized feed, detail drawer/page, archive, and versioned API while keeping original source links visible.
 
-The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, review metadata, queue API, local review-action storage, detail API, and approved archive. On Vercel the review-action endpoint intentionally refuses writes until an authenticated durable decision-store adapter is added.
+The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, review metadata, queue API, local review-action storage, detail API, and approved archive. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
 
 ## Production next steps
 
@@ -50,7 +50,7 @@ The current prototype implements the collector registry, deterministic extractio
 3. Expand the source registry into connector SDKs for official feeds, licensed wires, RSS, APIs, and approved social/open-web leads.
 4. Persist documents, claims, events, event updates, and media assets in PostgreSQL/PostGIS.
 5. Add an SSE endpoint for public event invalidations.
-6. Connect `POST /api/review-action` to durable authenticated storage for production reviewers, then add merge/split and reviewer assignment screens.
+6. Replace or harden the GitHub-backed decision adapter with PostgreSQL/PostGIS-backed event storage, then add merge/split and reviewer assignment screens.
 7. Replace thumbnail placeholders with licensed or owned media assets and attribution text.
 
 ## Current live-feed limitations
