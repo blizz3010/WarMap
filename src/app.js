@@ -1,581 +1,808 @@
 import {
-  assets,
-  briefing,
-  events,
-  leaders,
-  strikerLabels,
-  strikeEventCollection,
-  targetTypes
+  categories,
+  events as fallbackEvents,
+  regions,
+  severities,
+  sourceTypes,
+  verificationStates
 } from "./data.js";
 
-const confidenceWeights = {
-  high: 1,
-  medium: 0.65,
-  low: 0.35
-};
-
-const statusLabels = {
-  alive: "Alive",
-  unknown: "Unknown",
-  eliminated: "Eliminated",
-  fled: "Fled"
-};
-
 const state = {
-  selectedEventId: events[0]?.id ?? null,
-  strikers: new Set(["us", "israel", "joint", "iran"]),
-  layers: {
-    strikes: true,
-    assets: true,
-    feed: true,
-    leaders: true
-  },
-  heat: false,
-  videoOnly: false,
+  regionId: "iran",
+  selectedEventId: null,
   search: "",
-  playTimer: null,
-  playIndex: 0,
-  timelineDelayMs: 8000
+  verifiedOnly: false,
+  officialOnly: false,
+  mediaOnly: false,
+  viewportOnly: false,
+  filtersOpen: false,
+  layersOpen: false,
+  detailOpen: false,
+  paused: false,
+  timeRange: "30d",
+  categories: new Set(Object.keys(categories)),
+  severities: new Set(Object.keys(severities)),
+  sourceTypes: new Set(Object.keys(sourceTypes)),
+  events: fallbackEvents,
+  feedMeta: {
+    source: "Prototype data",
+    verification: "synthetic fallback"
+  },
+  markers: new Map()
 };
 
 const els = {
-  activityFeed: document.querySelector("#activityFeed"),
-  assetList: document.querySelector("#assetList"),
-  briefButton: document.querySelector("#briefButton"),
-  briefDialog: document.querySelector("#briefDialog"),
-  briefingContent: document.querySelector("#briefingContent"),
-  copyShareLink: document.querySelector("#copyShareLink"),
-  eventCard: document.querySelector("#eventCard"),
-  eventList: document.querySelector("#eventList"),
-  eventSearch: document.querySelector("#eventSearch"),
-  feedModule: document.querySelector("#feedModule"),
-  heatToggle: document.querySelector("#heatToggle"),
-  infoButton: document.querySelector("#infoButton"),
-  infoDialog: document.querySelector("#infoDialog"),
-  leaderList: document.querySelector("#leaderList"),
-  leadersModule: document.querySelector("#leadersModule"),
-  mapHud: document.querySelector("#mapHud"),
-  nextEvent: document.querySelector("#nextEvent"),
-  pauseTimeline: document.querySelector("#pauseTimeline"),
-  previousEvent: document.querySelector("#previousEvent"),
-  shareButton: document.querySelector("#shareButton"),
-  shareDialog: document.querySelector("#shareDialog"),
-  shareText: document.querySelector("#shareText"),
-  snapshotStrip: document.querySelector("#snapshotStrip"),
-  timelineIndex: document.querySelector("#timelineIndex"),
-  videoOnlyToggle: document.querySelector("#videoOnlyToggle"),
-  visibleCount: document.querySelector("#visibleCount")
+  categoryFilters: document.querySelector("#categoryFilters"),
+  detailDrawer: document.querySelector("#detailDrawer"),
+  feedList: document.querySelector("#feedList"),
+  closeFilters: document.querySelector("#closeFilters"),
+  closeLayers: document.querySelector("#closeLayers"),
+  filterRail: document.querySelector("#filterRail"),
+  filterToggle: document.querySelector("#filterToggle"),
+  fitEvents: document.querySelector("#fitEvents"),
+  globalSearch: document.querySelector("#globalSearch"),
+  layerPanel: document.querySelector("#layerPanel"),
+  layersToggle: document.querySelector("#layersToggle"),
+  locateRegion: document.querySelector("#locateRegion"),
+  mapVisibleCount: document.querySelector("#mapVisibleCount"),
+  mediaCount: document.querySelector("#mediaCount"),
+  mediaOnlyToggle: document.querySelector("#mediaOnlyToggle"),
+  newEventsButton: document.querySelector("#newEventsButton"),
+  officialCount: document.querySelector("#officialCount"),
+  officialOnlyToggle: document.querySelector("#officialOnlyToggle"),
+  pauseStreamButton: document.querySelector("#pauseStreamButton"),
+  regionSelect: document.querySelector("#regionSelect"),
+  resetFilters: document.querySelector("#resetFilters"),
+  severityFilters: document.querySelector("#severityFilters"),
+  sourceFilters: document.querySelector("#sourceFilters"),
+  streamStatus: document.querySelector("#streamStatus"),
+  timeRange: document.querySelector("#timeRange"),
+  updatedAt: document.querySelector("#updatedAt"),
+  verifiedCount: document.querySelector("#verifiedCount"),
+  verifiedOnlyToggle: document.querySelector("#verifiedOnlyToggle"),
+  viewportOnlyToggle: document.querySelector("#viewportOnlyToggle"),
+  zoomIn: document.querySelector("#zoomIn"),
+  zoomOut: document.querySelector("#zoomOut")
 };
 
-const layers = {
-  strikes: L.layerGroup(),
-  assets: L.layerGroup(),
-  heat: null
-};
-
-const markersById = new Map();
 let map;
+let liveRequestId = 0;
+
+const IRAN_FOCUS_GEOJSON = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: { name: "Iran" },
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [44.05, 39.7],
+            [48.2, 39.1],
+            [53.2, 38.8],
+            [57.4, 37.2],
+            [61.2, 35.0],
+            [62.2, 31.3],
+            [60.8, 27.0],
+            [57.3, 25.2],
+            [53.0, 26.2],
+            [49.5, 29.1],
+            [46.2, 32.0],
+            [44.3, 35.7],
+            [44.05, 39.7]
+          ]
+        ]
+      }
+    }
+  ]
+};
 
 init();
 
 function init() {
-  map = L.map("map", {
-    center: [31.8, 52.4],
-    zoom: 5,
-    minZoom: 3,
-    maxZoom: 12,
-    zoomControl: false,
-    preferCanvas: true
+  renderFilterControls();
+  renderRegionOptions();
+  bindControls();
+  initMap();
+  updateCounts();
+  render();
+  loadLiveEvents();
+}
+
+function initMap() {
+  const region = currentRegion();
+  map = new maplibregl.Map({
+    container: "map",
+    style: buildStyle("dark"),
+    center: region.center,
+    zoom: region.zoom,
+    attributionControl: false
   });
 
-  L.control.zoom({ position: "bottomright" }).addTo(map);
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+  map.on("moveend", () => {
+    if (state.viewportOnly) {
+      render();
+    }
+  });
 
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19,
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }).addTo(map);
+  map.on("load", () => {
+    fitToRegion(false);
+    render();
+  });
+}
 
-  layers.strikes.addTo(map);
-  layers.assets.addTo(map);
+function buildStyle(theme) {
+  const rasterTiles = {
+    dark: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    light: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+    satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+  };
+  const attributions = {
+    dark: "OpenStreetMap contributors, CARTO",
+    light: "OpenStreetMap contributors, CARTO",
+    satellite: "Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+  };
 
-  bindControls();
-  renderStaticPanels();
-  renderAll();
-  selectEvent(state.selectedEventId, false);
+  return {
+    version: 8,
+    sources: {
+      base: {
+        type: "raster",
+        tiles: [rasterTiles[theme] ?? rasterTiles.dark],
+        tileSize: 256,
+        attribution: attributions[theme] ?? attributions.dark
+      },
+      iranFocus: {
+        type: "geojson",
+        data: IRAN_FOCUS_GEOJSON
+      }
+    },
+    layers: [
+      {
+        id: "base",
+        type: "raster",
+        source: "base",
+        minzoom: 0,
+        maxzoom: 19
+      },
+      {
+        id: "iran-focus-fill",
+        type: "fill",
+        source: "iranFocus",
+        paint: {
+          "fill-color": theme === "light" ? "#f97316" : "#ff3b3b",
+          "fill-opacity": theme === "satellite" ? 0.12 : 0.08
+        }
+      },
+      {
+        id: "iran-focus-line",
+        type: "line",
+        source: "iranFocus",
+        paint: {
+          "line-color": theme === "light" ? "#c2410c" : "#ff5757",
+          "line-width": 2.2,
+          "line-opacity": 0.78
+        }
+      }
+    ]
+  };
+}
+
+function renderRegionOptions() {
+  els.regionSelect.innerHTML = regions
+    .map((region) => `<option value="${region.id}">${region.name}</option>`)
+    .join("");
+  els.regionSelect.value = state.regionId;
+}
+
+function renderFilterControls() {
+  els.sourceFilters.innerHTML = Object.entries(sourceTypes)
+    .map(([key, label]) => filterLabel("source-type", key, label, countBy("sourceType", key)))
+    .join("");
+
+  els.severityFilters.innerHTML = Object.entries(severities)
+    .map(([key, severity]) => filterLabel("severity", key, severity.label, countBy("severity", key), severity.color))
+    .join("");
+
+  els.categoryFilters.innerHTML = Object.entries(categories)
+    .map(([key, category]) => filterLabel("category", key, category.label, countBy("category", key), category.color))
+    .join("");
+}
+
+function filterLabel(kind, key, label, count, color) {
+  return `
+    <label>
+      <input type="checkbox" data-filter-kind="${kind}" data-filter-key="${key}" checked />
+      <span class="legend-swatch" style="--swatch:${color ?? "#64748b"}"></span>
+      ${label}
+      <span>${count}</span>
+    </label>
+  `;
 }
 
 function bindControls() {
-  document.querySelectorAll("[data-striker]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const striker = button.dataset.striker;
-      if (state.strikers.has(striker)) {
-        state.strikers.delete(striker);
-        button.classList.remove("is-active");
-      } else {
-        state.strikers.add(striker);
-        button.classList.add("is-active");
-      }
-      renderAll();
-    });
+  els.globalSearch.addEventListener("input", () => {
+    state.search = els.globalSearch.value.trim().toLowerCase();
+    render();
   });
 
-  document.querySelectorAll("[data-layer]").forEach((input) => {
+  els.verifiedOnlyToggle.addEventListener("change", () => {
+    state.verifiedOnly = els.verifiedOnlyToggle.checked;
+    render();
+  });
+
+  els.officialOnlyToggle.addEventListener("change", () => {
+    state.officialOnly = els.officialOnlyToggle.checked;
+    render();
+  });
+
+  els.mediaOnlyToggle.addEventListener("change", () => {
+    state.mediaOnly = els.mediaOnlyToggle.checked;
+    render();
+  });
+
+  els.filterToggle.addEventListener("click", () => setFiltersOpen(!state.filtersOpen));
+  els.closeFilters.addEventListener("click", () => setFiltersOpen(false));
+  els.layersToggle.addEventListener("click", () => setLayersOpen(!state.layersOpen));
+  els.closeLayers.addEventListener("click", () => setLayersOpen(false));
+
+  els.viewportOnlyToggle.addEventListener("change", () => {
+    state.viewportOnly = els.viewportOnlyToggle.checked;
+    render();
+  });
+
+  els.pauseStreamButton.addEventListener("click", () => {
+    state.paused = !state.paused;
+    els.pauseStreamButton.textContent = state.paused ? "Resume" : "Pause";
+    els.pauseStreamButton.setAttribute("aria-pressed", String(state.paused));
+    els.streamStatus.textContent = state.paused ? "Auto-update paused" : "Updates in real-time";
+  });
+
+  els.resetFilters.addEventListener("click", resetFilters);
+  els.timeRange.addEventListener("change", () => {
+    state.timeRange = els.timeRange.value;
+    render();
+    loadLiveEvents();
+  });
+
+  els.regionSelect.addEventListener("change", () => {
+    state.regionId = els.regionSelect.value;
+    fitToRegion(true);
+    render();
+    loadLiveEvents();
+  });
+
+  els.zoomIn.addEventListener("click", () => map.zoomIn());
+  els.zoomOut.addEventListener("click", () => map.zoomOut());
+  els.locateRegion.addEventListener("click", () => fitToRegion(true));
+  els.fitEvents.addEventListener("click", () => fitVisibleEvents());
+  els.newEventsButton.addEventListener("click", () => {
+    const firstEvent = filteredEvents(false)[0];
+    if (firstEvent) {
+      selectEvent(firstEvent.id, true);
+    }
+    render();
+  });
+
+  bindFilterInputControls();
+
+  document.querySelectorAll("input[name='basemap']").forEach((input) => {
     input.addEventListener("change", () => {
-      state.layers[input.dataset.layer] = input.checked;
-      renderAll();
+      if (input.checked) {
+        map.setStyle(buildStyle(input.value));
+      }
     });
   });
+}
 
-  document.querySelectorAll("[data-delay]").forEach((button) => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll("[data-delay]").forEach((item) => item.classList.remove("is-active"));
-      button.classList.add("is-active");
-      startTimeline(Number(button.dataset.delay));
+function bindFilterInputControls() {
+  document.querySelectorAll("[data-filter-kind]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const set = setForFilterKind(input.dataset.filterKind);
+      if (input.checked) {
+        set.add(input.dataset.filterKey);
+      } else {
+        set.delete(input.dataset.filterKey);
+      }
+      render();
     });
   });
-
-  els.heatToggle.addEventListener("change", () => {
-    state.heat = els.heatToggle.checked;
-    renderAll();
-  });
-
-  els.videoOnlyToggle.addEventListener("change", () => {
-    state.videoOnly = els.videoOnlyToggle.checked;
-    renderAll();
-  });
-
-  els.eventSearch.addEventListener("input", () => {
-    state.search = els.eventSearch.value.trim().toLowerCase();
-    renderAll();
-  });
-
-  els.nextEvent.addEventListener("click", () => stepEvent(1));
-  els.previousEvent.addEventListener("click", () => stepEvent(-1));
-  els.pauseTimeline.addEventListener("click", stopTimeline);
-  els.briefButton.addEventListener("click", () => els.briefDialog.showModal());
-  els.infoButton.addEventListener("click", () => els.infoDialog.showModal());
-  els.shareButton.addEventListener("click", openShareDialog);
-
-  document.querySelectorAll("[data-close-dialog]").forEach((button) => {
-    button.addEventListener("click", () => button.closest("dialog").close());
-  });
-
-  els.copyShareLink.addEventListener("click", async () => {
-    await navigator.clipboard?.writeText(window.location.href);
-    els.copyShareLink.textContent = "Copied";
-    window.setTimeout(() => {
-      els.copyShareLink.textContent = "Copy link";
-    }, 1600);
-  });
 }
 
-function renderStaticPanels() {
-  const eventCount = events.length;
-  const videoCount = events.filter((feature) => feature.properties.hasVideo).length;
-  const recentCount = events.filter((feature) => feature.properties.last6h).length;
+async function loadLiveEvents() {
+  const region = state.regionId;
+  const requestId = (liveRequestId += 1);
+  els.streamStatus.textContent = "Loading open-web news leads";
 
-  els.snapshotStrip.innerHTML = `
-    <span><strong>${eventCount}</strong> events</span>
-    <span><strong>${videoCount}</strong> video-linked</span>
-    <span><strong>${recentCount}</strong> active-window</span>
-    <span><strong>${assets.length}</strong> assets</span>
-  `;
+  try {
+    const params = new URLSearchParams({
+      region,
+      lookback: lookbackForApi(state.timeRange)
+    });
+    const response = await fetch(`/api/events?${params.toString()}`, {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || `Live feed returned ${response.status}`);
+    }
+    if (!Array.isArray(payload.events)) {
+      throw new Error("Live feed returned an invalid event list");
+    }
+    if (requestId !== liveRequestId) {
+      return;
+    }
 
-  document.querySelector("#legendGrid").innerHTML = Object.entries(targetTypes)
-    .map(
-      ([key, type]) => `
-        <div class="legend-row">
-          <span class="legend-dot target-${key}"></span>
-          <span>${type.label}</span>
-        </div>
-      `
-    )
-    .join("");
-
-  els.leaderList.innerHTML = leaders.map(renderLeader).join("");
-  els.assetList.innerHTML = assets.map(renderAssetRow).join("");
-  els.briefingContent.innerHTML = briefing
-    .map(
-      (item) => `
-        <section>
-          <h3>${item.title}</h3>
-          <p>${item.body}</p>
-        </section>
-      `
-    )
-    .join("");
+    state.events = payload.events;
+    state.feedMeta = payload.meta ?? {
+      source: "Live open-web feed",
+      verification: "open-web leads, not confirmed incidents"
+    };
+    state.selectedEventId = null;
+    state.detailOpen = false;
+    state.verifiedOnly = false;
+    els.verifiedOnlyToggle.checked = false;
+    resetFilterSets();
+    renderFilterControls();
+    bindFilterInputControls();
+    render();
+    els.streamStatus.textContent =
+      payload.events.length > 0
+        ? `Live open-web feed - ${payload.events.length} leads / ${rangeLabel(state.timeRange)}`
+        : `No live leads in ${rangeLabel(state.timeRange)}`;
+  } catch (error) {
+    if (requestId !== liveRequestId) {
+      return;
+    }
+    state.events = fallbackEvents;
+    state.feedMeta = {
+      source: "Prototype data",
+      verification: "live feed unavailable",
+      error: error instanceof Error ? error.message : "Unknown live feed error"
+    };
+    state.selectedEventId = null;
+    state.detailOpen = false;
+    resetFilterSets();
+    renderFilterControls();
+    bindFilterInputControls();
+    render();
+    els.streamStatus.textContent = "Prototype fallback - live feed unavailable";
+  }
 }
 
-function renderAll() {
-  const visible = visibleEvents();
-  renderStrikeLayer(visible);
-  renderAssetLayer();
-  renderHeatLayer(visible);
-  renderEventList(visible);
-  renderActivityFeed(visible);
-  renderLayerVisibility();
-  renderHud(visible);
-  ensureSelectionIsVisible(visible);
+function render() {
+  const visible = filteredEvents(true);
+  if (state.selectedEventId && !visible.some((item) => item.id === state.selectedEventId)) {
+    state.selectedEventId = null;
+    state.detailOpen = false;
+  }
+
+  renderMarkers(visible);
+  renderFeed(visible);
+  renderDetail();
+  renderChromeState();
+  updateCounts();
+  els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${state.events.length.toLocaleString()} events`;
+  els.updatedAt.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function visibleEvents() {
-  return events.filter((feature) => {
-    const props = feature.properties;
-    const sourceText = props.sources.map((source) => source.label).join(" ");
-    const haystack = `${props.title} ${props.city} ${props.description} ${sourceText}`.toLowerCase();
+function filteredEvents(applyViewport) {
+  const bounds = map && applyViewport && state.viewportOnly ? map.getBounds() : null;
+  const minTimestamp = minTimestampForRange(state.timeRange);
+  return state.events.filter((item) => {
+    const sourceTypeMatch = item.sources.some((source) => state.sourceTypes.has(source.type));
+    const officialMatch = !state.officialOnly || item.sources.some((source) => source.type === "official");
+    const verifiedMatch = !state.verifiedOnly || ["verified", "official", "corroborated"].includes(item.verification);
+    const mediaMatch = !state.mediaOnly || Boolean(item.media);
+    const viewportMatch = !bounds || bounds.contains([item.location.lon, item.location.lat]);
+    const timeMatch = !minTimestamp || eventTimestamp(item) >= minTimestamp;
+    const searchMatch =
+      !state.search ||
+      `${item.title} ${item.summary} ${item.place} ${item.province} ${item.sources.map((source) => source.name).join(" ")}`
+        .toLowerCase()
+        .includes(state.search);
+
     return (
-      state.strikers.has(props.striker) &&
-      (!state.videoOnly || props.hasVideo) &&
-      (!state.search || haystack.includes(state.search))
+      state.categories.has(item.category) &&
+      state.severities.has(item.severity) &&
+      sourceTypeMatch &&
+      officialMatch &&
+      verifiedMatch &&
+      mediaMatch &&
+      viewportMatch &&
+      timeMatch &&
+      searchMatch
     );
   });
 }
 
-function renderStrikeLayer(visible) {
-  layers.strikes.clearLayers();
-  markersById.clear();
+function renderMarkers(visible) {
+  const visibleIds = new Set(visible.map((item) => item.id));
 
-  if (!state.layers.strikes) {
-    return;
-  }
-
-  visible.forEach((feature) => {
-    const [lng, lat] = feature.geometry.coordinates;
-    const marker = L.marker([lat, lng], {
-      icon: strikeIcon(feature, feature.id === state.selectedEventId),
-      keyboard: true,
-      title: `${feature.properties.city}: ${feature.properties.title}`
-    });
-
-    marker.on("click", () => selectEvent(feature.id, true));
-    marker.bindTooltip(`${feature.properties.city}: ${feature.properties.title}`, {
-      direction: "top",
-      opacity: 0.92
-    });
-
-    marker.addTo(layers.strikes);
-    markersById.set(feature.id, marker);
-  });
-}
-
-function renderAssetLayer() {
-  layers.assets.clearLayers();
-
-  if (!state.layers.assets) {
-    return;
-  }
-
-  assets.forEach((asset) => {
-    const [lng, lat] = asset.coordinates;
-    L.marker([lat, lng], {
-      icon: assetIcon(),
-      title: asset.name
-    })
-      .bindTooltip(`${asset.name} - ${asset.location}`, {
-        direction: "top",
-        opacity: 0.92
-      })
-      .addTo(layers.assets);
-  });
-}
-
-function renderHeatLayer(visible) {
-  if (!window.L.heatLayer) {
-    return;
-  }
-
-  if (layers.heat) {
-    map.removeLayer(layers.heat);
-    layers.heat = null;
-  }
-
-  if (!state.heat) {
-    return;
-  }
-
-  const heatPoints = visible.map((feature) => {
-    const [lng, lat] = feature.geometry.coordinates;
-    const weight = confidenceWeights[feature.properties.confidence] ?? 0.5;
-    return [lat, lng, weight];
-  });
-
-  layers.heat = L.heatLayer(heatPoints, {
-    radius: 28,
-    blur: 22,
-    maxZoom: 9,
-    gradient: {
-      0.2: "#4da3ff",
-      0.45: "#f6d860",
-      0.75: "#f6a623",
-      1: "#f05252"
+  for (const [id, marker] of state.markers) {
+    if (!visibleIds.has(id)) {
+      marker.remove();
+      state.markers.delete(id);
     }
-  }).addTo(map);
+  }
+
+  visible.forEach((item) => {
+    if (state.markers.has(item.id)) {
+      updateMarkerClass(item);
+      return;
+    }
+
+    const markerNode = document.createElement("button");
+    markerNode.type = "button";
+    markerNode.className = markerClass(item);
+    markerNode.style.setProperty("--marker-color", categories[item.category].color);
+    markerNode.innerHTML = `<span>${categories[item.category].short}</span>`;
+    markerNode.title = `${item.place}: ${item.title}`;
+    markerNode.addEventListener("click", () => selectEvent(item.id, false));
+
+    const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
+      .setLngLat([item.location.lon, item.location.lat])
+      .addTo(map);
+
+    state.markers.set(item.id, marker);
+  });
 }
 
-function renderEventList(visible) {
-  els.visibleCount.textContent = `${visible.length} visible`;
-  els.eventList.innerHTML = visible
-    .map((feature, index) => {
-      const props = feature.properties;
-      const active = feature.id === state.selectedEventId ? "is-active" : "";
+function updateMarkerClass(item) {
+  const marker = state.markers.get(item.id);
+  if (marker) {
+    marker.getElement().className = markerClass(item);
+  }
+}
+
+function markerClass(item) {
+  return [
+    "incident-marker",
+    `severity-${item.severity}`,
+    item.id === state.selectedEventId ? "is-selected" : "",
+    item.verification === "reported" ? "is-reported" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function renderFeed(visible) {
+  if (!visible.length) {
+    els.feedList.innerHTML = `<p class="empty-state">No events match this time range and filter set.</p>`;
+    return;
+  }
+
+  els.feedList.innerHTML = visible
+    .map((item) => {
+      const category = categories[item.category];
+      const severity = severities[item.severity];
       return `
-        <button class="event-row ${active}" type="button" data-event-id="${feature.id}">
-          <span class="event-row-index">${String(index + 1).padStart(2, "0")}</span>
-          <span class="event-row-main">
-            <strong>${props.title}</strong>
-            <small>${props.city} - ${props.displayTime}</small>
-          </span>
-          <span class="event-row-badge target-${props.targetType}">${strikerLabels[props.striker]}</span>
-        </button>
+        <article class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}" style="--card-color:${category.color}">
+          <button type="button" data-event-id="${escapeAttr(item.id)}" class="feed-card-button">
+            <time>${escapeHtml(item.timeLabel)}<span>${escapeHtml(item.relativeTime)}</span></time>
+            <div class="feed-card-body">
+              <div class="place-line">
+                <span>${escapeHtml(item.place)}, ${escapeHtml(item.province)}</span>
+                <small>${escapeHtml(verificationStates[item.verification] ?? item.verification)}</small>
+              </div>
+              <h3>${escapeHtml(item.title)}</h3>
+              <p>${escapeHtml(item.summary)}</p>
+              <div class="feed-meta">
+                <span style="color:${category.color}">${category.label}</span>
+                <span style="color:${severity.color}">${severity.label}</span>
+                <span>${sourceCountLabel(item.sourceCount)}</span>
+              </div>
+            </div>
+            ${item.media ? renderMediaThumb(item) : ""}
+            <span class="save-marker" aria-hidden="true"></span>
+          </button>
+        </article>
       `;
     })
     .join("");
 
-  els.eventList.querySelectorAll("[data-event-id]").forEach((row) => {
-    row.addEventListener("click", () => selectEvent(row.dataset.eventId, true));
+  els.feedList.querySelectorAll("[data-event-id]").forEach((button) => {
+    button.addEventListener("click", () => selectEvent(button.dataset.eventId, true));
   });
 }
 
-function renderActivityFeed(visible) {
-  els.activityFeed.innerHTML = visible
-    .slice(0, 8)
-    .map(
-      (feature) => `
-        <li>
-          <span>${feature.properties.displayTime}</span>
-          <button type="button" data-feed-event="${feature.id}">${feature.properties.city}: ${feature.properties.title}</button>
-        </li>
-      `
-    )
-    .join("");
-
-  els.activityFeed.querySelectorAll("[data-feed-event]").forEach((button) => {
-    button.addEventListener("click", () => selectEvent(button.dataset.feedEvent, true));
-  });
-}
-
-function renderLayerVisibility() {
-  if (state.layers.strikes && !map.hasLayer(layers.strikes)) {
-    layers.strikes.addTo(map);
-  }
-
-  if (!state.layers.strikes && map.hasLayer(layers.strikes)) {
-    map.removeLayer(layers.strikes);
-  }
-
-  if (state.layers.assets && !map.hasLayer(layers.assets)) {
-    layers.assets.addTo(map);
-  }
-
-  if (!state.layers.assets && map.hasLayer(layers.assets)) {
-    map.removeLayer(layers.assets);
-  }
-
-  els.feedModule.hidden = !state.layers.feed;
-  els.leadersModule.hidden = !state.layers.leaders;
-}
-
-function renderHud(visible) {
-  const targetCounts = visible.reduce((acc, feature) => {
-    acc[feature.properties.targetType] = (acc[feature.properties.targetType] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  els.mapHud.innerHTML = `
-    <span>Snapshot ${new Date(strikeEventCollection.meta.version).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit"
-    })}</span>
-    <span>${visible.length} mapped</span>
-    <span>${targetCounts.nuclear ?? 0} nuclear</span>
-    <span>${targetCounts.retaliation ?? 0} retaliation</span>
-  `;
-}
-
-function ensureSelectionIsVisible(visible) {
-  if (!visible.length) {
-    state.selectedEventId = null;
-    els.eventCard.innerHTML = `<p class="empty-state">No events match the current filters.</p>`;
-    els.timelineIndex.textContent = "Event 0 / 0";
-    return;
-  }
-
-  if (!visible.some((feature) => feature.id === state.selectedEventId)) {
-    selectEvent(visible[0].id, false);
-  } else {
-    renderSelectedEvent();
-  }
-}
-
-function selectEvent(eventId, flyTo) {
-  if (!eventId) {
-    return;
-  }
-
-  const feature = events.find((item) => item.id === eventId);
-  if (!feature) {
-    return;
-  }
-
-  state.selectedEventId = eventId;
-  const visible = visibleEvents();
-  state.playIndex = Math.max(0, visible.findIndex((item) => item.id === eventId));
-
-  if (flyTo) {
-    const [lng, lat] = feature.geometry.coordinates;
-    map.flyTo([lat, lng], Math.max(map.getZoom(), 6), { duration: 0.65 });
-  }
-
-  renderStrikeLayer(visible);
-  renderEventList(visible);
-  renderSelectedEvent();
-}
-
-function renderSelectedEvent() {
-  const feature = events.find((item) => item.id === state.selectedEventId);
-  const visible = visibleEvents();
-  if (!feature) {
-    return;
-  }
-
-  const props = feature.properties;
-  const index = visible.findIndex((item) => item.id === feature.id);
-  els.timelineIndex.textContent = `Event ${index + 1} / ${visible.length}`;
-  els.eventCard.innerHTML = `
-    <div class="event-kicker">${props.city}</div>
-    <h1 id="selectedTitle">${props.title}</h1>
-    <div class="event-meta">
-      <span>${props.displayTime}</span>
-      <span>${strikerLabels[props.striker]} strike</span>
-      <span class="confidence confidence-${props.confidence}">${props.confidence}</span>
-    </div>
-    <p>${props.description}</p>
-    <div class="detail-grid">
-      <span>Target type</span><strong>${targetTypes[props.targetType].label}</strong>
-      <span>Casualties</span><strong>${formatCasualties(props.casualties)}</strong>
-      <span>Video</span><strong>${props.hasVideo ? "Linked" : "None"}</strong>
-      <span>Coordinates</span><strong>${feature.geometry.coordinates[1].toFixed(3)}, ${feature.geometry.coordinates[0].toFixed(3)}</strong>
-    </div>
-    <div class="source-list">
-      ${props.sources
-        .map((source) =>
-          source.url
-            ? `<a href="${source.url}" target="_blank" rel="noreferrer">${source.label}</a>`
-            : `<span>${source.label}</span>`
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function stepEvent(direction) {
-  const visible = visibleEvents();
-  if (!visible.length) {
-    return;
-  }
-
-  const currentIndex = Math.max(0, visible.findIndex((feature) => feature.id === state.selectedEventId));
-  const nextIndex = (currentIndex + direction + visible.length) % visible.length;
-  selectEvent(visible[nextIndex].id, true);
-}
-
-function startTimeline(delayMs) {
-  stopTimeline();
-  state.timelineDelayMs = delayMs;
-  els.pauseTimeline.textContent = "Pause";
-
-  state.playTimer = window.setInterval(() => {
-    const visible = visibleEvents();
-    if (!visible.length) {
-      stopTimeline();
-      return;
-    }
-    state.playIndex = (state.playIndex + 1) % visible.length;
-    selectEvent(visible[state.playIndex].id, true);
-  }, delayMs);
-}
-
-function stopTimeline() {
-  if (state.playTimer) {
-    window.clearInterval(state.playTimer);
-  }
-  state.playTimer = null;
-  els.pauseTimeline.textContent = "Paused";
-}
-
-function strikeIcon(feature, selected) {
-  const props = feature.properties;
-  const pulse = props.last6h ? "is-pulsing" : "";
-  const active = selected ? "is-selected" : "";
-  return L.divIcon({
-    className: "strike-icon-root",
-    iconSize: [44, 48],
-    iconAnchor: [22, 34],
-    html: `
-      <div class="strike-pin ${pulse} ${active}">
-        <span class="strike-label">${strikerLabels[props.striker] ?? "?"}</span>
-        <span class="strike-dot target-${props.targetType}"></span>
-      </div>
-    `
-  });
-}
-
-function assetIcon() {
-  return L.divIcon({
-    className: "asset-icon-root",
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    html: `<div class="asset-pin" aria-label="US asset">*</div>`
-  });
-}
-
-function renderLeader(leader) {
-  const initials = leader.name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
+function renderMediaThumb(item) {
   return `
-    <article class="leader-row">
-      <div class="leader-avatar">${initials}</div>
+    <div class="media-thumb media-${escapeAttr(item.media.tone)}" aria-label="${escapeAttr(item.media.label)}">
+      <span>${categories[item.category].short}</span>
+    </div>
+  `;
+}
+
+function renderDetail() {
+  const item = state.events.find((eventItem) => eventItem.id === state.selectedEventId);
+  if (!item) {
+    els.detailDrawer.classList.remove("is-open");
+    els.detailDrawer.setAttribute("aria-hidden", "true");
+    els.detailDrawer.innerHTML = "";
+    return;
+  }
+
+  const category = categories[item.category];
+  const severity = severities[item.severity];
+  els.detailDrawer.style.setProperty("--detail-color", category.color);
+  els.detailDrawer.classList.toggle("is-open", state.detailOpen);
+  els.detailDrawer.setAttribute("aria-hidden", String(!state.detailOpen));
+  els.detailDrawer.innerHTML = `
+    <header class="detail-header">
       <div>
-        <strong>${leader.name}</strong>
-        <span>${leader.role}</span>
-        <small>${leader.organization}</small>
-        <p>${leader.summary}</p>
+        <time>${escapeHtml(item.timeLabel)}</time>
+        <h2>${escapeHtml(item.title)}</h2>
+        <span>${escapeHtml(item.place)}, ${escapeHtml(item.province)}</span>
       </div>
-      <span class="status-badge status-${leader.status}">${statusLabels[leader.status]}</span>
-    </article>
+      <button type="button" id="closeDetail">Close</button>
+    </header>
+    <nav class="detail-tabs" aria-label="Event detail tabs">
+      <button type="button" class="is-active">Details</button>
+      <button type="button">Sources (${item.sourceCount})</button>
+      <button type="button">Timeline</button>
+      <button type="button">Map</button>
+      <button type="button">Revisions (${item.updates.length})</button>
+    </nav>
+    <div class="detail-grid">
+      <section>
+        <h3>Summary</h3>
+        <p>${escapeHtml(item.summary)}</p>
+        <dl class="detail-facts">
+          <div><dt>Category</dt><dd style="color:${category.color}">${category.label}</dd></div>
+          <div><dt>Severity</dt><dd style="color:${severity.color}">${severity.label}</dd></div>
+          <div><dt>Confidence</dt><dd>${Math.round(item.confidence * 100)}%</dd></div>
+          <div><dt>Precision</dt><dd>${escapeHtml(item.location.precision)}</dd></div>
+        </dl>
+        <ol class="update-trail">
+          ${item.updates.map((update, index) => `<li><span>${index + 1}</span>${escapeHtml(update)}</li>`).join("")}
+        </ol>
+      </section>
+      <aside>
+        <h3>Verification</h3>
+        <div class="verification-badge">${escapeHtml(verificationStates[item.verification] ?? item.verification)}</div>
+        <dl class="side-facts">
+          <div><dt>First seen</dt><dd>${formatDate(item.firstSeenAt)}</dd></div>
+          <div><dt>Last update</dt><dd>${formatDate(item.lastUpdatedAt)}</dd></div>
+          <div><dt>Location</dt><dd>${item.location.lat.toFixed(3)}, ${item.location.lon.toFixed(3)}</dd></div>
+        </dl>
+        <h3>Sources</h3>
+        <ul class="source-list">
+          ${item.sources.map((source) => renderSource(source)).join("")}
+        </ul>
+      </aside>
+    </div>
   `;
+
+  document.querySelector("#closeDetail")?.addEventListener("click", () => {
+    closeDetail();
+  });
 }
 
-function renderAssetRow(asset) {
-  return `
-    <article class="asset-row">
-      <strong>${asset.name}</strong>
-      <span>${asset.type} - ${asset.location}</span>
-      <small>${asset.note}</small>
-    </article>
-  `;
-}
-
-function formatCasualties(casualties) {
-  if (casualties.killed == null && casualties.injured == null) {
-    return "Not stated";
+function selectEvent(eventId, panTo) {
+  state.selectedEventId = eventId;
+  state.detailOpen = true;
+  const item = state.events.find((eventItem) => eventItem.id === eventId);
+  if (item && panTo) {
+    map.easeTo({
+      center: [item.location.lon, item.location.lat],
+      zoom: Math.max(map.getZoom(), 6.2),
+      duration: 600
+    });
   }
-  return `${casualties.killed ?? "?"} killed / ${casualties.injured ?? "?"} injured`;
+  render();
 }
 
-function openShareDialog() {
-  const visible = visibleEvents();
-  const selected = events.find((feature) => feature.id === state.selectedEventId);
-  els.shareText.textContent = selected
-    ? `${visible.length} mapped events visible. Selected: ${selected.properties.city} - ${selected.properties.title}.`
-    : `${visible.length} mapped events visible.`;
-  els.shareDialog.showModal();
+function closeDetail() {
+  state.detailOpen = false;
+  state.selectedEventId = null;
+  render();
+}
+
+function resetFilters() {
+  state.search = "";
+  state.verifiedOnly = false;
+  state.officialOnly = false;
+  state.mediaOnly = false;
+  state.viewportOnly = false;
+  state.timeRange = "30d";
+  resetFilterSets();
+  els.globalSearch.value = "";
+  els.verifiedOnlyToggle.checked = false;
+  els.officialOnlyToggle.checked = false;
+  els.mediaOnlyToggle.checked = false;
+  els.viewportOnlyToggle.checked = false;
+  els.timeRange.value = state.timeRange;
+  document.querySelectorAll("[data-filter-kind]").forEach((input) => {
+    input.checked = true;
+  });
+  render();
+  loadLiveEvents();
+}
+
+function resetFilterSets() {
+  state.categories = new Set(Object.keys(categories));
+  state.severities = new Set(Object.keys(severities));
+  state.sourceTypes = new Set(Object.keys(sourceTypes));
+}
+
+function setFiltersOpen(open) {
+  state.filtersOpen = open;
+  if (open) {
+    state.layersOpen = false;
+  }
+  renderChromeState();
+  window.setTimeout(() => {
+    if (map) {
+      map.resize();
+    }
+  }, 260);
+}
+
+function setLayersOpen(open) {
+  state.layersOpen = open;
+  if (open) {
+    state.filtersOpen = false;
+  }
+  renderChromeState();
+}
+
+function renderChromeState() {
+  document.body.classList.toggle("filters-open", state.filtersOpen);
+  document.body.classList.toggle("layers-open", state.layersOpen);
+  els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
+  els.filterRail.inert = !state.filtersOpen;
+  els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
+  els.filterToggle.textContent = state.filtersOpen ? "Hide filters" : "Filters";
+  els.layerPanel.setAttribute("aria-hidden", String(!state.layersOpen));
+  els.layerPanel.inert = !state.layersOpen;
+  els.layersToggle.setAttribute("aria-pressed", String(state.layersOpen));
+  els.layersToggle.textContent = state.layersOpen ? "Hide layers" : "Layers";
+}
+
+function fitToRegion(animated) {
+  const region = currentRegion();
+  map.fitBounds(
+    [
+      [region.bounds[0], region.bounds[1]],
+      [region.bounds[2], region.bounds[3]]
+    ],
+    {
+      padding: region.fitPadding ?? 36,
+      maxZoom: region.maxZoom,
+      duration: animated ? 700 : 0
+    }
+  );
+}
+
+function fitVisibleEvents() {
+  const visible = filteredEvents(false);
+  if (!visible.length) {
+    fitToRegion(true);
+    return;
+  }
+
+  const bounds = new maplibregl.LngLatBounds();
+  visible.forEach((item) => bounds.extend([item.location.lon, item.location.lat]));
+  map.fitBounds(bounds, { padding: 74, maxZoom: 7.2, duration: 700 });
+}
+
+function currentRegion() {
+  return regions.find((region) => region.id === state.regionId) ?? regions[0];
+}
+
+function setForFilterKind(kind) {
+  if (kind === "category") return state.categories;
+  if (kind === "severity") return state.severities;
+  return state.sourceTypes;
+}
+
+function countBy(field, key) {
+  if (field === "sourceType") {
+    return state.events.filter((item) => item.sources.some((source) => source.type === key)).length;
+  }
+  return state.events.filter((item) => item[field] === key).length;
+}
+
+function updateCounts() {
+  els.verifiedCount.textContent = state.events.filter((item) =>
+    ["verified", "official", "corroborated"].includes(item.verification)
+  ).length;
+  els.officialCount.textContent = state.events.filter((item) =>
+    item.sources.some((source) => source.type === "official")
+  ).length;
+  els.mediaCount.textContent = state.events.filter((item) => item.media).length;
+}
+
+function renderSource(source) {
+  const label = escapeHtml(source.name);
+  const url = safeUrl(source.url);
+  const sourceTitle = url
+    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}</a>`
+    : `<strong>${label}</strong>`;
+  return `<li>${sourceTitle}<span>${escapeHtml(sourceTypes[source.type] ?? source.type)} - ${escapeHtml(source.trustTier)}</span></li>`;
+}
+
+function sourceCountLabel(count) {
+  return `${count} ${count === 1 ? "source" : "sources"}`;
+}
+
+function minTimestampForRange(range) {
+  if (range === "all") {
+    return null;
+  }
+  const duration = rangeDurationMs(range);
+  return duration ? Date.now() - duration : null;
+}
+
+function rangeDurationMs(range) {
+  const match = String(range).match(/^(\d+)([hd])$/);
+  if (!match) {
+    return null;
+  }
+  const amount = Number(match[1]);
+  const unit = match[2];
+  return amount * (unit === "h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
+}
+
+function eventTimestamp(item) {
+  const timestamp = new Date(item.firstSeenAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function lookbackForApi(range) {
+  if (range === "all") {
+    return "180d";
+  }
+  return ["1h", "6h", "24h", "7d", "30d", "90d"].includes(range) ? range : "30d";
+}
+
+function rangeLabel(range) {
+  const labels = {
+    "1h": "1h",
+    "6h": "6h",
+    "24h": "24h",
+    "7d": "7d",
+    "30d": "30d",
+    "90d": "90d",
+    all: "all available"
+  };
+  return labels[range] ?? "30d";
+}
+
+function formatDate(value) {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return entities[character];
+  });
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
 }
