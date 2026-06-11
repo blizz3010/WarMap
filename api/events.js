@@ -1,22 +1,15 @@
 import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeArticlesToEvents, normalizeLookback } from "./news-normalizer.js";
-
-const RSS_FEEDS = [
-  {
-    name: "BBC Middle East",
-    url: "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
-    country: "United Kingdom"
-  },
-  {
-    name: "Al Jazeera",
-    url: "https://www.aljazeera.com/xml/rss/all.xml",
-    country: "Qatar"
-  }
-];
+import { activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
 
 const REGION_TERMS = {
   iran: ["iran", "iranian", "tehran", "isfahan", "irgc", "revolutionary guard", "khamenei", "hormuz"],
   "middle-east": ["iran", "israel", "gaza", "lebanon", "syria", "iraq", "yemen", "hormuz", "red sea"],
-  gulf: ["iran", "kuwait", "qatar", "bahrain", "uae", "saudi", "persian gulf", "arabian gulf", "hormuz", "tanker"]
+  gulf: ["iran", "kuwait", "qatar", "bahrain", "uae", "saudi", "persian gulf", "arabian gulf", "hormuz", "tanker"],
+  ukraine: ["ukraine", "ukrainian", "kyiv", "kharkiv", "dnipro", "odesa", "donetsk", "russia", "russian"],
+  "ukraine-east": ["kharkiv", "donetsk", "luhansk", "pokrovsk", "kramatorsk", "kupiansk", "lyman", "bakhmut", "ukraine", "russia"],
+  "ukraine-south": ["kherson", "zaporizhzhia", "mykolaiv", "odesa", "crimea", "black sea", "sevastopol", "ukraine", "russia"],
+  "ukraine-north": ["kyiv", "sumy", "chernihiv", "kharkiv", "belgorod", "kursk", "ukraine", "russia"],
+  "black-sea": ["black sea", "crimea", "sevastopol", "odesa", "snake island", "novorossiysk", "ukraine", "russia"]
 };
 
 const WATCH_TERMS = [
@@ -30,11 +23,14 @@ const WATCH_TERMS = [
   "killed",
   "military",
   "missile",
+  "occupation",
   "nuclear",
   "port",
   "protest",
   "sanction",
   "security",
+  "shahed",
+  "shelling",
   "strike",
   "tanker",
   "war"
@@ -86,7 +82,8 @@ export default async function handler(request, response) {
         lookback,
         source: "GDELT DOC 2.0 plus RSS fallback",
         sourceUrl: "https://api.gdeltproject.org/api/v2/doc/doc",
-        rssFeeds: RSS_FEEDS.map((feed) => feed.url),
+        sourceRegistry: registrySummary(region),
+        rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
         upstreamArticles: articles.length,
         returnedEvents: events.length,
         gdeltStatus: gdeltResult.status,
@@ -124,8 +121,9 @@ async function fetchGdeltArticles(region, maxRecords, lookback) {
 }
 
 async function fetchRssArticles(region, lookback) {
+  const rssFeeds = activeRssFeedsForRegion(region);
   const feedResults = await Promise.allSettled(
-    RSS_FEEDS.map(async (feed) => {
+    rssFeeds.map(async (feed) => {
       const upstream = await fetchWithTimeout(feed.url, {
         headers: {
           Accept: "application/rss+xml, application/xml, text/xml",
@@ -174,6 +172,8 @@ function rssItemToArticle(itemXml, feed) {
     url,
     domain: domainFromUrl(url),
     sourceName: feed.name,
+    sourceType: feed.sourceType,
+    trustTier: feed.trustTier,
     sourcecountry: feed.country,
     language: "English",
     pubDate: decodeXml(readTag(itemXml, "pubDate")),

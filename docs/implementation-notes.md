@@ -7,12 +7,14 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 ## Product model implemented
 
 - Persistent top navigation: region, news/map/time/key controls, language/time placeholders, pause, and search.
+- Theater switching: Iran, Middle East, Gulf, Ukraine, East Ukraine, South Ukraine, North Ukraine, and Black Sea/Crimea presets.
 - Left filter rail: verification, source type, severity, category, media-only, and time range.
-- Central MapLibre map canvas: dark raster base map, custom incident markers, selected marker state, fit/zoom controls, layer popout, and viewport-only filtering.
-- Right news feed: reverse-chronological event cards with time, place, title, summary, category, severity, verification, source count, and media thumbnail placeholders.
-- Event detail drawer: stable event object presentation with summary, source list, geocode precision, confidence, update trail, first-seen and last-updated metadata.
+- Central MapLibre map canvas: dark raster base map, custom clustered incident markers, region focus overlays, selected marker state, fit/zoom controls, layer popout, and viewport-only filtering.
+- Right news feed: reverse-chronological event cards with time, place, title, summary, category, severity, verification, source count, source links, side color, and media thumbnail placeholders.
+- Event detail drawer: stable event object presentation with summary, source list, geocode precision, confidence, update trail, side, review queue, first-seen and last-updated metadata.
+- Key/Time panels: icon taxonomy, side/color legend, source registry status, and review queue counts.
 - Embed view: compact map and ticker at `/embed`.
-- Live feed endpoint: `/api/events` fetches open-web article leads, normalizes them into the same event shape, and lets the client fall back to static prototype data if upstream sources fail.
+- Live feed endpoint: `/api/events` fetches open-web article leads from GDELT and registry-backed RSS sources, normalizes them into the same event shape, and lets the client fall back to static prototype data if upstream sources fail.
 - Iran focus mode: default map bounds, zoom, and a subtle country highlight keep Iran visually dominant while still allowing nearby regional markers.
 - Longer event history: date filtering now supports 30-day, 90-day, and all-available windows and passes the requested lookback into the live endpoint.
 
@@ -25,17 +27,29 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - `firstSeenAt`, `lastUpdatedAt`, `timeLabel`, `relativeTime`
 - `place`, `province`, `country`, `location.lat/lon/precision`
 - `confidence`, `sourceCount`, `sources[]`
+- `side`, `review.status`, `review.queue`, `review.requiredActions[]`
 - `media`
 - `updates[]`
+
+## Curation model
+
+Liveuamap's public About page describes proprietary AI crawlers, expert analysts, and editors deciding which facts appear on the map. The compatible WarMap model is:
+
+1. Collect from public, licensed, or permission-compatible feeds: RSS, official sites/APIs, CAP or emergency feeds, GDELT-style public indexes, and compliant social APIs.
+2. Extract candidate event type, location, summary, actor side, source metadata, geocode precision, and duplicate keys.
+3. Queue every candidate for editorial actions: verify, reject, merge, split, correct time, correct location, update severity, approve, correct, or retract.
+4. Publish approved items to the map, synchronized feed, detail drawer/page, archive, and versioned API while keeping original source links visible.
+
+The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, and review metadata. It does not yet persist a private editorial queue or gate public publishing on approval.
 
 ## Production next steps
 
 1. Promote `/api/events` into a versioned `/v1/events` and `/v1/feed` API with stable schemas.
-2. Add region definitions and category taxonomies from the backend.
-3. Build a source registry and connector SDK for official feeds, licensed wires, RSS, APIs, and approved social/open-web leads.
+2. Move region definitions, side colors, and category taxonomies to backend-managed configuration.
+3. Expand the source registry into connector SDKs for official feeds, licensed wires, RSS, APIs, and approved social/open-web leads.
 4. Persist documents, claims, events, event updates, and media assets in PostgreSQL/PostGIS.
 5. Add an SSE endpoint for public event invalidations.
-6. Add an editorial queue for verify, merge, split, correct location, and correct time actions.
+6. Add a persistent editorial queue for verify, merge, split, correct location, correct time, approve, correct, and retract actions.
 7. Replace thumbnail placeholders with licensed or owned media assets and attribution text.
 
 ## Current live-feed limitations

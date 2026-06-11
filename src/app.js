@@ -1,4 +1,5 @@
 import {
+  actorSides,
   categories,
   events as fallbackEvents,
   regions,
@@ -18,6 +19,7 @@ const state = {
   filtersOpen: false,
   layersOpen: false,
   detailOpen: false,
+  activePanel: "feed",
   paused: false,
   timeRange: "30d",
   categories: new Set(Object.keys(categories)),
@@ -42,6 +44,7 @@ const els = {
   fitEvents: document.querySelector("#fitEvents"),
   globalSearch: document.querySelector("#globalSearch"),
   layerPanel: document.querySelector("#layerPanel"),
+  intelPanel: document.querySelector("#intelPanel"),
   layersToggle: document.querySelector("#layersToggle"),
   locateRegion: document.querySelector("#locateRegion"),
   mapVisibleCount: document.querySelector("#mapVisibleCount"),
@@ -62,40 +65,71 @@ const els = {
   verifiedOnlyToggle: document.querySelector("#verifiedOnlyToggle"),
   viewportOnlyToggle: document.querySelector("#viewportOnlyToggle"),
   zoomIn: document.querySelector("#zoomIn"),
-  zoomOut: document.querySelector("#zoomOut")
+  zoomOut: document.querySelector("#zoomOut"),
+  topTabs: document.querySelectorAll("[data-focus-panel]")
 };
 
 let map;
 let liveRequestId = 0;
 
-const IRAN_FOCUS_GEOJSON = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: { name: "Iran" },
-      geometry: {
-        type: "Polygon",
-        coordinates: [
-          [
-            [44.05, 39.7],
-            [48.2, 39.1],
-            [53.2, 38.8],
-            [57.4, 37.2],
-            [61.2, 35.0],
-            [62.2, 31.3],
-            [60.8, 27.0],
-            [57.3, 25.2],
-            [53.0, 26.2],
-            [49.5, 29.1],
-            [46.2, 32.0],
-            [44.3, 35.7],
-            [44.05, 39.7]
+const FOCUS_GEOJSON_BY_FAMILY = {
+  iran: {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "Iran" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [44.05, 39.7],
+              [48.2, 39.1],
+              [53.2, 38.8],
+              [57.4, 37.2],
+              [61.2, 35.0],
+              [62.2, 31.3],
+              [60.8, 27.0],
+              [57.3, 25.2],
+              [53.0, 26.2],
+              [49.5, 29.1],
+              [46.2, 32.0],
+              [44.3, 35.7],
+              [44.05, 39.7]
+            ]
           ]
-        ]
+        }
       }
-    }
-  ]
+    ]
+  },
+  ukraine: {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "Ukraine" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [22.1, 52.3],
+              [25.8, 51.9],
+              [30.1, 52.2],
+              [34.2, 51.8],
+              [38.3, 50.5],
+              [40.3, 48.5],
+              [37.8, 46.0],
+              [33.4, 44.5],
+              [29.4, 45.2],
+              [24.9, 45.4],
+              [22.2, 48.2],
+              [22.1, 52.3]
+            ]
+          ]
+        }
+      }
+    ]
+  }
 };
 
 init();
@@ -122,9 +156,7 @@ function initMap() {
 
   map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
   map.on("moveend", () => {
-    if (state.viewportOnly) {
-      render();
-    }
+    render();
   });
 
   map.on("load", () => {
@@ -154,9 +186,9 @@ function buildStyle(theme) {
         tileSize: 256,
         attribution: attributions[theme] ?? attributions.dark
       },
-      iranFocus: {
+      regionFocus: {
         type: "geojson",
-        data: IRAN_FOCUS_GEOJSON
+        data: focusGeoJsonForRegion(state.regionId)
       }
     },
     layers: [
@@ -168,18 +200,18 @@ function buildStyle(theme) {
         maxzoom: 19
       },
       {
-        id: "iran-focus-fill",
+        id: "region-focus-fill",
         type: "fill",
-        source: "iranFocus",
+        source: "regionFocus",
         paint: {
           "fill-color": theme === "light" ? "#f97316" : "#ff3b3b",
           "fill-opacity": theme === "satellite" ? 0.12 : 0.08
         }
       },
       {
-        id: "iran-focus-line",
+        id: "region-focus-line",
         type: "line",
-        source: "iranFocus",
+        source: "regionFocus",
         paint: {
           "line-color": theme === "light" ? "#c2410c" : "#ff5757",
           "line-width": 2.2,
@@ -191,8 +223,19 @@ function buildStyle(theme) {
 }
 
 function renderRegionOptions() {
-  els.regionSelect.innerHTML = regions
-    .map((region) => `<option value="${region.id}">${region.name}</option>`)
+  const groups = new Map();
+  regions.forEach((region) => {
+    const group = region.group ?? "Regions";
+    groups.set(group, [...(groups.get(group) ?? []), region]);
+  });
+
+  els.regionSelect.innerHTML = [...groups]
+    .map(([group, groupRegions]) => {
+      const options = groupRegions
+        .map((region) => `<option value="${escapeAttr(region.id)}">${escapeHtml(region.name)}</option>`)
+        .join("");
+      return `<optgroup label="${escapeAttr(group)}">${options}</optgroup>`;
+    })
     .join("");
   els.regionSelect.value = state.regionId;
 }
@@ -223,6 +266,10 @@ function filterLabel(kind, key, label, count, color) {
 }
 
 function bindControls() {
+  els.topTabs.forEach((button) => {
+    button.addEventListener("click", () => setActivePanel(button.dataset.focusPanel));
+  });
+
   els.globalSearch.addEventListener("input", () => {
     state.search = els.globalSearch.value.trim().toLowerCase();
     render();
@@ -269,6 +316,7 @@ function bindControls() {
 
   els.regionSelect.addEventListener("change", () => {
     state.regionId = els.regionSelect.value;
+    updateRegionFocus();
     fitToRegion(true);
     render();
     loadLiveEvents();
@@ -292,9 +340,22 @@ function bindControls() {
     input.addEventListener("change", () => {
       if (input.checked) {
         map.setStyle(buildStyle(input.value));
+        map.once("styledata", () => {
+          updateRegionFocus();
+          render();
+        });
       }
     });
   });
+}
+
+function setActivePanel(panel) {
+  state.activePanel = panel || "feed";
+  if (state.activePanel === "map") {
+    fitVisibleEvents();
+  }
+  renderChromeState();
+  renderIntelPanel(filteredEvents(true));
 }
 
 function bindFilterInputControls() {
@@ -383,6 +444,7 @@ function render() {
   renderFeed(visible);
   renderDetail();
   renderChromeState();
+  renderIntelPanel(visible);
   updateCounts();
   els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${state.events.length.toLocaleString()} events`;
   els.updatedAt.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
@@ -419,7 +481,8 @@ function filteredEvents(applyViewport) {
 }
 
 function renderMarkers(visible) {
-  const visibleIds = new Set(visible.map((item) => item.id));
+  const markerItems = clusteredMarkerItems(visible);
+  const visibleIds = new Set(markerItems.map((item) => item.markerId));
 
   for (const [id, marker] of state.markers) {
     if (!visibleIds.has(id)) {
@@ -428,44 +491,165 @@ function renderMarkers(visible) {
     }
   }
 
-  visible.forEach((item) => {
-    if (state.markers.has(item.id)) {
-      updateMarkerClass(item);
+  markerItems.forEach((markerItem) => {
+    if (state.markers.has(markerItem.markerId)) {
+      updateMarkerElement(markerItem);
       return;
     }
 
     const markerNode = document.createElement("button");
     markerNode.type = "button";
-    markerNode.className = markerClass(item);
-    markerNode.style.setProperty("--marker-color", categories[item.category].color);
-    markerNode.innerHTML = `<span>${categories[item.category].short}</span>`;
-    markerNode.title = `${item.place}: ${item.title}`;
-    markerNode.addEventListener("click", () => selectEvent(item.id, false));
+    markerNode.className = markerClass(markerItem);
+    markerNode.style.setProperty("--marker-color", markerItem.color);
+    markerNode.innerHTML = markerItem.kind === "cluster" ? `<span>${markerItem.events.length}</span>` : `<span>${markerItem.short}</span>`;
+    markerNode.title = markerItem.title;
+    markerNode.addEventListener("click", () => {
+      if (markerItem.kind === "cluster") {
+        focusCluster(markerItem.events);
+      } else {
+        selectEvent(markerItem.event.id, false);
+      }
+    });
 
     const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
-      .setLngLat([item.location.lon, item.location.lat])
+      .setLngLat(markerItem.coordinates)
       .addTo(map);
 
-    state.markers.set(item.id, marker);
+    state.markers.set(markerItem.markerId, marker);
   });
 }
 
-function updateMarkerClass(item) {
-  const marker = state.markers.get(item.id);
+function updateMarkerElement(markerItem) {
+  const marker = state.markers.get(markerItem.markerId);
   if (marker) {
-    marker.getElement().className = markerClass(item);
+    const node = marker.getElement();
+    node.className = markerClass(markerItem);
+    node.style.setProperty("--marker-color", markerItem.color);
+    node.innerHTML = markerItem.kind === "cluster" ? `<span>${markerItem.events.length}</span>` : `<span>${markerItem.short}</span>`;
+    node.title = markerItem.title;
   }
 }
 
-function markerClass(item) {
+function markerClass(markerItem) {
   return [
-    "incident-marker",
-    `severity-${item.severity}`,
-    item.id === state.selectedEventId ? "is-selected" : "",
-    item.verification === "reported" ? "is-reported" : ""
+    markerItem.kind === "cluster" ? "incident-cluster" : "incident-marker",
+    `severity-${markerItem.severity}`,
+    markerItem.isSelected ? "is-selected" : "",
+    markerItem.isReported ? "is-reported" : ""
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function clusteredMarkerItems(eventsToRender) {
+  if (!map || map.getZoom() >= 8.4) {
+    return eventsToRender.map(eventToMarkerItem);
+  }
+
+  const bucketSize = clusterBucketSize(map.getZoom());
+  const buckets = new Map();
+
+  eventsToRender.forEach((item) => {
+    const point = map.project([item.location.lon, item.location.lat]);
+    const key = `${Math.round(point.x / bucketSize)}:${Math.round(point.y / bucketSize)}`;
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(item);
+    buckets.set(key, bucket);
+  });
+
+  return [...buckets.values()].flatMap((bucket) => {
+    if (bucket.length === 1) {
+      return [eventToMarkerItem(bucket[0])];
+    }
+
+    const category = dominantCategory(bucket);
+    const severity = highestSeverity(bucket);
+    const coordinates = averageCoordinates(bucket);
+    const selectedInCluster = bucket.some((item) => item.id === state.selectedEventId);
+
+    return [
+      {
+        kind: "cluster",
+        markerId: `cluster_${hashText(bucket.map((item) => item.id).sort().join("|"))}`,
+        events: bucket,
+        coordinates,
+        color: categories[category].color,
+        severity,
+        isSelected: selectedInCluster,
+        isReported: bucket.every((item) => item.verification === "reported"),
+        title: `${bucket.length} events near ${bucket[0].place}`
+      }
+    ];
+  });
+}
+
+function eventToMarkerItem(item) {
+  const category = categories[item.category];
+  return {
+    kind: "event",
+    markerId: item.id,
+    event: item,
+    coordinates: [item.location.lon, item.location.lat],
+    color: category.color,
+    short: category.short,
+    severity: item.severity,
+    isSelected: item.id === state.selectedEventId,
+    isReported: item.verification === "reported",
+    title: `${item.place}: ${item.title}`
+  };
+}
+
+function clusterBucketSize(zoom) {
+  if (zoom < 4.5) return 58;
+  if (zoom < 6) return 48;
+  if (zoom < 7.2) return 38;
+  return 30;
+}
+
+function dominantCategory(items) {
+  const counts = new Map();
+  items.forEach((item) => counts.set(item.category, (counts.get(item.category) ?? 0) + 1));
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "other";
+}
+
+function highestSeverity(items) {
+  return items
+    .map((item) => item.severity)
+    .sort((left, right) => (severities[right]?.rank ?? 0) - (severities[left]?.rank ?? 0))[0] ?? "low";
+}
+
+function averageCoordinates(items) {
+  const totals = items.reduce(
+    (sum, item) => {
+      sum.lon += item.location.lon;
+      sum.lat += item.location.lat;
+      return sum;
+    },
+    { lon: 0, lat: 0 }
+  );
+  return [totals.lon / items.length, totals.lat / items.length];
+}
+
+function focusCluster(clusterEvents) {
+  state.selectedEventId = null;
+  const bounds = new maplibregl.LngLatBounds();
+  clusterEvents.forEach((item) => bounds.extend([item.location.lon, item.location.lat]));
+
+  const northEast = bounds.getNorthEast();
+  const southWest = bounds.getSouthWest();
+  const singlePoint =
+    Math.abs(northEast.lng - southWest.lng) < 0.0001 && Math.abs(northEast.lat - southWest.lat) < 0.0001;
+
+  if (singlePoint) {
+    map.easeTo({
+      center: [clusterEvents[0].location.lon, clusterEvents[0].location.lat],
+      zoom: Math.min(map.getZoom() + 1.8, 9.2),
+      duration: 500
+    });
+    return;
+  }
+
+  map.fitBounds(bounds, { padding: 92, maxZoom: 8.8, duration: 600 });
 }
 
 function renderFeed(visible) {
@@ -478,6 +662,7 @@ function renderFeed(visible) {
     .map((item) => {
       const category = categories[item.category];
       const severity = severities[item.severity];
+      const side = actorSides[item.side] ?? actorSides.unknown;
       return `
         <article class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}" style="--card-color:${category.color}">
           <button type="button" data-event-id="${escapeAttr(item.id)}" class="feed-card-button">
@@ -492,12 +677,14 @@ function renderFeed(visible) {
               <div class="feed-meta">
                 <span style="color:${category.color}">${category.label}</span>
                 <span style="color:${severity.color}">${severity.label}</span>
+                <span style="color:${side.color}">${side.label}</span>
                 <span>${sourceCountLabel(item.sourceCount)}</span>
               </div>
             </div>
             ${item.media ? renderMediaThumb(item) : ""}
             <span class="save-marker" aria-hidden="true"></span>
           </button>
+          ${renderFeedSources(item)}
         </article>
       `;
     })
@@ -516,6 +703,19 @@ function renderMediaThumb(item) {
   `;
 }
 
+function renderFeedSources(item) {
+  const links = item.sources.slice(0, 3).map((source) => {
+    const url = safeUrl(source.url);
+    const label = escapeHtml(source.name);
+    return url
+      ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}</a>`
+      : `<span>${label}</span>`;
+  });
+
+  const overflow = item.sources.length > 3 ? `<span>+${item.sources.length - 3}</span>` : "";
+  return `<div class="feed-source-row"><span>Sources</span>${links.join("")}${overflow}</div>`;
+}
+
 function renderDetail() {
   const item = state.events.find((eventItem) => eventItem.id === state.selectedEventId);
   if (!item) {
@@ -527,6 +727,8 @@ function renderDetail() {
 
   const category = categories[item.category];
   const severity = severities[item.severity];
+  const side = actorSides[item.side] ?? actorSides.unknown;
+  const review = reviewInfo(item);
   els.detailDrawer.style.setProperty("--detail-color", category.color);
   els.detailDrawer.classList.toggle("is-open", state.detailOpen);
   els.detailDrawer.setAttribute("aria-hidden", String(!state.detailOpen));
@@ -553,6 +755,7 @@ function renderDetail() {
         <dl class="detail-facts">
           <div><dt>Category</dt><dd style="color:${category.color}">${category.label}</dd></div>
           <div><dt>Severity</dt><dd style="color:${severity.color}">${severity.label}</dd></div>
+          <div><dt>Side</dt><dd style="color:${side.color}">${side.label}</dd></div>
           <div><dt>Confidence</dt><dd>${Math.round(item.confidence * 100)}%</dd></div>
           <div><dt>Precision</dt><dd>${escapeHtml(item.location.precision)}</dd></div>
         </dl>
@@ -568,6 +771,14 @@ function renderDetail() {
           <div><dt>Last update</dt><dd>${formatDate(item.lastUpdatedAt)}</dd></div>
           <div><dt>Location</dt><dd>${item.location.lat.toFixed(3)}, ${item.location.lon.toFixed(3)}</dd></div>
         </dl>
+        <h3>Review Queue</h3>
+        <div class="review-card">
+          <strong>${escapeHtml(review.status)}</strong>
+          <span>${escapeHtml(review.queue)}</span>
+          <ul>
+            ${review.requiredActions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+          </ul>
+        </div>
         <h3>Sources</h3>
         <ul class="source-list">
           ${item.sources.map((source) => renderSource(source)).join("")}
@@ -579,6 +790,117 @@ function renderDetail() {
   document.querySelector("#closeDetail")?.addEventListener("click", () => {
     closeDetail();
   });
+}
+
+function renderIntelPanel(visible = filteredEvents(true)) {
+  if (!["key", "time"].includes(state.activePanel)) {
+    els.intelPanel.classList.remove("is-open");
+    els.intelPanel.setAttribute("aria-hidden", "true");
+    els.intelPanel.innerHTML = "";
+    return;
+  }
+
+  els.intelPanel.classList.add("is-open");
+  els.intelPanel.setAttribute("aria-hidden", "false");
+  els.intelPanel.innerHTML = state.activePanel === "key" ? renderKeyPanel() : renderTimePanel(visible);
+  els.intelPanel.querySelector("[data-close-intel]")?.addEventListener("click", () => {
+    state.activePanel = "feed";
+    renderChromeState();
+    renderIntelPanel(visible);
+  });
+}
+
+function renderKeyPanel() {
+  const categoryRows = Object.entries(categories)
+    .map(
+      ([key, category]) => `
+        <li>
+          <span class="taxonomy-token" style="--swatch:${category.color}">${escapeHtml(category.short)}</span>
+          <strong>${escapeHtml(category.label)}</strong>
+          <small>${escapeHtml(category.icon)}</small>
+        </li>
+      `
+    )
+    .join("");
+
+  const sideRows = Object.entries(actorSides)
+    .map(
+      ([key, side]) => `
+        <li>
+          <span class="side-dot" style="--side-color:${side.color}"></span>
+          <strong>${escapeHtml(side.label)}</strong>
+          <small>${escapeHtml(key)}</small>
+        </li>
+      `
+    )
+    .join("");
+
+  return `
+    <header class="intel-heading">
+      <div>
+        <span>Map Key</span>
+        <h2>Icon and Side Legend</h2>
+      </div>
+      <button type="button" data-close-intel>Close</button>
+    </header>
+    <section class="intel-section">
+      <h3>Icon Taxonomy</h3>
+      <ul class="taxonomy-list">${categoryRows}</ul>
+    </section>
+    <section class="intel-section">
+      <h3>Side Colors</h3>
+      <ul class="taxonomy-list">${sideRows}</ul>
+    </section>
+    <section class="intel-section">
+      <h3>Curation Chain</h3>
+      <ol class="pipeline-list">
+        <li><strong>Collect</strong><span>RSS, public APIs, official feeds, compliant social APIs</span></li>
+        <li><strong>Extract</strong><span>Type, place, summary, source, candidate duplicate key</span></li>
+        <li><strong>Review</strong><span>Verify, merge, correct location, approve, correct, retract</span></li>
+        <li><strong>Publish</strong><span>Map, feed, details, archive, API, notifications</span></li>
+      </ol>
+    </section>
+  `;
+}
+
+function renderTimePanel(visible) {
+  const reviewCounts = visible.reduce((counts, item) => {
+    const status = reviewInfo(item).status;
+    counts[status] = (counts[status] ?? 0) + 1;
+    return counts;
+  }, {});
+  const sourceRegistry = state.feedMeta.sourceRegistry;
+  const registryLabel = sourceRegistry
+    ? `${sourceRegistry.active} active / ${sourceRegistry.planned} planned`
+    : "fallback source set";
+
+  return `
+    <header class="intel-heading">
+      <div>
+        <span>Timeline</span>
+        <h2>${escapeHtml(rangeLabel(state.timeRange))}</h2>
+      </div>
+      <button type="button" data-close-intel>Close</button>
+    </header>
+    <section class="intel-stats">
+      <div><strong>${visible.length}</strong><span>Visible</span></div>
+      <div><strong>${state.events.length}</strong><span>Loaded</span></div>
+      <div><strong>${Object.keys(reviewCounts).length}</strong><span>Review states</span></div>
+    </section>
+    <section class="intel-section">
+      <h3>Review Queue</h3>
+      <ul class="status-list">
+        ${Object.entries(reviewCounts)
+          .map(([status, count]) => `<li><span>${escapeHtml(status)}</span><strong>${count}</strong></li>`)
+          .join("") || "<li><span>No visible candidates</span><strong>0</strong></li>"}
+      </ul>
+    </section>
+    <section class="intel-section">
+      <h3>Sources</h3>
+      <p>${escapeHtml(state.feedMeta.source ?? "Live source")} - ${escapeHtml(state.feedMeta.verification ?? "candidate review")}</p>
+      <p>${escapeHtml(registryLabel)}</p>
+    </section>
+  `;
 }
 
 function selectEvent(eventId, panTo) {
@@ -652,6 +974,7 @@ function setLayersOpen(open) {
 function renderChromeState() {
   document.body.classList.toggle("filters-open", state.filtersOpen);
   document.body.classList.toggle("layers-open", state.layersOpen);
+  document.body.classList.toggle("intel-open", ["key", "time"].includes(state.activePanel));
   els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
   els.filterRail.inert = !state.filtersOpen;
   els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
@@ -660,10 +983,14 @@ function renderChromeState() {
   els.layerPanel.inert = !state.layersOpen;
   els.layersToggle.setAttribute("aria-pressed", String(state.layersOpen));
   els.layersToggle.textContent = state.layersOpen ? "Hide layers" : "Layers";
+  els.topTabs.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.focusPanel === state.activePanel);
+  });
 }
 
 function fitToRegion(animated) {
   const region = currentRegion();
+  updateRegionFocus();
   map.fitBounds(
     [
       [region.bounds[0], region.bounds[1]],
@@ -691,6 +1018,26 @@ function fitVisibleEvents() {
 
 function currentRegion() {
   return regions.find((region) => region.id === state.regionId) ?? regions[0];
+}
+
+function focusGeoJsonForRegion(regionId) {
+  if (String(regionId).startsWith("ukraine") || regionId === "black-sea") {
+    return FOCUS_GEOJSON_BY_FAMILY.ukraine;
+  }
+  if (regionId === "iran") {
+    return FOCUS_GEOJSON_BY_FAMILY.iran;
+  }
+  return {
+    type: "FeatureCollection",
+    features: []
+  };
+}
+
+function updateRegionFocus() {
+  const source = map?.getSource?.("regionFocus");
+  if (source?.setData) {
+    source.setData(focusGeoJsonForRegion(state.regionId));
+  }
 }
 
 function setForFilterKind(kind) {
@@ -727,6 +1074,16 @@ function renderSource(source) {
 
 function sourceCountLabel(count) {
   return `${count} ${count === 1 ? "source" : "sources"}`;
+}
+
+function reviewInfo(item) {
+  return {
+    status: item.review?.status ?? "candidate",
+    queue: item.review?.queue ?? "open-source intake",
+    requiredActions: item.review?.requiredActions?.length
+      ? item.review.requiredActions
+      : ["Confirm source reliability", "Check location precision", "Review duplicate matches"]
+  };
 }
 
 function minTimestampForRange(range) {
@@ -805,4 +1162,14 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function hashText(value) {
+  let hashValue = 2166136261;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    hashValue ^= text.charCodeAt(index);
+    hashValue = Math.imul(hashValue, 16777619);
+  }
+  return (hashValue >>> 0).toString(16);
 }
