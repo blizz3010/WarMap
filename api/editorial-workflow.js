@@ -5,6 +5,8 @@ const REVIEW_STATUS_LABELS = {
   "needs-review": "Needs review",
   approved: "Approved",
   corrected: "Corrected",
+  merged: "Merged",
+  split: "Split needed",
   rejected: "Rejected",
   retracted: "Retracted"
 };
@@ -118,6 +120,7 @@ function inferReviewStatus(event) {
 
 function inferPublicationStatus(status) {
   if (status === "approved" || status === "corrected") return "published";
+  if (status === "merged") return "withheld";
   if (status === "retracted") return "retracted";
   if (status === "rejected") return "withheld";
   return "review_only";
@@ -135,6 +138,8 @@ function visibleTargetsForPublication(publicationStatus) {
 
 function queueForStatus(status) {
   if (status === "approved" || status === "corrected") return "published map";
+  if (status === "merged") return "duplicate review";
+  if (status === "split") return "split review";
   if (status === "retracted") return "retractions";
   if (status === "rejected") return "withheld";
   if (status === "needs-review") return "editorial review";
@@ -150,6 +155,12 @@ function normalizeActions(actions, status) {
   }
   if (status === "needs-review") {
     return ["Resolve duplicate matches", "Confirm location precision", "Approve or split candidate"];
+  }
+  if (status === "merged") {
+    return ["Confirm canonical event", "Preserve merged source links"];
+  }
+  if (status === "split") {
+    return ["Split candidate into separate events", "Confirm location/time for each fact"];
   }
   return ["Confirm source reliability", "Check location precision", "Review duplicate matches"];
 }

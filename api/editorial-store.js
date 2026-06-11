@@ -2,7 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STATIC_EDITORIAL_DECISIONS } from "./editorial-decisions.js";
 
-export const EDITORIAL_ACTIONS = new Set(["approve", "reject", "needs-review", "correct", "retract"]);
+export const EDITORIAL_ACTIONS = new Set([
+  "approve",
+  "reject",
+  "needs-review",
+  "correct",
+  "retract",
+  "merge",
+  "split"
+]);
 
 const GITHUB_API_VERSION = "2022-11-28";
 const memoryDecisions = [];
@@ -115,6 +123,8 @@ export function normalizeDecisionPayload(payload, context = {}) {
     eventId,
     duplicateKey,
     sourceUrl,
+    targetEventId: clean(payload?.targetEventId),
+    targetDuplicateKey: clean(payload?.targetDuplicateKey),
     notes: clean(payload?.notes),
     reviewer: clean(payload?.reviewer) || "editorial desk",
     correctedFields: sanitizeCorrectedFields(payload?.correctedFields),
@@ -251,6 +261,38 @@ function applyDecision(event, decision) {
     };
   }
 
+  if (decision.action === "merge") {
+    return {
+      ...baseEvent,
+      verification: "corroborated",
+      review: {
+        ...nextReview,
+        status: "merged",
+        statusLabel: "Merged",
+        queue: "duplicate review",
+        publicationStatus: "withheld",
+        publicationLabel: "Withheld",
+        visibleOn: ["review queue", "api"],
+        mergeTarget: decision.targetEventId || decision.targetDuplicateKey || decision.duplicateKey || ""
+      }
+    };
+  }
+
+  if (decision.action === "split") {
+    return {
+      ...baseEvent,
+      review: {
+        ...nextReview,
+        status: "split",
+        statusLabel: "Split needed",
+        queue: "split review",
+        publicationStatus: "review_only",
+        publicationLabel: "Review only",
+        visibleOn: ["review queue", "api"]
+      }
+    };
+  }
+
   return {
     ...baseEvent,
     review: {
@@ -287,6 +329,8 @@ function normalizeDecision(decision) {
     eventId: decision.eventId || "",
     duplicateKey: decision.duplicateKey || "",
     sourceUrl: decision.sourceUrl || "",
+    targetEventId: decision.targetEventId || "",
+    targetDuplicateKey: decision.targetDuplicateKey || "",
     reviewer: decision.reviewer || "editorial desk",
     notes: decision.notes || "",
     correctedFields: sanitizeCorrectedFields(decision.correctedFields),
@@ -444,6 +488,8 @@ function actionsForDecision(action) {
   if (action === "reject") return ["Keep source in audit history", "Record rejection reason"];
   if (action === "retract") return ["Preserve original source links", "Display retraction in archive/API"];
   if (action === "correct") return ["Publish correction", "Preserve previous revision context"];
+  if (action === "merge") return ["Confirm canonical event", "Preserve merged source links", "Withhold duplicate card"];
+  if (action === "split") return ["Split candidate into separate events", "Confirm location/time for each fact"];
   return ["Resolve duplicate matches", "Confirm location precision", "Approve or reject candidate"];
 }
 
@@ -452,6 +498,7 @@ function checklistForDecision(event, decision) {
     { key: "source-visible", label: "Original source link retained", done: Boolean(event.sources?.some((source) => source.url)) },
     { key: "location", label: "Location precision assigned", done: Boolean(event.location?.precision) },
     { key: "dedupe", label: "Duplicate key generated", done: Boolean(event.review?.duplicateKey || decision.duplicateKey) },
+    { key: "refinement", label: "Editorial refinement recorded", done: ["merge", "split", "correct"].includes(decision.action) },
     { key: "approval", label: "Editorial approval recorded", done: ["approve", "correct"].includes(decision.action) }
   ];
 }

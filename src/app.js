@@ -828,17 +828,17 @@ function renderIntelPanel(visible = filteredEvents(true)) {
     button.addEventListener("click", () => selectEvent(button.dataset.reviewOpenEventId, true));
   });
   els.intelPanel.querySelectorAll("[data-review-action]").forEach((button) => {
-    button.addEventListener("click", () => submitReviewAction(button.dataset.reviewEventId, button.dataset.reviewAction));
+    button.addEventListener("click", () => submitReviewAction(button));
   });
 }
 
 function renderReviewPanel(visible) {
   const reviewItems = visible
-    .filter((item) => reviewInfo(item).publicationStatus !== "published")
+    .filter((item) => reviewInfo(item).publicationStatus === "review_only")
     .sort((left, right) => reviewPriorityRank(reviewInfo(right).priority) - reviewPriorityRank(reviewInfo(left).priority))
     .slice(0, 12);
   const publishedCount = visible.filter((item) => reviewInfo(item).publicationStatus === "published").length;
-  const queueCount = visible.length - publishedCount;
+  const queueCount = visible.filter((item) => reviewInfo(item).publicationStatus === "review_only").length;
   const extraction = state.feedMeta.extraction;
 
   return `
@@ -878,6 +878,31 @@ function renderReviewPanel(visible) {
                     <button type="button" data-review-action="approve" data-review-event-id="${escapeAttr(item.id)}">Approve</button>
                     <button type="button" data-review-action="needs-review" data-review-event-id="${escapeAttr(item.id)}">Hold</button>
                     <button type="button" data-review-action="reject" data-review-event-id="${escapeAttr(item.id)}">Reject</button>
+                    <button type="button" data-review-action="merge" data-review-event-id="${escapeAttr(item.id)}">Merge</button>
+                    <button type="button" data-review-action="split" data-review-event-id="${escapeAttr(item.id)}">Split</button>
+                  </div>
+                  <div class="review-corrections" data-review-corrections-for="${escapeAttr(item.id)}">
+                    <label>
+                      <span>Place</span>
+                      <input data-review-correct-field="place" value="${escapeAttr(item.place)}" />
+                    </label>
+                    <label>
+                      <span>Severity</span>
+                      <select data-review-correct-field="severity">
+                        ${Object.entries(severities)
+                          .map(([key, severity]) => `<option value="${escapeAttr(key)}" ${key === item.severity ? "selected" : ""}>${escapeHtml(severity.label)}</option>`)
+                          .join("")}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Category</span>
+                      <select data-review-correct-field="category">
+                        ${Object.entries(categories)
+                          .map(([key, optionCategory]) => `<option value="${escapeAttr(key)}" ${key === item.category ? "selected" : ""}>${escapeHtml(optionCategory.label)}</option>`)
+                          .join("")}
+                      </select>
+                    </label>
+                    <button type="button" data-review-action="correct" data-review-event-id="${escapeAttr(item.id)}">Correct</button>
                   </div>
                   <small>${escapeHtml(review.requiredActions[0] ?? "Review source")}</small>
                 </li>
@@ -892,19 +917,22 @@ function renderReviewPanel(visible) {
       <ul class="pipeline-list">
         <li><strong>Queue</strong><span>Every candidate enters review with source links and duplicate key</span></li>
         <li><strong>Approve</strong><span>Only approved records publish to map, feed, detail, archive, and API</span></li>
-        <li><strong>Correct</strong><span>Corrections and retractions remain visible through archive and API</span></li>
+        <li><strong>Refine</strong><span>Editors can correct, merge duplicates, split bundled facts, or retract later</span></li>
       </ul>
     </section>
   `;
 }
 
-async function submitReviewAction(eventId, action) {
+async function submitReviewAction(button) {
+  const eventId = button.dataset.reviewEventId;
+  const action = button.dataset.reviewAction;
   const item = state.events.find((eventItem) => eventItem.id === eventId);
   if (!item || !action) {
     return;
   }
 
   const review = reviewInfo(item);
+  const correctedFields = action === "correct" ? correctionFieldsForAction(button, item) : {};
   state.editorialMessage = `${titleCase(action)} submitted`;
   renderIntelPanel(filteredEvents(true));
 
@@ -920,6 +948,8 @@ async function submitReviewAction(eventId, action) {
         eventId: item.id,
         duplicateKey: review.duplicateKey,
         sourceUrl: item.sources[0]?.url ?? "",
+        correctedFields,
+        targetDuplicateKey: action === "merge" ? review.duplicateKey : "",
         notes: `Action from WarMap review panel for ${item.place}`
       })
     });
@@ -988,6 +1018,58 @@ function applyClientDecision(eventId, decision) {
       };
     }
 
+    if (action === "correct") {
+      return {
+        ...item,
+        ...decision.correctedFields,
+        verification: "corrected",
+        review: {
+          ...baseReview,
+          status: "corrected",
+          statusLabel: "Corrected",
+          queue: "published map",
+          publicationStatus: "published",
+          publicationLabel: "Published",
+          visibleOn: ["map", "feed", "detail", "archive", "api"],
+          requiredActions: ["Publish correction", "Preserve previous revision context"]
+        }
+      };
+    }
+
+    if (action === "merge") {
+      return {
+        ...item,
+        verification: "corroborated",
+        review: {
+          ...baseReview,
+          status: "merged",
+          statusLabel: "Merged",
+          queue: "duplicate review",
+          publicationStatus: "withheld",
+          publicationLabel: "Withheld",
+          visibleOn: ["review queue", "api"],
+          mergeTarget: decision.targetEventId || decision.targetDuplicateKey || review.duplicateKey,
+          requiredActions: ["Confirm canonical event", "Preserve merged source links", "Withhold duplicate card"]
+        }
+      };
+    }
+
+    if (action === "split") {
+      return {
+        ...item,
+        review: {
+          ...baseReview,
+          status: "split",
+          statusLabel: "Split needed",
+          queue: "split review",
+          publicationStatus: "review_only",
+          publicationLabel: "Review only",
+          visibleOn: ["review queue", "api"],
+          requiredActions: ["Split candidate into separate events", "Confirm location/time for each fact"]
+        }
+      };
+    }
+
     return {
       ...item,
       review: {
@@ -1002,6 +1084,19 @@ function applyClientDecision(eventId, decision) {
       }
     };
   });
+}
+
+function correctionFieldsForAction(button, item) {
+  const fields = {};
+  const correctionPanel = button.closest("[data-review-corrections-for]");
+  correctionPanel?.querySelectorAll("[data-review-correct-field]").forEach((input) => {
+    const key = input.dataset.reviewCorrectField;
+    const value = input.value?.trim?.() ?? "";
+    if (value && value !== String(item[key] ?? "")) {
+      fields[key] = value;
+    }
+  });
+  return Object.keys(fields).length ? fields : { place: item.place };
 }
 
 function editorialAuthHeaders() {

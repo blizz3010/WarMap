@@ -181,6 +181,38 @@ const approvedSampleDecision = normalizeDecisionPayload(
   { now: new Date("2026-05-28T02:03:03Z") }
 );
 const approvedSampleEvents = applyEditorialDecisions(sampleUkraineEvents, [approvedSampleDecision]);
+const correctedSampleDecision = normalizeDecisionPayload(
+  {
+    action: "correct",
+    eventId: sampleUkraineEvents[0].id,
+    correctedFields: {
+      place: "Kharkiv",
+      severity: "critical",
+      category: "strike"
+    },
+    notes: "static correction smoke test"
+  },
+  { now: new Date("2026-05-28T02:04:03Z") }
+);
+const mergedSampleDecision = normalizeDecisionPayload(
+  {
+    action: "merge",
+    eventId: sampleUkraineEvents[0].id,
+    duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+    targetDuplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+    notes: "static merge smoke test"
+  },
+  { now: new Date("2026-05-28T02:05:03Z") }
+);
+const splitSampleDecision = normalizeDecisionPayload(
+  {
+    action: "split",
+    eventId: sampleUkraineEvents[0].id,
+    duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+    notes: "static split smoke test"
+  },
+  { now: new Date("2026-05-28T02:06:03Z") }
+);
 
 if (!queue.candidates.length) {
   throw new Error("Expected fallback candidates in the review queue");
@@ -196,6 +228,18 @@ if (
   reviewQueueFromEvents(approvedSampleEvents).candidates.length
 ) {
   throw new Error("Editorial approval decisions did not publish and remove the sample candidate from queue");
+}
+
+if (applyEditorialDecisions(sampleUkraineEvents, [correctedSampleDecision])[0].review.status !== "corrected") {
+  throw new Error("Editorial correction decisions did not mark the sample as corrected");
+}
+
+if (applyEditorialDecisions(sampleUkraineEvents, [mergedSampleDecision])[0].review.status !== "merged") {
+  throw new Error("Editorial merge decisions did not mark the sample as merged");
+}
+
+if (reviewQueueFromEvents(applyEditorialDecisions(sampleUkraineEvents, [splitSampleDecision])).candidates[0]?.review.status !== "split") {
+  throw new Error("Editorial split decisions did not keep the sample in split review");
 }
 
 withTemporaryEditorialEnv(() => {

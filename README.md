@@ -55,7 +55,7 @@ The browser and embed views fetch `/api/events?region=iran&publication=all` and 
 ## Editorial API slice
 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
-- `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, and `retract` decisions keyed by event id, duplicate key, or source URL.
+- `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 - `/event?id=...&region=...` renders a public event record backed by `/api/event`.
