@@ -766,6 +766,7 @@ function renderDetail() {
           <div><dt>Side</dt><dd style="color:${side.color}">${side.label}</dd></div>
           <div><dt>Confidence</dt><dd>${Math.round(item.confidence * 100)}%</dd></div>
           <div><dt>Precision</dt><dd>${escapeHtml(item.location.precision)}</dd></div>
+          <div><dt>Extraction</dt><dd>${escapeHtml(extractionLabel(item))}</dd></div>
         </dl>
         <ol class="update-trail">
           ${item.updates.map((update, index) => `<li><span>${index + 1}</span>${escapeHtml(update)}</li>`).join("")}
@@ -838,6 +839,7 @@ function renderReviewPanel(visible) {
     .slice(0, 12);
   const publishedCount = visible.filter((item) => reviewInfo(item).publicationStatus === "published").length;
   const queueCount = visible.length - publishedCount;
+  const extraction = state.feedMeta.extraction;
 
   return `
     <header class="intel-heading">
@@ -853,6 +855,11 @@ function renderReviewPanel(visible) {
       <div><strong>${visible.length}</strong><span>Visible</span></div>
     </section>
     ${state.editorialMessage ? `<p class="editorial-message">${escapeHtml(state.editorialMessage)}</p>` : ""}
+    ${
+      extraction
+        ? `<section class="intel-section"><h3>Extraction</h3><p>${escapeHtml(extraction.provider)} - ${escapeHtml(extraction.mode)} - ${escapeHtml(extraction.schemaVersion)}</p></section>`
+        : ""
+    }
     <section class="intel-section">
       <h3>Candidates</h3>
       <ul class="review-queue-list">
@@ -1310,6 +1317,14 @@ function reviewInfo(item) {
 
 function reviewPriorityRank(priority) {
   return { low: 1, normal: 2, high: 3, urgent: 4 }[priority] ?? 0;
+}
+
+function extractionLabel(item) {
+  const extraction = item.extraction;
+  if (!extraction) {
+    return "not recorded";
+  }
+  return `${extraction.provider ?? "local"} / ${extraction.eventType ?? item.category}`;
 }
 
 function minTimestampForRange(range) {

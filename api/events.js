@@ -1,4 +1,5 @@
 import { collectOpenWebArticles } from "./collectors.js";
+import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
@@ -56,6 +57,7 @@ export default async function handler(request, response) {
         returnedEvents: events.length,
         editorial: editorialSummary(decidedEvents),
         editorialDecisions: decisions.length,
+        extraction: extractionRuntimeSummary(),
         gdeltStatus: collection.gdeltStatus,
         rssStatus: collection.rssStatus,
         officialStatus: collection.officialStatus,

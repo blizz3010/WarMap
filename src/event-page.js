@@ -78,6 +78,8 @@ function renderEvent(item, meta, context) {
               <div><dt>Side</dt><dd style="color:${side.color}">${escapeHtml(side.label)}</dd></div>
               <div><dt>Confidence</dt><dd>${Math.round(Number(item.confidence ?? 0) * 100)}%</dd></div>
               <div><dt>Precision</dt><dd>${escapeHtml(item.location?.precision ?? "unknown")}</dd></div>
+              <div><dt>Extraction</dt><dd>${escapeHtml(extractionLabel(item))}</dd></div>
+              <div><dt>Duplicate key</dt><dd>${escapeHtml(item.extraction?.duplicateKey ?? review.duplicateKey)}</dd></div>
               <div><dt>Coordinates</dt><dd>${formatCoordinate(item.location?.lat)}, ${formatCoordinate(item.location?.lon)}</dd></div>
               <div><dt>First seen</dt><dd>${formatDate(item.firstSeenAt)}</dd></div>
               <div><dt>Last update</dt><dd>${formatDate(item.lastUpdatedAt)}</dd></div>
@@ -154,6 +156,14 @@ function reviewInfo(item) {
     duplicateKey: review.duplicateKey ?? `${item.country}-${item.province}-${item.place}-${item.category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     requiredActions: review.requiredActions?.length ? review.requiredActions : ["Confirm source reliability"]
   };
+}
+
+function extractionLabel(item) {
+  const extraction = item.extraction;
+  if (!extraction) {
+    return "not recorded";
+  }
+  return `${extraction.provider ?? "local"} / ${extraction.eventType ?? item.category}`;
 }
 
 function formatDate(value) {

@@ -1,3 +1,4 @@
+import { buildCandidateExtraction, mergeDuplicateExtraction } from "./ai-extractor.js";
 import { enrichEditorialEvent } from "./editorial-workflow.js";
 
 export const DEFAULT_REGION_ID = "iran";
@@ -147,6 +148,21 @@ function normalizeArticle(article, now, seenUrls, region) {
   const sourceName = cleanText(article.sourceName) || humanizeDomain(article.domain, article.sourcecountry);
   const sourceType = cleanText(article.sourceType) || inferSourceType(article.domain);
   const trustTier = cleanText(article.trustTier) || (sourceType === "official" ? "primary source" : "open web");
+  const summary = buildSummary(article, sourceName);
+  const confidence = location.precision === "country" ? 0.42 : 0.56;
+  const extraction = buildCandidateExtraction({
+    article,
+    title,
+    summary,
+    sourceName,
+    location,
+    category,
+    severity,
+    side,
+    seenAt,
+    confidence,
+    region
+  });
 
   return {
     id: `live_${hash(url).slice(0, 12)}`,
@@ -166,9 +182,10 @@ function normalizeArticle(article, now, seenUrls, region) {
     category,
     severity,
     verification: "reported",
-    confidence: location.precision === "country" ? 0.42 : 0.56,
+    confidence,
     sourceCount: 1,
     side,
+    extraction,
     sources: [
       {
         id: `src_${hash(article.domain || url).slice(0, 10)}`,
@@ -186,7 +203,7 @@ function normalizeArticle(article, now, seenUrls, region) {
         }
       : null,
     title,
-    summary: buildSummary(article, sourceName),
+    summary,
     updates: [
       "AI extraction candidate from public source",
       `Source captured from ${sourceName}`,
@@ -196,8 +213,9 @@ function normalizeArticle(article, now, seenUrls, region) {
       status: "candidate",
       queue: "open-source intake",
       publicationStatus: "review_only",
+      duplicateKey: extraction.duplicateKey,
       visibleOn: ["review queue", "api"],
-      requiredActions: ["Confirm source reliability", "Check location precision", "Review duplicate matches"]
+      requiredActions: ["Review AI extraction", "Confirm source reliability", "Check location precision", "Review duplicate matches"]
     }
   };
 }
@@ -223,8 +241,13 @@ function mergeDuplicateEvents(candidates) {
     duplicate.review.queue = "duplicate review";
     duplicate.review.publicationStatus = "review_only";
     duplicate.review.visibleOn = ["review queue", "api"];
-    duplicate.review.requiredActions = ["Resolve duplicate matches", "Confirm location precision", "Approve or split candidate"];
+    duplicate.review.requiredActions = ["Review AI extraction", "Resolve duplicate matches", "Confirm location precision", "Approve or split candidate"];
     duplicate.lastUpdatedAt = maxIsoDate(duplicate.lastUpdatedAt, candidate.lastUpdatedAt);
+    duplicate.extraction = mergeDuplicateExtraction(
+      duplicate.extraction,
+      candidate.extraction,
+      candidate.sources[0]?.name
+    );
 
     if (SEVERITY_RANK[candidate.severity] > SEVERITY_RANK[duplicate.severity]) {
       duplicate.severity = candidate.severity;

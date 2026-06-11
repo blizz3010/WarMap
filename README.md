@@ -44,6 +44,7 @@ The check validates the static app files and the event, region, category, severi
 - compliant social APIs: opt-in JSON API sources configured only through `COMPLIANT_SOCIAL_API_SOURCES`
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
 - candidate extraction: event category, severity, actor side, place, summary, source metadata, and review status
+- AI extraction metadata: provider, schema version, event type, location, summary, duplicate key, confidence fields, and keyword signals
 - duplicate matching: same-place, same-category, close-time article candidates can merge into a corroborated review item
 - editorial fields: candidate/needs-review/approved status, publication status, duplicate key, priority, visible targets, and required actions
 - verification state: `reported` by default, because these are source leads
@@ -95,6 +96,20 @@ COMPLIANT_SOCIAL_API_SOURCES='[
 ```
 
 Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`, `link`, `permalink`, `publishedAt`, `createdAt`, `image`, and `mediaUrl`. Every social API item still enters the review queue as an unverified candidate.
+
+## AI extraction layer
+
+`api/ai-extractor.js` records a structured extraction object on each live candidate. The current default is `AI_EXTRACTION_PROVIDER=deterministic-local`, a local rule-based fallback that extracts:
+
+- event type/category
+- location and precision
+- summary
+- actor side
+- severity
+- duplicate key and duplicate bucket
+- field-level confidence and keyword signals
+
+The API exposes the extraction runtime in response metadata. A future provider can set `AI_EXTRACTION_PROVIDER` and `AI_EXTRACTION_MODEL`, but extracted records still remain review-only until an editor approves them.
 
 ## Production direction
 

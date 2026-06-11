@@ -1,4 +1,5 @@
 import { collectOpenWebArticles } from "./collectors.js";
+import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { registrySummary } from "./source-registry.js";
@@ -45,6 +46,7 @@ export default async function handler(request, response) {
         sourceRegistry: registrySummary(region),
         upstreamArticles: collection.articles.length,
         editorialDecisions: decisions.length,
+        extraction: extractionRuntimeSummary(),
         collectorStatus: collection.collectorStatus,
         rssFeeds: collection.rssFeeds,
         officialFeeds: collection.officialFeeds,

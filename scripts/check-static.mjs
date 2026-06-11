@@ -24,6 +24,7 @@ const requiredFiles = [
   "src/embed.js",
   "src/event-page.js",
   "src/styles.css",
+  "api/ai-extractor.js",
   "api/archive.js",
   "api/collectors.js",
   "api/editorial-decisions.js",
@@ -132,6 +133,14 @@ if (sampleLiveEvents.length !== 1 || sampleLiveEvents[0].place !== "Isfahan" || 
   throw new Error("Live news normalizer failed sample article mapping");
 }
 
+if (
+  sampleLiveEvents[0].extraction?.eventType !== "strike" ||
+  sampleLiveEvents[0].extraction?.location?.place !== "Isfahan" ||
+  sampleLiveEvents[0].review?.duplicateKey !== sampleLiveEvents[0].extraction?.duplicateKey
+) {
+  throw new Error("Live news normalizer failed AI extraction metadata");
+}
+
 const sampleUkraineEvents = normalizeArticlesToEvents(
   [
     {
@@ -152,6 +161,10 @@ if (sampleUkraineEvents.length !== 1 || sampleUkraineEvents[0].place !== "Kharki
 
 if (sampleUkraineEvents[0].review.publicationStatus !== "review_only" || !sampleUkraineEvents[0].review.duplicateKey) {
   throw new Error("Live news normalizer failed editorial queue metadata");
+}
+
+if (sampleUkraineEvents[0].review.requiredActions[0] !== "Review AI extraction") {
+  throw new Error("Live news normalizer failed AI review action metadata");
 }
 
 const queue = reviewQueueFromEvents(events);
