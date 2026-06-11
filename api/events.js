@@ -2,7 +2,7 @@ import { collectOpenWebArticles } from "./collectors.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
-import { activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
+import { activeOfficialFeedsForRegion, activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
 
 const PUBLICATION_MODES = new Set(["all", "review", "published"]);
 
@@ -50,12 +50,17 @@ export default async function handler(request, response) {
         sourceUrl: "https://api.gdeltproject.org/api/v2/doc/doc",
         sourceRegistry: registrySummary(region),
         rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
+        officialFeeds: activeOfficialFeedsForRegion(region).map((feed) => feed.url),
+        socialApiSources: collection.socialApiSources,
         upstreamArticles: collection.articles.length,
         returnedEvents: events.length,
         editorial: editorialSummary(decidedEvents),
         editorialDecisions: decisions.length,
         gdeltStatus: collection.gdeltStatus,
         rssStatus: collection.rssStatus,
+        officialStatus: collection.officialStatus,
+        socialStatus: collection.socialStatus,
+        collectorStatus: collection.collectorStatus,
         upstreamErrors: collection.upstreamErrors,
         verification: "open-web leads, not confirmed incidents"
       }

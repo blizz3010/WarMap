@@ -39,7 +39,9 @@ The check validates the static app files and the event, region, category, severi
 `/api/events` returns event-shaped JSON:
 
 - primary source attempt: GDELT DOC 2.0 article search
-- fallback sources: region-matched RSS feeds from the source registry
+- media RSS sources: region-matched feeds from the source registry
+- official feeds: active government/multilateral RSS-compatible feeds, tracked separately from media RSS
+- compliant social APIs: opt-in JSON API sources configured only through `COMPLIANT_SOCIAL_API_SOURCES`
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
 - candidate extraction: event category, severity, actor side, place, summary, source metadata, and review status
 - duplicate matching: same-place, same-category, close-time article candidates can merge into a corroborated review item
@@ -73,6 +75,26 @@ EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
 When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
 
 For the browser review panel, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN` or `localStorage.setItem("warmap.editorialToken", token)` before using the Approve/Hold/Reject buttons.
+
+## Collector configuration
+
+RSS and official-feed sources live in `api/source-registry.js`. Compliant social APIs are intentionally not scraped or hard-coded; add only API endpoints you are allowed to use:
+
+```bash
+COMPLIANT_SOCIAL_API_SOURCES='[
+  {
+    "name": "Allowed OSINT API",
+    "url": "https://example.com/api/posts",
+    "regions": ["ukraine", "ukraine-east"],
+    "tokenEnv": "ALLOWED_OSINT_API_TOKEN",
+    "itemsPath": "data",
+    "sourceType": "osint",
+    "trustTier": "requires analyst review"
+  }
+]'
+```
+
+Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`, `link`, `permalink`, `publishedAt`, `createdAt`, `image`, and `mediaUrl`. Every social API item still enters the review queue as an unverified candidate.
 
 ## Production direction
 

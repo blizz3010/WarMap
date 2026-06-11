@@ -45,6 +45,10 @@ export default async function handler(request, response) {
         sourceRegistry: registrySummary(region),
         upstreamArticles: collection.articles.length,
         editorialDecisions: decisions.length,
+        collectorStatus: collection.collectorStatus,
+        rssFeeds: collection.rssFeeds,
+        officialFeeds: collection.officialFeeds,
+        socialApiSources: collection.socialApiSources,
         upstreamErrors: collection.upstreamErrors,
         verification: "editorial queue for open-web leads"
       }

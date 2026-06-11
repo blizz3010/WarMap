@@ -46,7 +46,8 @@ export const SOURCE_REGISTRY = [
   {
     id: "un-news-europe-rss",
     name: "UN News Europe",
-    collector: "rss",
+    collector: "official-feed",
+    feedFormat: "rss",
     sourceType: "official",
     trustTier: "multilateral source",
     country: "United Nations",
@@ -57,7 +58,8 @@ export const SOURCE_REGISTRY = [
   {
     id: "ukraine-president-rss",
     name: "President of Ukraine",
-    collector: "rss",
+    collector: "official-feed",
+    feedFormat: "rss",
     sourceType: "official",
     trustTier: "primary source",
     country: "Ukraine",
@@ -99,8 +101,16 @@ export const SOURCE_REGISTRY = [
 ];
 
 export function activeRssFeedsForRegion(regionId) {
+  return activeSourcesForCollector(regionId, "rss");
+}
+
+export function activeOfficialFeedsForRegion(regionId) {
+  return activeSourcesForCollector(regionId, "official-feed");
+}
+
+export function plannedSocialApiSourcesForRegion(regionId) {
   return SOURCE_REGISTRY.filter((source) => {
-    return source.status === "active" && source.collector === "rss" && appliesToRegion(source, regionId);
+    return source.status === "planned" && source.collector === "social-api" && appliesToRegion(source, regionId);
   });
 }
 
@@ -111,6 +121,12 @@ export function registrySummary(regionId) {
     planned: relevant.filter((source) => source.status === "planned").length,
     collectors: [...new Set(relevant.map((source) => source.collector))].sort()
   };
+}
+
+function activeSourcesForCollector(regionId, collector) {
+  return SOURCE_REGISTRY.filter((source) => {
+    return source.status === "active" && source.collector === collector && appliesToRegion(source, regionId);
+  });
 }
 
 function appliesToRegion(source, regionId) {

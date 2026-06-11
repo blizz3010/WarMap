@@ -1068,6 +1068,9 @@ function renderTimePanel(visible) {
   const registryLabel = sourceRegistry
     ? `${sourceRegistry.active} active / ${sourceRegistry.planned} planned`
     : "fallback source set";
+  const collectorStatus = state.feedMeta.collectorStatus
+    ? Object.entries(state.feedMeta.collectorStatus)
+    : [];
 
   return `
     <header class="intel-heading">
@@ -1094,6 +1097,13 @@ function renderTimePanel(visible) {
       <h3>Sources</h3>
       <p>${escapeHtml(state.feedMeta.source ?? "Live source")} - ${escapeHtml(state.feedMeta.verification ?? "candidate review")}</p>
       <p>${escapeHtml(registryLabel)}</p>
+      ${
+        collectorStatus.length
+          ? `<ul class="status-list">${collectorStatus
+              .map(([collector, status]) => `<li><span>${escapeHtml(titleCase(collector))}</span><strong>${escapeHtml(status)}</strong></li>`)
+              .join("")}</ul>`
+          : ""
+      }
     </section>
   `;
 }
@@ -1411,6 +1421,7 @@ function selectHashEventIfAvailable(panTo) {
 
 function titleCase(value) {
   return String(value ?? "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

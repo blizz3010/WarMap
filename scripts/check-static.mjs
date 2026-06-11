@@ -9,7 +9,12 @@ import {
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
-import { activeRssFeedsForRegion, SOURCE_REGISTRY } from "../api/source-registry.js";
+import {
+  activeOfficialFeedsForRegion,
+  activeRssFeedsForRegion,
+  plannedSocialApiSourcesForRegion,
+  SOURCE_REGISTRY
+} from "../api/source-registry.js";
 
 const requiredFiles = [
   "index.html",
@@ -97,11 +102,15 @@ if (!regions.some((region) => region.id === "ukraine-east")) {
 }
 
 if (!activeRssFeedsForRegion("ukraine").length || SOURCE_REGISTRY.length < 6) {
-  throw new Error("Expected active Ukraine RSS sources in the source registry");
+  throw new Error("Expected active Ukraine media RSS sources in the source registry");
 }
 
-if (!activeRssFeedsForRegion("ukraine").some((source) => source.id === "ukraine-president-rss")) {
-  throw new Error("Expected official Ukraine presidential RSS collector");
+if (!activeOfficialFeedsForRegion("ukraine").some((source) => source.id === "ukraine-president-rss")) {
+  throw new Error("Expected official Ukraine presidential feed collector");
+}
+
+if (!plannedSocialApiSourcesForRegion("ukraine").length) {
+  throw new Error("Expected planned compliant social API collector family");
 }
 
 const sampleLiveEvents = normalizeArticlesToEvents(
