@@ -9,7 +9,7 @@ import {
 } from "./data.js";
 
 const state = {
-  regionId: "iran",
+  regionId: initialRegionId(),
   selectedEventId: null,
   search: "",
   verifiedOnly: false,
@@ -718,7 +718,7 @@ function renderFeedSources(item) {
   });
 
   const overflow = item.sources.length > 3 ? `<span>+${item.sources.length - 3}</span>` : "";
-  return `<div class="feed-source-row"><span>Sources</span>${links.join("")}${overflow}</div>`;
+  return `<div class="feed-source-row"><span>Sources</span>${links.join("")}${overflow}<a href="${escapeAttr(eventPageLink(item))}">Event page</a></div>`;
 }
 
 function renderDetail() {
@@ -735,6 +735,7 @@ function renderDetail() {
   const side = actorSides[item.side] ?? actorSides.unknown;
   const review = reviewInfo(item);
   const detailLink = eventHashLink(item);
+  const pageLink = eventPageLink(item);
   const apiLink = eventApiLink(item);
   els.detailDrawer.style.setProperty("--detail-color", category.color);
   els.detailDrawer.classList.toggle("is-open", state.detailOpen);
@@ -788,7 +789,8 @@ function renderDetail() {
           </ul>
         </div>
         <div class="detail-links">
-          <a href="${escapeAttr(detailLink)}">Detail link</a>
+          <a href="${escapeAttr(pageLink)}">Event page</a>
+          <a href="${escapeAttr(detailLink)}">Map link</a>
           <a href="${escapeAttr(apiLink)}" target="_blank" rel="noreferrer noopener">API record</a>
         </div>
         <h3>Sources</h3>
@@ -1217,6 +1219,12 @@ function currentRegion() {
   return regions.find((region) => region.id === state.regionId) ?? regions[0];
 }
 
+function initialRegionId() {
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get("region");
+  return regions.some((region) => region.id === requested) ? requested : "iran";
+}
+
 function focusGeoJsonForRegion(regionId) {
   if (String(regionId).startsWith("ukraine") || regionId === "black-sea") {
     return FOCUS_GEOJSON_BY_FAMILY.ukraine;
@@ -1364,7 +1372,17 @@ function escapeAttr(value) {
 }
 
 function eventHashLink(item) {
-  return `#event=${encodeURIComponent(item.id)}`;
+  const params = new URLSearchParams({ region: state.regionId });
+  return `/?${params.toString()}#event=${encodeURIComponent(item.id)}`;
+}
+
+function eventPageLink(item) {
+  const params = new URLSearchParams({
+    id: item.id,
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/event?${params.toString()}`;
 }
 
 function eventApiLink(item) {

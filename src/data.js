@@ -210,31 +210,36 @@ const sourceCatalog = {
     id: "src_regional_authority",
     name: "Regional authority",
     type: "official",
-    trustTier: "primary"
+    trustTier: "primary",
+    url: "https://www.irna.ir/"
   },
   stateMedia: {
     id: "src_state_media",
     name: "State media monitor",
     type: "media",
-    trustTier: "known outlet"
+    trustTier: "known outlet",
+    url: "https://www.presstv.ir/"
   },
   localMedia: {
     id: "src_local_media",
     name: "Local media desk",
     type: "media",
-    trustTier: "known outlet"
+    trustTier: "known outlet",
+    url: "https://www.iranintl.com/en"
   },
   osintDesk: {
     id: "src_osint_desk",
     name: "OSINT verification desk",
     type: "osint",
-    trustTier: "analyst reviewed"
+    trustTier: "analyst reviewed",
+    url: "https://www.bellingcat.com/"
   },
   maritimeAdvisory: {
     id: "src_maritime_advisory",
     name: "Maritime advisory",
     type: "official",
-    trustTier: "primary"
+    trustTier: "primary",
+    url: "https://www.ukmto.org/"
   }
 };
 

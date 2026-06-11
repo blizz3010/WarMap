@@ -13,9 +13,11 @@ import { activeRssFeedsForRegion, SOURCE_REGISTRY } from "../api/source-registry
 
 const requiredFiles = [
   "index.html",
+  "event.html",
   "embed.html",
   "src/app.js",
   "src/embed.js",
+  "src/event-page.js",
   "src/styles.css",
   "api/archive.js",
   "api/collectors.js",
@@ -53,6 +55,10 @@ for (const event of events) {
 
   if (!event.sources.length) {
     throw new Error(`Event has no sources: ${event.id}`);
+  }
+
+  if (!event.sources.every((source) => hasHttpUrl(source.url))) {
+    throw new Error(`Event has a source without a visible URL: ${event.id}`);
   }
 
   if (!actorSides[event.side]) {
@@ -200,6 +206,15 @@ if (!buildGdeltUrl("iran").startsWith("https://api.gdeltproject.org/api/v2/doc/d
 }
 
 console.log(`Static checks passed: ${events.length} events, ${regions.length} regions, ${Object.keys(categories).length} categories.`);
+
+function hasHttpUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 function withTemporaryEditorialEnv(callback) {
   const keys = [

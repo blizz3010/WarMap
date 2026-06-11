@@ -12,6 +12,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Central MapLibre map canvas: dark raster base map, custom clustered incident markers, region focus overlays, selected marker state, fit/zoom controls, layer popout, and viewport-only filtering.
 - Right news feed: reverse-chronological event cards with time, place, title, summary, category, severity, verification, source count, source links, side color, and media thumbnail placeholders.
 - Event detail drawer: stable event object presentation with summary, source list, geocode precision, confidence, update trail, side, review queue, first-seen and last-updated metadata.
+- Public event detail page: `/event?id=...&region=...` renders the approved/candidate record from `/api/event` with original source links, review state, archive/API links, and a return link to the correct theater map.
 - Key/Time/Review panels: icon taxonomy, side/color legend, source registry status, review queue counts, and candidate queue cards.
 - Embed view: compact map and ticker at `/embed`.
 - Live feed endpoint: `/api/events` fetches open-web article leads from GDELT and registry-backed RSS sources, normalizes them into the same event shape, and lets the client fall back to static prototype data if upstream sources fail.
@@ -41,7 +42,7 @@ Liveuamap's public About page describes proprietary AI crawlers, expert analysts
 3. Queue every candidate for editorial actions: verify, reject, merge, split, correct time, correct location, update severity, approve, correct, or retract.
 4. Publish approved items to the map, synchronized feed, detail drawer/page, archive, and versioned API while keeping original source links visible.
 
-The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, review metadata, queue API, local review-action storage, detail API, and approved archive. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
+The current prototype implements the collector registry, deterministic extraction, side/category taxonomy, approximate duplicate matching, review metadata, queue API, local review-action storage, detail API/page, and approved archive. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
 
 ## Production next steps
 

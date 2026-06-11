@@ -9,6 +9,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - reverse-chronological feed synchronized with selected map events and visible original source links
 - filter rail for verification, source type, severity, category, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
+- shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, and `/api/archive` endpoints for live leads, review actions, detail records, and approved history
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - compact embed view at `/embed`
@@ -54,6 +55,7 @@ The browser and embed views fetch `/api/events?region=iran&publication=all` and 
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, and `retract` decisions keyed by event id, duplicate key, or source URL.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
+- `/event?id=...&region=...` renders a public event record backed by `/api/event`.
 
 Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured.
 
