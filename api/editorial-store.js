@@ -149,6 +149,23 @@ export function normalizeDecisionPayload(payload, context = {}) {
   });
 }
 
+export function normalizeEditorialDecision(decision) {
+  const normalized = normalizeDecision(decision);
+  if (!EDITORIAL_ACTIONS.has(normalized.action)) {
+    throw new Error("Unsupported editorial action");
+  }
+
+  if (!normalized.eventId && !normalized.duplicateKey && !normalized.sourceUrl) {
+    throw new Error("Decision must include eventId, duplicateKey, or sourceUrl");
+  }
+
+  if (SNAPSHOT_REQUIRED_ACTIONS.has(normalized.action) && !normalized.eventSnapshot) {
+    throw new Error("Approve and correct actions require a valid eventSnapshot with title, coordinates, and source URL");
+  }
+
+  return normalized;
+}
+
 export function authorizeEditorialRequest(request) {
   const capabilities = editorialStoreCapabilities();
   const configuredToken = process.env.EDITORIAL_REVIEW_TOKEN;

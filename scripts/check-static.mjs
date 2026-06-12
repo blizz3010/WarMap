@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
 import { detailEventsForRegion } from "../api/event.js";
@@ -17,6 +19,7 @@ import { buildProductionReadinessPayload } from "../api/production-readiness.js"
 import { eventsForRegionScope } from "../api/region-scope.js";
 import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
+import { applyReviewExportText, renderStaticEditorialDecisionModule } from "./apply-review-export.mjs";
 import {
   buildV1EventsPayload,
   buildV1FeedPayload,
@@ -39,6 +42,7 @@ const requiredFiles = [
   "archive.html",
   "review.html",
   "embed.html",
+  "scripts/apply-review-export.mjs",
   "src/app.js",
   "src/archive-page.js",
   "src/embed.js",
@@ -449,6 +453,51 @@ const approvedExport = buildEditorialDecisionExport(
   },
   { now: new Date("2026-05-28T02:03:30Z") }
 );
+
+const applyExportTempDir = mkdtempSync(join(tmpdir(), "warmap-review-export-"));
+try {
+  const targetFile = join(applyExportTempDir, "editorial-decisions.js");
+  writeFileSync(targetFile, "export const STATIC_EDITORIAL_DECISIONS = [];\n", "utf8");
+
+  const jsonApply = applyReviewExportText(JSON.stringify(approvedExport), {
+    targetFile
+  });
+  if (
+    jsonApply.incoming !== 1 ||
+    jsonApply.added !== 1 ||
+    jsonApply.total !== 1 ||
+    !readFileSync(targetFile, "utf8").includes(sampleUkraineEvents[0].sources[0].url)
+  ) {
+    throw new Error("Review export apply script failed JSON export input");
+  }
+
+  const moduleApply = applyReviewExportText(approvedExport.staticModule, {
+    targetFile,
+    dryRun: true
+  });
+  if (moduleApply.total !== 1 || moduleApply.added !== 0 || moduleApply.unchanged !== 1) {
+    throw new Error("Review export apply script failed copied static module input");
+  }
+
+  const nextDecision = normalizeDecisionPayload(
+    {
+      action: "reject",
+      eventId: `${sampleUkraineEvents[0].id}-duplicate`,
+      duplicateKey: `${sampleUkraineEvents[0].review.duplicateKey}-duplicate`,
+      sourceUrl: sampleUkraineEvents[0].sources[0].url,
+      notes: "static export merge smoke test"
+    },
+    { now: new Date("2026-05-28T02:07:03Z") }
+  );
+  const mergedModuleApply = applyReviewExportText(renderStaticEditorialDecisionModule([approvedExport.decision, nextDecision]), {
+    targetFile
+  });
+  if (mergedModuleApply.total !== 2 || mergedModuleApply.added !== 1 || mergedModuleApply.unchanged !== 1) {
+    throw new Error("Review export apply script failed merged static module input");
+  }
+} finally {
+  rmSync(applyExportTempDir, { recursive: true, force: true });
+}
 const correctedSampleDecision = normalizeDecisionPayload(
   {
     action: "correct",
