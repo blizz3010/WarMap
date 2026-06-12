@@ -73,6 +73,8 @@ const els = {
   severityFilters: document.querySelector("#severityFilters"),
   sourceFilters: document.querySelector("#sourceFilters"),
   streamStatus: document.querySelector("#streamStatus"),
+  theaterSummary: document.querySelector("#theaterSummary"),
+  theaterSwitch: document.querySelector("#theaterSwitch"),
   timeRange: document.querySelector("#timeRange"),
   timeButton: document.querySelector("#timeButton"),
   updatedAt: document.querySelector("#updatedAt"),
@@ -605,6 +607,49 @@ function renderRegionOptions() {
   els.regionSelect.value = state.regionId;
 }
 
+function renderTheaterSwitch() {
+  if (!els.theaterSwitch || !els.theaterSummary) {
+    return;
+  }
+
+  const region = currentRegion();
+  const group = region.group ?? "Regions";
+  const groupRegions = regions.filter((item) => (item.group ?? "Regions") === group);
+
+  els.theaterSwitch.innerHTML = `
+    <span class="theater-kicker">Theater</span>
+    ${groupRegions
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="${item.id === state.regionId ? "is-active" : ""}"
+            aria-pressed="${item.id === state.regionId}"
+            data-theater-region="${escapeAttr(item.id)}"
+          >
+            ${escapeHtml(theaterButtonLabel(item, group))}
+          </button>
+        `
+      )
+      .join("")}
+  `;
+
+  els.theaterSummary.innerHTML = `
+    <strong>${escapeHtml(region.name)}</strong>
+    <span>${state.events.length.toLocaleString()} loaded leads - ${escapeHtml(state.feedMeta.verification ?? "review queue")}</span>
+  `;
+
+  els.theaterSwitch.querySelectorAll("[data-theater-region]").forEach((button) => {
+    button.addEventListener("click", () => changeRegion(button.dataset.theaterRegion));
+  });
+}
+
+function theaterButtonLabel(region, group) {
+  return region.name
+    .replace(`${group} - `, "")
+    .replace("Ukraine - ", "");
+}
+
 function renderFilterControls() {
   els.sourceFilters.innerHTML = Object.entries(sourceTypes)
     .map(([key, label]) => filterLabel("source-type", key, label, countBy("sourceType", key)))
@@ -689,13 +734,7 @@ function bindControls() {
   });
 
   els.regionSelect.addEventListener("change", () => {
-    state.regionId = els.regionSelect.value;
-    clearInlineReviewExport();
-    updateRegionFocus();
-    fitToRegion(true);
-    render();
-    loadLiveEvents();
-    restartEventStream();
+    changeRegion(els.regionSelect.value);
   });
 
   els.zoomIn.addEventListener("click", () => map.zoomIn());
@@ -734,6 +773,24 @@ function setActivePanel(panel) {
   }
   renderChromeState();
   renderIntelPanel(filteredEvents(true));
+}
+
+function changeRegion(regionId) {
+  const nextRegion = regions.find((region) => region.id === regionId);
+  if (!nextRegion || nextRegion.id === state.regionId) {
+    return;
+  }
+
+  state.regionId = nextRegion.id;
+  els.regionSelect.value = nextRegion.id;
+  state.selectedEventId = null;
+  state.detailOpen = false;
+  clearInlineReviewExport();
+  updateRegionFocus();
+  fitToRegion(true);
+  render();
+  loadLiveEvents();
+  restartEventStream();
 }
 
 function bindFilterInputControls() {
@@ -1009,6 +1066,7 @@ function render() {
   renderMarkers(visible);
   renderFeed(visible);
   renderDetail();
+  renderTheaterSwitch();
   renderChromeState();
   renderIntelPanel(visible);
   updateCounts();

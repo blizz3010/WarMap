@@ -4,7 +4,7 @@ WarMap Live is a Liveuamap-style live news map and feed prototype.
 
 This rebuild shifts the project away from the original strike-only dashboard and toward a continuously updating news-map product:
 
-- region selector with Middle East and Ukraine theater presets, top navigation, time/key controls, and global search
+- region selector plus one-click theater strip for Middle East and Ukraine area presets, top navigation, time/key controls, and global search
 - dense map canvas with colored incident markers and zoom-aware marker clustering
 - reverse-chronological feed synchronized with selected map events and visible original source links
 - filter rail for verification, source type, severity, category, media, and viewport-only mode

@@ -6,7 +6,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 
 ## Product model implemented
 
-- Persistent top navigation: region, news/map/time/review/alerts/key controls, language/time selectors, pause, and search.
+- Persistent top navigation: region selector, one-click theater strip, news/map/time/review/alerts/key controls, language/time selectors, pause, and search.
 - Theater switching: Iran, Middle East, Gulf, Ukraine, East Ukraine, South Ukraine, North Ukraine, and Black Sea/Crimea presets.
 - Left filter rail: verification, source type, severity, category, media-only, and time range.
 - Central MapLibre map canvas: dark raster base map, custom clustered incident markers, region focus overlays, selected marker state, fit/zoom controls, layer popout, and viewport-only filtering.

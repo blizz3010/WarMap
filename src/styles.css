@@ -51,7 +51,7 @@ a {
 
 .live-shell {
   display: grid;
-  grid-template-rows: 54px minmax(0, 1fr);
+  grid-template-rows: 54px 42px minmax(0, 1fr);
   height: 100vh;
   min-height: 720px;
   background: #070a0f;
@@ -66,6 +66,81 @@ a {
   border-bottom: 1px solid var(--line);
   background: rgba(5, 7, 10, 0.96);
   z-index: 20;
+}
+
+.theater-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 10, 15, 0.98);
+  z-index: 18;
+}
+
+.theater-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.theater-switch::-webkit-scrollbar {
+  display: none;
+}
+
+.theater-kicker,
+.theater-summary span {
+  flex: 0 0 auto;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.theater-switch button {
+  flex: 0 0 auto;
+  min-width: 74px;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.theater-switch button:hover,
+.theater-switch button:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--text);
+  outline: none;
+}
+
+.theater-switch button.is-active {
+  border-color: rgba(239, 68, 68, 0.72);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+}
+
+.theater-summary {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.theater-summary strong {
+  color: var(--text);
+  font-size: 12px;
 }
 
 .brand {
@@ -224,7 +299,7 @@ a {
 
 .filter-rail {
   position: absolute;
-  top: 54px;
+  top: 96px;
   bottom: 0;
   left: 0;
   z-index: 15;
@@ -2293,6 +2368,16 @@ dd {
     grid-template-columns: 240px 150px 1fr;
   }
 
+  .theater-strip {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .theater-summary {
+    justify-content: flex-start;
+  }
+
   .top-meta,
   .global-search {
     grid-column: span 1;
@@ -2311,12 +2396,27 @@ dd {
   .live-shell {
     height: auto;
     min-height: 100vh;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
   }
 
   .app-topbar {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .theater-strip {
+    position: sticky;
+    top: 0;
+  }
+
+  .theater-summary {
+    overflow: hidden;
+  }
+
+  .theater-summary span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .top-tabs,
