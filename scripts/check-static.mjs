@@ -62,6 +62,16 @@ for (const file of requiredFiles) {
   readFileSync(new URL(file, `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 }
 
+const appSource = readFileSync(new URL("src/app.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+
+if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.includes("/v1/stream/events")) {
+  throw new Error("Expected client to subscribe to the v1 event stream");
+}
+
+if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
+  throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
+}
+
 const ids = new Set();
 
 for (const event of events) {

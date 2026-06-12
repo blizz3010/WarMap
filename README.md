@@ -54,6 +54,8 @@ The check validates the static app files and the event, region, category, severi
 
 The browser and embed views fetch `/api/events?region=iran&publication=all` and keep the static data as a safe fallback. `publication=published` returns only approved events when a persistent editorial store is added.
 
+The browser map also opens `/v1/stream/events` with `EventSource` when available. Stream snapshots invalidate events and trigger a quiet refresh that preserves filters and the selected detail card; the Pause button closes the stream and Resume reconnects it.
+
 ## Public v1 API
 
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:

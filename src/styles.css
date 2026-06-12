@@ -59,7 +59,7 @@ a {
 
 .app-topbar {
   display: grid;
-  grid-template-columns: 260px 168px minmax(310px, auto) auto minmax(280px, 1fr);
+  grid-template-columns: minmax(190px, 220px) minmax(132px, 150px) minmax(0, 1fr) max-content minmax(180px, 220px);
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -179,7 +179,8 @@ a {
 }
 
 .top-tabs button {
-  padding: 0 13px;
+  flex: 0 0 auto;
+  padding: 0 10px;
   border-radius: 0;
   border-bottom: 2px solid transparent;
 }
@@ -197,7 +198,7 @@ a {
 .detail-header button {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.035);
-  padding: 0 10px;
+  padding: 0 8px;
 }
 
 .live-workspace {

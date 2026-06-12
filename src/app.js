@@ -26,6 +26,10 @@ const state = {
   platformConfig: null,
   platformMessage: "",
   paused: false,
+  streamConnected: false,
+  streamMessage: "Realtime stream idle",
+  streamSnapshotId: "",
+  streamLastRefreshAt: 0,
   timeRange: "30d",
   categories: new Set(Object.keys(categories)),
   severities: new Set(Object.keys(severities)),
@@ -80,6 +84,10 @@ const els = {
 
 let map;
 let liveRequestId = 0;
+const streamController = {
+  source: null,
+  fallbackTimer: null
+};
 
 const PLATFORM_CONFIG_FALLBACK = {
   schemaVersion: "platform-config.fallback",
@@ -188,6 +196,7 @@ function init() {
   render();
   loadPlatformConfig();
   loadLiveEvents();
+  startEventStream();
 }
 
 function initMap() {
@@ -352,7 +361,12 @@ function bindControls() {
     state.paused = !state.paused;
     els.pauseStreamButton.textContent = state.paused ? "Resume" : "Pause";
     els.pauseStreamButton.setAttribute("aria-pressed", String(state.paused));
-    els.streamStatus.textContent = state.paused ? "Auto-update paused" : "Updates in real-time";
+    if (state.paused) {
+      stopEventStream("Auto-update paused");
+    } else {
+      loadLiveEvents({ reason: "resume" });
+      startEventStream();
+    }
   });
 
   els.resetFilters.addEventListener("click", resetFilters);
@@ -360,6 +374,7 @@ function bindControls() {
     state.timeRange = els.timeRange.value;
     render();
     loadLiveEvents();
+    restartEventStream();
   });
 
   els.regionSelect.addEventListener("change", () => {
@@ -368,6 +383,7 @@ function bindControls() {
     fitToRegion(true);
     render();
     loadLiveEvents();
+    restartEventStream();
   });
 
   els.zoomIn.addEventListener("click", () => map.zoomIn());
@@ -443,10 +459,21 @@ async function loadPlatformConfig() {
   renderIntelPanel(filteredEvents(true));
 }
 
-async function loadLiveEvents() {
+async function loadLiveEvents(options = {}) {
+  const {
+    keepExistingOnError = false,
+    preserveFilters = false,
+    preserveSelection = false,
+    quiet = false,
+    reason = "manual"
+  } = options;
   const region = state.regionId;
   const requestId = (liveRequestId += 1);
-  els.streamStatus.textContent = "Loading open-web news leads";
+  const previousSelectedId = state.selectedEventId;
+  const previousDetailOpen = state.detailOpen;
+  if (!quiet) {
+    updateStreamStatusLabel("Loading open-web news leads");
+  }
 
   try {
     const params = new URLSearchParams({
@@ -469,25 +496,38 @@ async function loadLiveEvents() {
     }
 
     state.events = payload.events;
+    state.streamLastRefreshAt = Date.now();
     state.feedMeta = payload.meta ?? {
       source: "Live open-web feed",
       verification: "open-web leads, not confirmed incidents"
     };
-    state.selectedEventId = null;
-    state.detailOpen = false;
-    state.verifiedOnly = false;
-    els.verifiedOnlyToggle.checked = false;
-    resetFilterSets();
-    renderFilterControls();
-    bindFilterInputControls();
+    if (preserveSelection && previousSelectedId && payload.events.some((item) => item.id === previousSelectedId)) {
+      state.selectedEventId = previousSelectedId;
+      state.detailOpen = previousDetailOpen;
+    } else {
+      state.selectedEventId = null;
+      state.detailOpen = false;
+    }
+    if (!preserveFilters) {
+      state.verifiedOnly = false;
+      els.verifiedOnlyToggle.checked = false;
+      resetFilterSets();
+      renderFilterControls();
+      bindFilterInputControls();
+    }
     render();
     selectHashEventIfAvailable(false);
-    els.streamStatus.textContent =
+    updateStreamStatusLabel(
       payload.events.length > 0
-        ? `Live open-web feed - ${payload.events.length} leads / ${rangeLabel(state.timeRange)}`
-        : `No live leads in ${rangeLabel(state.timeRange)}`;
+        ? `${reason === "stream" ? "Stream refresh" : "Live open-web feed"} - ${payload.events.length} leads / ${rangeLabel(state.timeRange)}`
+        : `No live leads in ${rangeLabel(state.timeRange)}`
+    );
   } catch (error) {
     if (requestId !== liveRequestId) {
+      return;
+    }
+    if (keepExistingOnError) {
+      updateStreamStatusLabel(error instanceof Error ? `Stream refresh failed - ${error.message}` : "Stream refresh failed");
       return;
     }
     state.events = fallbackEvents;
@@ -502,8 +542,144 @@ async function loadLiveEvents() {
     renderFilterControls();
     bindFilterInputControls();
     render();
-    els.streamStatus.textContent = "Prototype fallback - live feed unavailable";
+    updateStreamStatusLabel("Prototype fallback - live feed unavailable");
   }
+}
+
+function startEventStream() {
+  clearFallbackStreamTimer();
+
+  if (state.paused) {
+    stopEventStream("Auto-update paused");
+    return;
+  }
+
+  if (!("EventSource" in window)) {
+    state.streamConnected = false;
+    scheduleFallbackStreamRefresh("Realtime stream unavailable - polling");
+    return;
+  }
+
+  closeEventStreamSource();
+  const source = new EventSource(eventStreamUrl());
+  streamController.source = source;
+  updateStreamStatusLabel("Connecting realtime stream");
+
+  source.addEventListener("open", () => {
+    state.streamConnected = true;
+    updateStreamStatusLabel("Realtime stream connected");
+  });
+
+  source.addEventListener("warmap.snapshot", (event) => {
+    handleStreamSnapshot(event);
+  });
+
+  source.addEventListener("message", (event) => {
+    handleStreamSnapshot(event);
+  });
+
+  source.addEventListener("error", () => {
+    state.streamConnected = false;
+    updateStreamStatusLabel("Realtime stream reconnecting");
+  });
+}
+
+function restartEventStream() {
+  if (state.paused) {
+    return;
+  }
+  startEventStream();
+}
+
+function stopEventStream(message = "Realtime stream stopped") {
+  closeEventStreamSource();
+  clearFallbackStreamTimer();
+  state.streamConnected = false;
+  updateStreamStatusLabel(message);
+}
+
+function closeEventStreamSource() {
+  if (streamController.source) {
+    streamController.source.close();
+    streamController.source = null;
+  }
+}
+
+function handleStreamSnapshot(event) {
+  let snapshot;
+  try {
+    snapshot = JSON.parse(event.data);
+  } catch {
+    updateStreamStatusLabel("Realtime stream sent an invalid snapshot");
+    return;
+  }
+
+  if (snapshot.generatedAt && snapshot.generatedAt === state.streamSnapshotId) {
+    return;
+  }
+
+  state.streamConnected = true;
+  state.streamSnapshotId = snapshot.generatedAt ?? event.lastEventId ?? `${Date.now()}`;
+  state.streamMessage = `Stream snapshot - ${snapshot.counts?.events ?? 0} events`;
+  const nextPollMs = Number(snapshot.nextPollMs) || 300000;
+
+  if (Array.isArray(snapshot.invalidates) && snapshot.invalidates.includes("events") && !state.paused) {
+    const refreshedRecently = Date.now() - state.streamLastRefreshAt < 10000;
+    if (!refreshedRecently) {
+      loadLiveEvents({
+        keepExistingOnError: true,
+        preserveFilters: true,
+        preserveSelection: true,
+        quiet: true,
+        reason: "stream"
+      });
+    } else {
+      updateStreamStatusLabel(state.streamMessage);
+    }
+  }
+
+  scheduleFallbackStreamRefresh(state.streamMessage, nextPollMs);
+}
+
+function scheduleFallbackStreamRefresh(message, delayMs = 300000) {
+  clearFallbackStreamTimer();
+  updateStreamStatusLabel(message);
+  streamController.fallbackTimer = window.setTimeout(() => {
+    if (state.paused) {
+      return;
+    }
+    loadLiveEvents({
+      keepExistingOnError: true,
+      preserveFilters: true,
+      preserveSelection: true,
+      quiet: true,
+      reason: "stream"
+    });
+    if (!streamController.source) {
+      scheduleFallbackStreamRefresh("Polling realtime endpoint", delayMs);
+    }
+  }, Math.max(60000, delayMs));
+}
+
+function clearFallbackStreamTimer() {
+  if (streamController.fallbackTimer) {
+    window.clearTimeout(streamController.fallbackTimer);
+    streamController.fallbackTimer = null;
+  }
+}
+
+function eventStreamUrl() {
+  const params = new URLSearchParams({
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange),
+    publication: "all"
+  });
+  return `/v1/stream/events?${params.toString()}`;
+}
+
+function updateStreamStatusLabel(message) {
+  state.streamMessage = message;
+  els.streamStatus.textContent = message;
 }
 
 function render() {
