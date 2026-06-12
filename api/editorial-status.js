@@ -29,6 +29,7 @@ export function buildEditorialStatusPayload(context = {}) {
     },
     endpoints: {
       queue: "/api/review-queue",
+      dossier: "/api/review-dossier",
       action: "/api/review-action",
       storeHealth: "/api/editorial-store-health",
       publicationStatus: "/api/publication-status",

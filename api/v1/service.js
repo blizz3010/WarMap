@@ -161,6 +161,7 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       sourceHealth: "/api/source-health",
       ingestionStatus: "/api/ingestion-status",
       publicationStatus: "/api/publication-status",
+      reviewDossier: "/api/review-dossier",
       notificationStatus: "/api/notification-status"
     }
   };

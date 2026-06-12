@@ -14,6 +14,7 @@ import platformConfigHandler from "../api/platform-config.js";
 import productionReadinessHandler from "../api/production-readiness.js";
 import publicationStatusHandler from "../api/publication-status.js";
 import reviewActionHandler from "../api/review-action.js";
+import reviewDossierHandler from "../api/review-dossier.js";
 import reviewExportHandler from "../api/review-export.js";
 import reviewQueueHandler from "../api/review-queue.js";
 import sourceCurationHandler from "../api/source-curation.js";
@@ -50,6 +51,7 @@ const apiHandlers = new Map([
   ["/api/production-readiness", productionReadinessHandler],
   ["/api/publication-status", publicationStatusHandler],
   ["/api/review-action", reviewActionHandler],
+  ["/api/review-dossier", reviewDossierHandler],
   ["/api/review-export", reviewExportHandler],
   ["/api/review-queue", reviewQueueHandler],
   ["/api/source-curation", sourceCurationHandler],
