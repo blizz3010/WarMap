@@ -11,6 +11,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
+- standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
 - Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
@@ -78,6 +79,7 @@ The default v1 publication mode is `published`, matching the public-map contract
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 - `/event?id=...&region=...` renders a public event record backed by `/api/event`.
 - `/archive?region=iran&lookback=90d` renders the public approved-event archive backed by `/api/archive`.
+- `/review?region=ukraine-east&lookback=30d` renders the standalone editorial queue backed by `/api/review-queue` and `/api/review-action`.
 
 Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured.
 
@@ -94,7 +96,7 @@ EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
 
 When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
 
-For the browser review panel, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN` or `localStorage.setItem("warmap.editorialToken", token)` before using the Approve/Hold/Reject buttons.
+For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions.
 
 ## Platform capability registry
 

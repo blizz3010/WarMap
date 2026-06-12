@@ -30,11 +30,13 @@ const requiredFiles = [
   "index.html",
   "event.html",
   "archive.html",
+  "review.html",
   "embed.html",
   "src/app.js",
   "src/archive-page.js",
   "src/embed.js",
   "src/event-page.js",
+  "src/review-page.js",
   "src/styles.css",
   "api/ai-extractor.js",
   "api/archive.js",
@@ -67,6 +69,7 @@ for (const file of requiredFiles) {
 const appSource = readFileSync(new URL("src/app.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const archivePageSource = readFileSync(new URL("src/archive-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 
 if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.includes("/v1/stream/events")) {
   throw new Error("Expected client to subscribe to the v1 event stream");
@@ -82,6 +85,14 @@ if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes(
 
 if (!eventPageSource.includes("/archive?") || eventPageSource.includes('href="/api/archive?')) {
   throw new Error("Expected event page archive links to use the public archive route");
+}
+
+if (!reviewPageSource.includes("/api/review-queue?") || !reviewPageSource.includes("/api/review-action")) {
+  throw new Error("Expected standalone review page to use review queue and action APIs");
+}
+
+if (!reviewPageSource.includes("warmap.editorialToken") || !reviewPageSource.includes("review-source-strip")) {
+  throw new Error("Expected standalone review page to persist reviewer token and render source links");
 }
 
 const ids = new Set();

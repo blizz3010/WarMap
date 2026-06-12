@@ -163,6 +163,7 @@ a {
 
 .top-tabs button,
 .top-meta button,
+.top-meta-link,
 .rail-heading button,
 .layer-heading button,
 .map-tools button,
@@ -191,6 +192,7 @@ a {
 }
 
 .top-meta button,
+.top-meta-link,
 .rail-heading button,
 .layer-heading button,
 .map-tools button,
@@ -199,6 +201,12 @@ a {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.035);
   padding: 0 8px;
+}
+
+.top-meta-link {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
 }
 
 .live-workspace {
@@ -1825,6 +1833,186 @@ dd {
   text-transform: uppercase;
 }
 
+.review-hero {
+  align-items: start;
+}
+
+.review-toolbar {
+  display: grid;
+  grid-template-columns: minmax(160px, 210px) minmax(140px, 170px) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.review-toolbar span,
+.review-correction-grid span {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.review-toolbar select,
+.review-toolbar input,
+.review-correction-grid select,
+.review-correction-grid input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #0d1117;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.review-toolbar button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.review-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 22px;
+  align-items: start;
+}
+
+.review-candidate-list {
+  display: grid;
+  gap: 14px;
+}
+
+.review-candidate-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--event-color, var(--accent));
+  border-radius: 6px;
+  background: rgba(10, 14, 19, 0.78);
+}
+
+.review-candidate-card > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.review-candidate-card time {
+  color: var(--event-color, var(--accent));
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.review-candidate-card h2 {
+  margin: 5px 0 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.review-candidate-card p {
+  margin: 7px 0 0;
+  color: #d6dce6;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.review-candidate-card > header > strong {
+  align-self: start;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--event-color) 40%, white 5%);
+  border-radius: 999px;
+  color: var(--event-color);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.review-source-strip,
+.review-candidate-links,
+.review-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.review-source-strip > span {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.review-source-strip a,
+.review-source-strip small,
+.review-candidate-links a {
+  display: inline-grid;
+  gap: 2px;
+  max-width: 210px;
+  min-height: 30px;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: #c7d2fe;
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-source-strip a small {
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.review-correction-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.6fr) minmax(150px, 0.8fr);
+  gap: 8px;
+}
+
+.review-correction-grid label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.review-action-bar button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.review-action-bar button:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
+}
+
 .embed-body {
   overflow: hidden;
 }
@@ -2025,6 +2213,10 @@ dd {
   .archive-layout,
   .archive-event header,
   .archive-event-meta,
+  .review-toolbar,
+  .review-workspace,
+  .review-candidate-card > header,
+  .review-correction-grid,
   .event-page-facts {
     grid-template-columns: 1fr;
   }
