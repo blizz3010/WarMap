@@ -48,6 +48,169 @@ export function editorialStoreCapabilities() {
   };
 }
 
+export async function editorialGithubStoreHealth(context = {}) {
+  const githubStore = githubStoreConfig();
+  const capabilities = editorialStoreCapabilities();
+  const checks = [
+    healthCheck(
+      "provider",
+      Boolean(githubStore),
+      githubStore ? "configured" : "missing",
+      githubStore
+        ? "EDITORIAL_STORE_PROVIDER is set to github."
+        : "Set EDITORIAL_STORE_PROVIDER=github before using the production editorial store."
+    ),
+    healthCheck(
+      "github-token",
+      Boolean(githubStore?.token),
+      githubStore?.token ? "configured" : "missing",
+      githubStore?.token
+        ? "GitHub token is configured."
+        : "Set EDITORIAL_GITHUB_TOKEN or GITHUB_TOKEN with Contents read/write access."
+    ),
+    healthCheck(
+      "github-repo",
+      Boolean(githubStore?.repo),
+      githubStore?.repo ? "configured" : "missing",
+      githubStore?.repo ? "GitHub repository is configured." : "Set EDITORIAL_GITHUB_REPO or Vercel Git repo metadata."
+    ),
+    healthCheck(
+      "github-branch",
+      Boolean(githubStore?.branch),
+      githubStore?.branch ? "configured" : "missing",
+      githubStore?.branch ? "GitHub branch is configured." : "Set EDITORIAL_GITHUB_BRANCH."
+    ),
+    healthCheck(
+      "github-path",
+      Boolean(githubStore?.path),
+      githubStore?.path ? "configured" : "missing",
+      githubStore?.path ? "GitHub decisions path is configured." : "Set EDITORIAL_GITHUB_PATH."
+    ),
+    healthCheck(
+      "review-token",
+      Boolean(process.env.EDITORIAL_REVIEW_TOKEN),
+      process.env.EDITORIAL_REVIEW_TOKEN ? "configured" : "missing",
+      process.env.EDITORIAL_REVIEW_TOKEN
+        ? "Reviewer token is configured."
+        : "Set EDITORIAL_REVIEW_TOKEN before accepting production review actions."
+    )
+  ];
+
+  const health = {
+    kind: "EditorialStoreHealth",
+    generatedAt: context.now?.toISOString?.() ?? new Date().toISOString(),
+    ready: false,
+    mode: capabilities.mode,
+    store: {
+      provider: githubStore?.provider ?? null,
+      repo: githubStore?.repo ?? "",
+      branch: githubStore?.branch ?? "",
+      path: githubStore?.path ?? "",
+      configured: Boolean(githubStore?.configured),
+      tokenConfigured: Boolean(githubStore?.token),
+      reviewTokenConfigured: Boolean(process.env.EDITORIAL_REVIEW_TOKEN)
+    },
+    checks
+  };
+
+  if (!githubStore?.configured) {
+    return finalizeEditorialStoreHealth(health);
+  }
+
+  try {
+    const repoResponse = await fetch(githubRepoUrl(githubStore), {
+      headers: githubHeaders(githubStore)
+    });
+    checks.push(
+      healthCheck(
+        "github-repo-access",
+        repoResponse.ok,
+        String(repoResponse.status),
+        repoResponse.ok
+          ? "GitHub repository is reachable with the configured token."
+          : `GitHub repository check returned ${repoResponse.status}.`
+      )
+    );
+
+    if (!repoResponse.ok) {
+      return finalizeEditorialStoreHealth(health);
+    }
+
+    const branchResponse = await fetch(githubBranchUrl(githubStore), {
+      headers: githubHeaders(githubStore)
+    });
+    checks.push(
+      healthCheck(
+        "github-branch-access",
+        branchResponse.ok,
+        String(branchResponse.status),
+        branchResponse.ok
+          ? "GitHub branch is reachable with the configured token."
+          : `GitHub branch check returned ${branchResponse.status}.`
+      )
+    );
+
+    if (!branchResponse.ok) {
+      return finalizeEditorialStoreHealth(health);
+    }
+
+    const fileResponse = await fetch(githubContentsUrl(githubStore, { includeRef: true }), {
+      headers: githubHeaders(githubStore)
+    });
+    if (fileResponse.status === 404) {
+      checks.push(
+        healthCheck(
+          "github-decision-file",
+          true,
+          "missing-ok",
+          "Decision file does not exist yet; the first approved write can create it.",
+          { decisionCount: 0, shaPresent: false }
+        )
+      );
+      return finalizeEditorialStoreHealth(health);
+    }
+
+    if (!fileResponse.ok) {
+      checks.push(
+        healthCheck(
+          "github-decision-file",
+          false,
+          String(fileResponse.status),
+          `GitHub decision file check returned ${fileResponse.status}.`
+        )
+      );
+      return finalizeEditorialStoreHealth(health);
+    }
+
+    const payload = await fileResponse.json();
+    const content = Buffer.from(String(payload.content ?? "").replace(/\s/g, ""), "base64").toString("utf8").trim();
+    const parsed = content ? JSON.parse(content) : [];
+    const decisionCount = Array.isArray(parsed) ? parsed.length : -1;
+    checks.push(
+      healthCheck(
+        "github-decision-file",
+        Array.isArray(parsed),
+        "readable",
+        Array.isArray(parsed)
+          ? "Decision file is readable and contains a JSON array."
+          : "Decision file exists but does not contain a JSON array.",
+        { decisionCount: Math.max(decisionCount, 0), shaPresent: Boolean(payload.sha) }
+      )
+    );
+  } catch (error) {
+    checks.push(
+      healthCheck(
+        "github-api",
+        false,
+        "error",
+        `GitHub editorial store health check failed: ${String(error?.message ?? error)}`
+      )
+    );
+  }
+
+  return finalizeEditorialStoreHealth(health);
+}
+
 export async function loadEditorialDecisions() {
   const durableDecisions = await readDurableDecisions();
   return dedupeDecisions([
@@ -516,6 +679,14 @@ function githubContentsUrl(githubStore, options = {}) {
   return options.includeRef ? `${url}?ref=${encodeURIComponent(githubStore.branch)}` : url;
 }
 
+function githubRepoUrl(githubStore) {
+  return `https://api.github.com/repos/${githubStore.repo}`;
+}
+
+function githubBranchUrl(githubStore) {
+  return `${githubRepoUrl(githubStore)}/branches/${encodeURIComponent(githubStore.branch)}`;
+}
+
 function githubHeaders(githubStore) {
   return {
     Accept: "application/vnd.github+json",
@@ -523,6 +694,23 @@ function githubHeaders(githubStore) {
     "Content-Type": "application/json",
     "User-Agent": "WarMapLive/0.1 editorial-store",
     "X-GitHub-Api-Version": GITHUB_API_VERSION
+  };
+}
+
+function healthCheck(id, ok, status, message, extra = {}) {
+  return {
+    id,
+    ok: Boolean(ok),
+    status,
+    message,
+    ...extra
+  };
+}
+
+function finalizeEditorialStoreHealth(health) {
+  return {
+    ...health,
+    ready: health.checks.every((check) => check.ok)
   };
 }
 

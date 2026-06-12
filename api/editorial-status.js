@@ -30,6 +30,7 @@ export function buildEditorialStatusPayload(context = {}) {
     endpoints: {
       queue: "/api/review-queue",
       action: "/api/review-action",
+      storeHealth: "/api/editorial-store-health",
       archive: "/api/archive",
       events: "/api/events"
     },
