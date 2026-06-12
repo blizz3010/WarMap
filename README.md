@@ -99,6 +99,14 @@ The embed header includes a theater selector, live/published count, source mode 
 
 Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured. Until those secrets exist, the standalone review page calls `/api/review-export` after a blocked approval/correction and shows a static module that can be committed to `api/editorial-decisions.js`; committed static decisions are loaded by the same map, feed, detail, archive, and API publication path.
 
+For the no-secret publishing bridge, place either the copied static module text or the JSON response from `/api/review-export` in a local file, then run:
+
+```bash
+node scripts/apply-review-export.mjs .data/review-export.json
+```
+
+The script validates each decision, preserves source links and approval snapshots, merges by decision id, and rewrites `api/editorial-decisions.js`. Use `--dry-run` to validate without changing the module, or `-` to read the export from stdin.
+
 Optional GitHub-backed production review storage uses the GitHub Contents API and no extra npm dependency:
 
 ```bash

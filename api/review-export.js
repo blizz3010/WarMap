@@ -13,7 +13,7 @@ export function buildEditorialDecisionExport(payload, { now = new Date() } = {})
     appendObject: JSON.stringify(decision, null, 2),
     instructions: [
       "Review the decision JSON and source links before committing.",
-      "Add the decision object to STATIC_EDITORIAL_DECISIONS in api/editorial-decisions.js.",
+      "Run node scripts/apply-review-export.mjs with the copied module or JSON export to update api/editorial-decisions.js.",
       "Commit and deploy the change; approved or corrected snapshots will publish to map, feed, detail, archive, and API.",
       "Use the durable GitHub editorial store once Vercel secrets are configured."
     ]
