@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
 import { detailEventsForRegion } from "../api/event.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
+import { buildEditorialStatusPayload } from "../api/editorial-status.js";
 import {
   applyEditorialDecisions,
   authorizeEditorialRequest,
@@ -45,6 +46,7 @@ const requiredFiles = [
   "api/archive.js",
   "api/collectors.js",
   "api/editorial-decisions.js",
+  "api/editorial-status.js",
   "api/editorial-store.js",
   "api/editorial-workflow.js",
   "api/event.js",
@@ -114,8 +116,16 @@ if (!eventPageSource.includes("/archive?") || eventPageSource.includes('href="/a
   throw new Error("Expected event page archive links to use the public archive route");
 }
 
-if (!reviewPageSource.includes("/api/review-queue?") || !reviewPageSource.includes("/api/review-action")) {
+if (
+  !reviewPageSource.includes("/api/review-queue?") ||
+  !reviewPageSource.includes("/api/review-action") ||
+  !reviewPageSource.includes("/api/editorial-status")
+) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
+}
+
+if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("publishReady")) {
+  throw new Error("Expected standalone review page to show editorial publishing readiness");
 }
 
 if (!reviewPageSource.includes("warmap.editorialToken") || !reviewPageSource.includes("review-source-strip")) {
@@ -407,6 +417,21 @@ withTemporaryEditorialEnv(() => {
     throw new Error("GitHub editorial store capabilities are incomplete");
   }
 
+  const status = buildEditorialStatusPayload({
+    decisions: [approvedSampleDecision],
+    now: new Date("2026-05-28T02:05:00Z")
+  });
+  if (
+    status.kind !== "EditorialStatus" ||
+    !status.readiness.durableStoreReady ||
+    status.readiness.reviewTokenReady ||
+    status.readiness.publishReady ||
+    status.counts.editorialDecisions !== 1 ||
+    !status.requiredConfiguration.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && !item.configured)
+  ) {
+    throw new Error("Editorial status payload failed unconfigured token readiness checks");
+  }
+
   const missingToken = authorizeEditorialRequest({ headers: {} });
   if (missingToken.ok || missingToken.code !== "EDITORIAL_AUTH_NOT_CONFIGURED") {
     throw new Error("Durable editorial store should require EDITORIAL_REVIEW_TOKEN");
@@ -416,6 +441,14 @@ withTemporaryEditorialEnv(() => {
   const authorized = authorizeEditorialRequest({ headers: { authorization: "Bearer review-secret" } });
   if (!authorized.ok || authorized.authMode !== "token") {
     throw new Error("Durable editorial store token authorization failed");
+  }
+
+  const readyStatus = buildEditorialStatusPayload({
+    decisions: [approvedSampleDecision],
+    now: new Date("2026-05-28T02:06:00Z")
+  });
+  if (!readyStatus.readiness.publishReady || !readyStatus.store.github?.configured) {
+    throw new Error("Editorial status payload failed publish-ready checks");
   }
 });
 
