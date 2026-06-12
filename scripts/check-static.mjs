@@ -29,8 +29,10 @@ import {
 const requiredFiles = [
   "index.html",
   "event.html",
+  "archive.html",
   "embed.html",
   "src/app.js",
+  "src/archive-page.js",
   "src/embed.js",
   "src/event-page.js",
   "src/styles.css",
@@ -63,6 +65,8 @@ for (const file of requiredFiles) {
 }
 
 const appSource = readFileSync(new URL("src/app.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const archivePageSource = readFileSync(new URL("src/archive-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 
 if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.includes("/v1/stream/events")) {
   throw new Error("Expected client to subscribe to the v1 event stream");
@@ -70,6 +74,14 @@ if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.inclu
 
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
   throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
+}
+
+if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes("archive-sources")) {
+  throw new Error("Expected public archive page to render approved archive records with sources");
+}
+
+if (!eventPageSource.includes("/archive?") || eventPageSource.includes('href="/api/archive?')) {
+  throw new Error("Expected event page archive links to use the public archive route");
 }
 
 const ids = new Set();

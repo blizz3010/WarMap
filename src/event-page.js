@@ -116,7 +116,7 @@ function renderEvent(item, meta, context) {
             <div class="detail-links">
               <a href="/?${new URLSearchParams({ region: context.region }).toString()}#event=${encodeURIComponent(item.id)}">Open on map</a>
               <a href="${escapeAttr(context.apiUrl)}">API record</a>
-              <a href="/api/archive?${new URLSearchParams({ region: context.region, lookback: context.lookback }).toString()}">Archive</a>
+              <a href="/archive?${new URLSearchParams({ region: context.region, lookback: context.lookback }).toString()}">Archive</a>
             </div>
             <p>${escapeHtml(meta.source ?? "event detail API")} - ${escapeHtml(String(meta.generatedAt ?? ""))}</p>
           </section>

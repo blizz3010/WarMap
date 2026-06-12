@@ -981,6 +981,7 @@ function renderDetail() {
   const detailLink = eventHashLink(item);
   const pageLink = eventPageLink(item);
   const apiLink = eventApiLink(item);
+  const archiveLink = archivePageLink();
   els.detailDrawer.style.setProperty("--detail-color", category.color);
   els.detailDrawer.classList.toggle("is-open", state.detailOpen);
   els.detailDrawer.setAttribute("aria-hidden", String(!state.detailOpen));
@@ -1036,6 +1037,7 @@ function renderDetail() {
         <div class="detail-links">
           <a href="${escapeAttr(pageLink)}">Event page</a>
           <a href="${escapeAttr(detailLink)}">Map link</a>
+          <a href="${escapeAttr(archiveLink)}">Archive</a>
           <a href="${escapeAttr(apiLink)}" target="_blank" rel="noreferrer noopener">API record</a>
         </div>
         <h3>Sources</h3>
@@ -2049,6 +2051,14 @@ function eventApiLink(item) {
     lookback: lookbackForApi(state.timeRange)
   });
   return `/api/event?${params.toString()}`;
+}
+
+function archivePageLink() {
+  const params = new URLSearchParams({
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/archive?${params.toString()}`;
 }
 
 function syncEventHash(eventId) {
