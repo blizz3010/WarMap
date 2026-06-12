@@ -162,8 +162,29 @@ function renderSourceChip(source) {
   const url = safeUrl(source.url);
   const label = escapeHtml(source.name);
   return url
-    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}<small>${escapeHtml(sourceTypes[source.type] ?? source.type ?? "source")}</small></a>`
+    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}<small>${escapeHtml(sourceProvenanceLabel(source))}</small></a>`
     : `<small>${label}</small>`;
+}
+
+function sourceProvenanceLabel(source) {
+  return [
+    sourceTypes[source.type] ?? source.type ?? "source",
+    source.trustTier,
+    collectorLabel(source.collector)
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function collectorLabel(collector) {
+  const labels = {
+    "gdelt-doc": "GDELT DOC collector",
+    rss: "RSS collector",
+    "official-feed": "Official feed collector",
+    "social-api": "Social API collector",
+    "open-web": "Open web collector"
+  };
+  return labels[collector] ?? (collector ? `${titleCase(collector)} collector` : "");
 }
 
 function renderEmptyArchive() {

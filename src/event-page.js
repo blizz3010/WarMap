@@ -132,7 +132,28 @@ function renderSource(source) {
   const sourceTitle = url
     ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}</a>`
     : `<strong>${label}</strong>`;
-  return `<li>${sourceTitle}<span>${escapeHtml(sourceTypes[source.type] ?? source.type ?? "unknown")} - ${escapeHtml(source.trustTier ?? "source")}</span></li>`;
+  return `<li>${sourceTitle}<span>${escapeHtml(sourceProvenanceLabel(source))}</span></li>`;
+}
+
+function sourceProvenanceLabel(source) {
+  return [
+    sourceTypes[source.type] ?? source.type ?? "unknown",
+    source.trustTier ?? "source",
+    collectorLabel(source.collector)
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function collectorLabel(collector) {
+  const labels = {
+    "gdelt-doc": "GDELT DOC collector",
+    rss: "RSS collector",
+    "official-feed": "Official feed collector",
+    "social-api": "Social API collector",
+    "open-web": "Open web collector"
+  };
+  return labels[collector] ?? (collector ? `${titleCase(collector)} collector` : "");
 }
 
 function renderError(title, message) {

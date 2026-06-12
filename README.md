@@ -49,6 +49,7 @@ The check validates the static app files and the event, region, category, severi
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
 - theater scoping: normalized events are filtered through the selected region bounds before list, detail, review, archive, and publication responses are returned
 - candidate extraction: event category, severity, actor side, place, summary, source metadata, and review status
+- source provenance: normalized source rows retain collector, registry id, original title, article publish time, capture time, and original URL
 - AI extraction metadata: provider, schema version, event type, location, summary, duplicate key, confidence fields, and keyword signals
 - duplicate matching: same-place, same-category, close-time article candidates can merge into a corroborated review item
 - editorial fields: candidate/needs-review/approved status, publication status, duplicate key, priority, visible targets, and required actions
@@ -64,7 +65,7 @@ The browser map also opens `/v1/stream/events` with `EventSource` when available
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
 
 - `/v1/config` returns theater presets, category icon taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, notification channels, and paid-layer capability records.
-- `/v1/events?region=ukraine-east&publication=published` returns event resources with location, review state, extraction metadata, visible original source links, and map/detail/API links.
+- `/v1/events?region=ukraine-east&publication=published` returns event resources with location, review state, extraction metadata, visible original source links, collector provenance, and map/detail/API links.
 - `/v1/feed?region=ukraine-east` returns feed-optimized event cards.
 - `/v1/timeline?region=ukraine-east` groups event cards by day.
 - `/v1/search?region=ukraine-east&q=Kharkiv` searches title, summary, place, category, severity, and source names.

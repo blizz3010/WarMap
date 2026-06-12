@@ -96,7 +96,16 @@ async function fetchGdeltArticles(region, maxRecords, lookback) {
   }
 
   const payload = await upstream.json();
-  return Array.isArray(payload.articles) ? payload.articles : [];
+  return Array.isArray(payload.articles)
+    ? payload.articles.map((article) => ({
+        ...article,
+        sourceRegistryId: "gdelt-doc",
+        collector: "gdelt-doc",
+        collectorUrl: gdeltUrl,
+        sourceType: article.sourceType || "media",
+        trustTier: article.trustTier || "open web index"
+      }))
+    : [];
 }
 
 async function fetchRssArticles(region, lookback) {
@@ -194,6 +203,9 @@ function rssItemToArticle(itemXml, feed) {
     url,
     domain: domainFromUrl(url),
     sourceName: feed.name,
+    sourceRegistryId: feed.id,
+    collector: feed.collector,
+    collectorUrl: feed.url,
     sourceType: feed.sourceType,
     trustTier: feed.trustTier,
     sourcecountry: feed.country,
@@ -237,6 +249,9 @@ function socialItemToArticle(item, source) {
     url,
     domain: domainFromUrl(url) || domainFromUrl(source.url),
     sourceName: source.name,
+    sourceRegistryId: source.id,
+    collector: source.collector,
+    collectorUrl: source.url,
     sourceType: source.sourceType || "osint",
     trustTier: source.trustTier || "requires analyst review",
     sourcecountry: source.country,
@@ -275,11 +290,13 @@ function parseSocialApiSources() {
 function normalizeSocialApiSource(source) {
   return {
     name: cleanText(source.name),
+    id: cleanText(source.id) || slugify(source.name || source.url || "social-api"),
     url: safeUrl(source.url),
     regions: Array.isArray(source.regions) ? source.regions.map(cleanText).filter(Boolean) : ["*"],
     tokenEnv: cleanText(source.tokenEnv),
     authScheme: cleanText(source.authScheme),
     itemsPath: cleanText(source.itemsPath),
+    collector: cleanText(source.collector) || "social-api",
     sourceType: cleanText(source.sourceType) || "osint",
     trustTier: cleanText(source.trustTier) || "requires analyst review",
     country: cleanText(source.country),
@@ -339,6 +356,13 @@ function safeUrl(value) {
 
 function cleanText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function slugify(value) {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function lookbackDurationMs(lookback) {

@@ -2387,11 +2387,28 @@ function renderSource(source) {
   const sourceTitle = url
     ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}</a>`
     : `<strong>${label}</strong>`;
-  return `<li>${sourceTitle}<span>${escapeHtml(sourceTypes[source.type] ?? source.type)} - ${escapeHtml(source.trustTier)}</span></li>`;
+  return `<li>${sourceTitle}<span>${escapeHtml(sourceProvenanceLabel(source))}</span></li>`;
 }
 
 function sourceCountLabel(count) {
   return `${count} ${count === 1 ? "source" : "sources"}`;
+}
+
+function sourceProvenanceLabel(source) {
+  const parts = [sourceTypes[source.type] ?? source.type, source.trustTier, collectorLabel(source.collector)]
+    .filter(Boolean);
+  return parts.join(" - ");
+}
+
+function collectorLabel(collector) {
+  const labels = {
+    "gdelt-doc": "GDELT DOC collector",
+    rss: "RSS collector",
+    "official-feed": "Official feed collector",
+    "social-api": "Social API collector",
+    "open-web": "Open web collector"
+  };
+  return labels[collector] ?? (collector ? `${titleCase(collector)} collector` : "");
 }
 
 function reviewInfo(item) {

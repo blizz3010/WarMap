@@ -235,6 +235,15 @@ if (
   throw new Error("Live news normalizer failed AI extraction metadata");
 }
 
+if (
+  sampleLiveEvents[0].sources[0].collector !== "open-web" ||
+  !sampleLiveEvents[0].sources[0].originalTitle ||
+  !sampleLiveEvents[0].sources[0].capturedAt ||
+  !sampleLiveEvents[0].sources[0].publishedAt
+) {
+  throw new Error("Live news normalizer failed source provenance metadata");
+}
+
 const sampleUkraineEvents = normalizeArticlesToEvents(
   [
     {
@@ -437,6 +446,29 @@ if (
 
 if (!v1Events.events.every((event) => event.sources.every((source) => hasHttpUrl(source.url)))) {
   throw new Error("V1 events must preserve visible original source URLs");
+}
+
+const v1LiveSource = buildV1EventsPayload(
+  {
+    events: sampleUkraineEvents,
+    meta: {
+      generatedAt: "2026-05-28T00:00:00.000Z",
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all"
+    }
+  },
+  {
+    query: {
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all"
+    }
+  }
+).events[0]?.sources[0];
+
+if (!v1LiveSource?.collector || !v1LiveSource.originalTitle || !v1LiveSource.capturedAt) {
+  throw new Error("V1 events must preserve source provenance metadata");
 }
 
 if (!v1Events.events[0].links.detail.startsWith("/event?") || !v1Events.links.stream.startsWith("/v1/stream/events")) {

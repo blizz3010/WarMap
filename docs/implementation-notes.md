@@ -36,6 +36,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - `firstSeenAt`, `lastUpdatedAt`, `timeLabel`, `relativeTime`
 - `place`, `province`, `country`, `location.lat/lon/precision`
 - `confidence`, `sourceCount`, `sources[]`
+- `sources[].registryId`, `sources[].collector`, `sources[].originalTitle`, `sources[].publishedAt`, `sources[].capturedAt`
 - `side`, `review.status`, `review.queue`, `review.publicationStatus`, `review.priority`, `review.duplicateKey`, `review.visibleOn[]`, `review.requiredActions[]`
 - `media`
 - `updates[]`

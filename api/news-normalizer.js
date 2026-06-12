@@ -146,6 +146,9 @@ function normalizeArticle(article, now, seenUrls, region) {
   const side = inferActorSide(text, location);
   const seenAt = parseArticleDate(article.seendate ?? article.pubDate ?? article.isoDate) ?? now;
   const sourceName = cleanText(article.sourceName) || humanizeDomain(article.domain, article.sourcecountry);
+  const sourceRegistryId = cleanText(article.sourceRegistryId);
+  const collector = cleanText(article.collector) || "open-web";
+  const collectorUrl = safeUrl(article.collectorUrl);
   const sourceType = cleanText(article.sourceType) || inferSourceType(article.domain);
   const trustTier = cleanText(article.trustTier) || (sourceType === "official" ? "primary source" : "open web");
   const summary = buildSummary(article, sourceName);
@@ -189,10 +192,16 @@ function normalizeArticle(article, now, seenUrls, region) {
     sources: [
       {
         id: `src_${hash(article.domain || url).slice(0, 10)}`,
+        registryId: sourceRegistryId,
         name: sourceName,
+        collector,
         type: sourceType,
         trustTier,
-        url
+        url,
+        collectorUrl,
+        originalTitle: title,
+        publishedAt: seenAt.toISOString(),
+        capturedAt: now.toISOString()
       }
     ],
     media: safeUrl(article.socialimage)

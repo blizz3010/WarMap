@@ -312,10 +312,16 @@ function toTimelineItem(event, context) {
 function visibleSources(event) {
   return (event.sources ?? []).map((source) => ({
     id: source.id,
+    registryId: source.registryId ?? "",
     name: source.name,
+    collector: source.collector ?? "",
     type: source.type,
     trustTier: source.trustTier,
-    url: source.url
+    url: source.url,
+    collectorUrl: source.collectorUrl ?? "",
+    originalTitle: source.originalTitle ?? "",
+    publishedAt: source.publishedAt ?? "",
+    capturedAt: source.capturedAt ?? ""
   }));
 }
 
