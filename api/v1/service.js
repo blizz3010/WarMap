@@ -157,7 +157,8 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       timeline: "/v1/timeline",
       search: "/v1/search",
       stream: "/v1/stream/events",
-      platformConfig: "/api/platform-config"
+      platformConfig: "/api/platform-config",
+      sourceHealth: "/api/source-health"
     }
   };
 }

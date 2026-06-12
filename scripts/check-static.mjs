@@ -20,6 +20,7 @@ import { buildProductionReadinessPayload } from "../api/production-readiness.js"
 import { eventsForRegionScope } from "../api/region-scope.js";
 import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
+import { buildSourceHealthPayload } from "../api/source-health.js";
 import { applyReviewExportText, renderStaticEditorialDecisionModule } from "./apply-review-export.mjs";
 import {
   buildV1EventsPayload,
@@ -68,6 +69,7 @@ const requiredFiles = [
   "api/review-export.js",
   "api/review-queue.js",
   "api/source-curation.js",
+  "api/source-health.js",
   "api/source-registry.js",
   "api/v1/adapter.js",
   "api/v1/config.js",
@@ -248,10 +250,94 @@ if (
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "ukraine-mod-news") ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api") ||
   !ukraineCuration.readiness.canPublishFromCollectors ||
+  !ukraineCuration.endpoints.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
   !ukraineCuration.readiness.needsOfficialSiteAdapters ||
   !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages"))
 ) {
   throw new Error("Source curation payload failed Liveuamap boundary or source backlog checks");
+}
+
+const sourceHealth = await withTemporarySourceHealthEnv(async () => {
+  process.env.COMPLIANT_SOCIAL_API_SOURCES = JSON.stringify([
+    {
+      id: "approved-osint",
+      name: "Approved OSINT API",
+      url: "https://allowed.example.test/api/posts",
+      regions: ["ukraine-east"],
+      tokenEnv: "ALLOWED_OSINT_TOKEN",
+      itemsPath: "data",
+      sourceType: "osint",
+      trustTier: "requires analyst review"
+    }
+  ]);
+  process.env.ALLOWED_OSINT_TOKEN = "social-secret";
+  const urls = [];
+  const health = await buildSourceHealthPayload({
+    region: "ukraine-east",
+    lookback: "30d",
+    now: new Date("2026-05-28T02:03:30Z"),
+    fetchImpl: async (url, options) => {
+      urls.push(String(url));
+      const authorization = options?.headers?.Authorization ?? "";
+      if (String(url).includes("allowed.example.test") && !authorization.includes("social-secret")) {
+        throw new Error("Expected source health to send the configured social API token");
+      }
+      if (String(url).includes("api.gdeltproject.org")) {
+        return jsonResponse(200, { articles: [{ title: "fixture" }] });
+      }
+      if (String(url).includes("allowed.example.test")) {
+        return jsonResponse(200, { data: [{ title: "fixture", url: "https://allowed.example.test/post/1" }] });
+      }
+      return textResponse(200, "<rss><channel><item><title>Ukraine strike fixture</title><link>https://example.test/a</link></item></channel></rss>");
+    }
+  });
+  return { health, urls };
+});
+if (
+  sourceHealth.health.kind !== "SourceHealth" ||
+  !sourceHealth.health.ready ||
+  sourceHealth.health.summary.checkedSources < 4 ||
+  sourceHealth.health.summary.configuredSocialApis !== 1 ||
+  !sourceHealth.health.sources.some((source) => source.id === "approved-osint" && source.ok && source.itemCount === 1) ||
+  !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned") ||
+  !sourceHealth.health.families.some((family) => family.collector === "social-api" && family.ok === 1) ||
+  sourceHealth.urls.length < 4
+) {
+  throw new Error("Source health payload failed configured collector checks");
+}
+if (JSON.stringify(sourceHealth.health).includes("social-secret")) {
+  throw new Error("Source health payload leaked a configured social API secret");
+}
+
+const missingSocialTokenHealth = await withTemporarySourceHealthEnv(async () => {
+  process.env.COMPLIANT_SOCIAL_API_SOURCES = JSON.stringify([
+    {
+      id: "missing-token-api",
+      name: "Missing Token API",
+      url: "https://allowed.example.test/api/posts",
+      regions: ["ukraine-east"],
+      tokenEnv: "MISSING_ALLOWED_TOKEN"
+    }
+  ]);
+  return buildSourceHealthPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:03:45Z"),
+    fetchImpl: async (url) => {
+      if (String(url).includes("allowed.example.test")) {
+        throw new Error("Missing-token social API source should not be fetched");
+      }
+      if (String(url).includes("api.gdeltproject.org")) {
+        return jsonResponse(200, { articles: [] });
+      }
+      return textResponse(200, "<rss><channel><item><title>Fixture</title></item></channel></rss>");
+    }
+  });
+});
+if (
+  missingSocialTokenHealth.summary.missingConfiguration !== 1 ||
+  !missingSocialTokenHealth.sources.some((source) => source.id === "missing-token-api" && source.status === "missing-config")
+) {
+  throw new Error("Source health payload failed missing social API token checks");
 }
 
 const productionReadiness = await withTemporaryEditorialEnvAsync(async () => {
@@ -271,6 +357,7 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
   productionReadiness.sections.sourceCuration.activeSources < 1 ||
+  !productionReadiness.sections.sourceCuration.sourceHealth?.includes("/api/source-health?region=ukraine-east") ||
   !productionReadiness.sections.platform.browserNotifications
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
@@ -937,6 +1024,27 @@ async function withTemporaryAiExtractionEnv(callback) {
   }
 }
 
+async function withTemporarySourceHealthEnv(callback) {
+  const keys = [
+    "COMPLIANT_SOCIAL_API_SOURCES",
+    "ALLOWED_OSINT_TOKEN",
+    "MISSING_ALLOWED_TOKEN"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return await callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
 function assertThrows(callback, expectedMessage) {
   try {
     callback();
@@ -955,6 +1063,16 @@ function jsonResponse(status, payload) {
     status,
     async json() {
       return payload;
+    }
+  };
+}
+
+function textResponse(status, text) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async text() {
+      return text;
     }
   };
 }

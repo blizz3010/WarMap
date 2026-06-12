@@ -21,10 +21,11 @@ WarMap should imitate the useful public shape of Liveuamap, not copy its data. T
 
 ## Current source state
 
-Active sources are defined in `api/source-registry.js` and exposed through `/api/source-curation?region=ukraine-east`.
+Active sources are defined in `api/source-registry.js` and exposed through `/api/source-curation?region=ukraine-east`. Runtime reachability is exposed through `/api/source-health?region=ukraine-east`.
 
 - Active collectors: GDELT DOC, region-matched media RSS, official RSS-compatible feeds, and opt-in compliant social APIs.
 - Planned collectors: official-site adapters for Ukraine Ministry of Defence, State Emergency Service of Ukraine, Russian Defence Ministry claim labeling, and a licensed Liveuamap API integration.
+- Health checks: active GDELT/RSS/official-feed sources and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched.
 - Social/API sources remain opt-in through `COMPLIANT_SOCIAL_API_SOURCES`; only add endpoints whose terms permit automated use.
 
 ## Activation checklist

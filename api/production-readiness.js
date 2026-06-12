@@ -29,7 +29,8 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
       sourceCuration: {
         activeSources: curation.sourceRegistry.active,
         plannedSources: curation.sourceRegistry.planned,
-        readiness: curation.readiness
+        readiness: curation.readiness,
+        sourceHealth: curation.endpoints?.sourceHealth ?? null
       },
       platform
     },
