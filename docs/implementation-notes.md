@@ -25,7 +25,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Editorial endpoints: `/api/review-queue`, `/api/review-action`, `/api/event`, and `/api/archive` expose review candidates, approval/rejection actions, detail records, and approved history.
 - Iran focus mode: default map bounds, zoom, and a subtle country highlight keep Iran visually dominant while still allowing nearby regional markers.
 - Longer event history: date filtering now supports 30-day, 90-day, and all-available windows and passes the requested lookback into the live endpoint.
-- Theater bounds scoping: normalized open-web leads are filtered against configured region bounds before list, review, archive, and v1 responses are returned, so Ukraine sub-theaters do not inherit unrelated nationwide leads.
+- Theater bounds scoping: normalized open-web leads are filtered against configured region bounds before list, detail, review, archive, and v1 responses are returned, so Ukraine sub-theaters do not inherit unrelated nationwide leads.
 
 ## Data shape
 

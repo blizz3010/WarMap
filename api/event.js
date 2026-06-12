@@ -2,6 +2,7 @@ import { collectOpenWebArticles } from "./collectors.js";
 import { enrichEditorialEvents } from "./editorial-workflow.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
 
 export default async function handler(request, response) {
@@ -19,14 +20,17 @@ export default async function handler(request, response) {
 
   const region = String(request.query?.region ?? DEFAULT_REGION_ID);
   const decisions = await loadEditorialDecisions();
-  const seedMatch = findEvent(enrichEditorialEvents(applyEditorialDecisions(seedEvents, decisions)), id);
+  const scopedSeedEvents = detailEventsForRegion(seedEvents, decisions, region, { enrich: true });
+  const seedMatch = findEvent(scopedSeedEvents, id);
   if (seedMatch) {
     response.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=600");
     response.status(200).json({
       event: seedMatch,
       meta: {
         generatedAt: new Date().toISOString(),
+        region,
         source: "approved seed archive",
+        scopedEvents: scopedSeedEvents.length,
         editorialDecisions: decisions.length
       }
     });
@@ -45,7 +49,8 @@ export default async function handler(request, response) {
       region,
       limit: 100
     });
-    const liveMatch = findEvent(applyEditorialDecisions(liveEvents, decisions), id);
+    const scopedLiveEvents = detailEventsForRegion(liveEvents, decisions, region);
+    const liveMatch = findEvent(scopedLiveEvents, id);
 
     if (!liveMatch) {
       response.status(404).json({ error: "EVENT_NOT_FOUND" });
@@ -60,6 +65,7 @@ export default async function handler(request, response) {
         source: "live review candidate",
         editorialDecisions: decisions.length,
         upstreamArticles: collection.articles.length,
+        scopedEvents: scopedLiveEvents.length,
         upstreamErrors: collection.upstreamErrors
       }
     });
@@ -70,6 +76,12 @@ export default async function handler(request, response) {
       message: error instanceof Error ? error.message : "Unknown upstream error"
     });
   }
+}
+
+export function detailEventsForRegion(events, decisions = [], region = DEFAULT_REGION_ID, options = {}) {
+  const decidedEvents = applyEditorialDecisions(events, decisions);
+  const detailEvents = options.enrich ? enrichEditorialEvents(decidedEvents) : decidedEvents;
+  return eventsForRegionScope(detailEvents, region);
 }
 
 function findEvent(events, id) {

@@ -47,7 +47,7 @@ The check validates the static app files and the event, region, category, severi
 - official feeds: active government/multilateral RSS-compatible feeds, tracked separately from media RSS
 - compliant social APIs: opt-in JSON API sources configured only through `COMPLIANT_SOCIAL_API_SOURCES`
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
-- theater scoping: normalized events are filtered through the selected region bounds before publication/review responses are returned
+- theater scoping: normalized events are filtered through the selected region bounds before list, detail, review, archive, and publication responses are returned
 - candidate extraction: event category, severity, actor side, place, summary, source metadata, and review status
 - AI extraction metadata: provider, schema version, event type, location, summary, duplicate key, confidence fields, and keyword signals
 - duplicate matching: same-place, same-category, close-time article candidates can merge into a corroborated review item

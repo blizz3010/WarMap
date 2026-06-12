@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
+import { detailEventsForRegion } from "../api/event.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
 import {
   applyEditorialDecisions,
@@ -265,6 +266,13 @@ if (
   eventsForRegionScope(sampleUkraineEvents, "black-sea").length !== 0
 ) {
   throw new Error("Region scope filtering failed to separate Ukraine sub-theaters");
+}
+
+if (
+  !detailEventsForRegion(events, [], "iran", { enrich: true }).some((event) => event.id === "evt_tehran_air_defense") ||
+  detailEventsForRegion(events, [], "black-sea", { enrich: true }).some((event) => event.id === "evt_tehran_air_defense")
+) {
+  throw new Error("Event detail API scoping failed to keep detail records inside the requested theater");
 }
 
 const queue = reviewQueueFromEvents(events);
