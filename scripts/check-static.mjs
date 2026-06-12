@@ -7,6 +7,7 @@ import {
   applyEditorialDecisions,
   authorizeEditorialRequest,
   editorialStoreCapabilities,
+  eventsFromEditorialSnapshots,
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
@@ -119,6 +120,10 @@ if (!reviewPageSource.includes("/api/review-queue?") || !reviewPageSource.includ
 
 if (!reviewPageSource.includes("warmap.editorialToken") || !reviewPageSource.includes("review-source-strip")) {
   throw new Error("Expected standalone review page to persist reviewer token and render source links");
+}
+
+if (!appSource.includes("eventSnapshot: eventSnapshotForDecision(item)") || !reviewPageSource.includes("eventSnapshot: eventSnapshotForDecision(item)")) {
+  throw new Error("Expected review actions to include durable event snapshots");
 }
 
 const ids = new Set();
@@ -293,11 +298,13 @@ const approvedSampleDecision = normalizeDecisionPayload(
     eventId: sampleUkraineEvents[0].id,
     duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
     sourceUrl: sampleUkraineEvents[0].sources[0].url,
+    eventSnapshot: sampleUkraineEvents[0],
     notes: "static approval overlay smoke test"
   },
   { now: new Date("2026-05-28T02:03:03Z") }
 );
 const approvedSampleEvents = applyEditorialDecisions(sampleUkraineEvents, [approvedSampleDecision]);
+const approvedSnapshotEvents = eventsFromEditorialSnapshots([approvedSampleDecision]);
 const correctedSampleDecision = normalizeDecisionPayload(
   {
     action: "correct",
@@ -345,6 +352,19 @@ if (
   reviewQueueFromEvents(approvedSampleEvents).candidates.length
 ) {
   throw new Error("Editorial approval decisions did not publish and remove the sample candidate from queue");
+}
+
+if (
+  !approvedSampleDecision.eventSnapshot ||
+  approvedSnapshotEvents[0]?.id !== sampleUkraineEvents[0].id ||
+  approvedSnapshotEvents[0]?.review.publicationStatus !== "published" ||
+  !approvedSnapshotEvents[0]?.sources.every((source) => hasHttpUrl(source.url))
+) {
+  throw new Error("Editorial approval snapshots did not materialize a durable published event");
+}
+
+if (!detailEventsForRegion(approvedSnapshotEvents, [], "ukraine-east").some((event) => event.id === sampleUkraineEvents[0].id)) {
+  throw new Error("Editorial approval snapshots failed theater-scoped detail recovery");
 }
 
 if (applyEditorialDecisions(sampleUkraineEvents, [correctedSampleDecision])[0].review.status !== "corrected") {

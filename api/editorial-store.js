@@ -105,6 +105,17 @@ export function applyEditorialDecisions(events, decisions = []) {
   });
 }
 
+export function eventsFromEditorialSnapshots(decisions = []) {
+  const snapshots = latestSnapshotsByEvent(decisions);
+  if (!snapshots.length) {
+    return [];
+  }
+
+  return applyEditorialDecisions(snapshots, decisions).filter((event) => {
+    return ["published", "retracted"].includes(event.review?.publicationStatus);
+  });
+}
+
 export function normalizeDecisionPayload(payload, context = {}) {
   const action = String(payload?.action ?? "").trim().toLowerCase();
   if (!EDITORIAL_ACTIONS.has(action)) {
@@ -128,6 +139,7 @@ export function normalizeDecisionPayload(payload, context = {}) {
     notes: clean(payload?.notes),
     reviewer: clean(payload?.reviewer) || "editorial desk",
     correctedFields: sanitizeCorrectedFields(payload?.correctedFields),
+    eventSnapshot: sanitizeEventSnapshot(payload?.eventSnapshot),
     createdAt: context.now?.toISOString?.() ?? new Date().toISOString()
   });
 }
@@ -334,8 +346,23 @@ function normalizeDecision(decision) {
     reviewer: decision.reviewer || "editorial desk",
     notes: decision.notes || "",
     correctedFields: sanitizeCorrectedFields(decision.correctedFields),
+    eventSnapshot: sanitizeEventSnapshot(decision.eventSnapshot),
     createdAt
   };
+}
+
+function latestSnapshotsByEvent(decisions) {
+  const snapshots = new Map();
+  decisions
+    .filter((decision) => decision.eventSnapshot)
+    .sort((left, right) => timestamp(left.createdAt) - timestamp(right.createdAt))
+    .forEach((decision) => {
+      const snapshot = sanitizeEventSnapshot(decision.eventSnapshot);
+      if (snapshot?.id) {
+        snapshots.set(snapshot.id, snapshot);
+      }
+    });
+  return [...snapshots.values()];
 }
 
 function readLocalDecisions() {
@@ -515,6 +542,141 @@ function sanitizeCorrectedFields(value) {
       .map(([key, fieldValue]) => [key, clean(fieldValue)])
       .filter(([, fieldValue]) => fieldValue)
   );
+}
+
+function sanitizeEventSnapshot(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const id = clean(value.id);
+  const title = clean(value.title);
+  const sources = Array.isArray(value.sources) ? value.sources.map(sanitizeSourceSnapshot).filter(Boolean) : [];
+  const lat = Number(value.location?.lat);
+  const lon = Number(value.location?.lon);
+
+  if (!id || !title || !sources.length || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+
+  return {
+    id,
+    slug: clean(value.slug) || id,
+    timeLabel: clean(value.timeLabel),
+    relativeTime: clean(value.relativeTime),
+    firstSeenAt: clean(value.firstSeenAt),
+    lastUpdatedAt: clean(value.lastUpdatedAt || value.firstSeenAt),
+    place: clean(value.place),
+    province: clean(value.province),
+    country: clean(value.country),
+    location: {
+      lat,
+      lon,
+      precision: clean(value.location?.precision)
+    },
+    category: clean(value.category) || "other",
+    severity: clean(value.severity) || "low",
+    verification: clean(value.verification) || "reported",
+    confidence: clampNumber(value.confidence, 0, 1, 0.5),
+    sourceCount: sources.length,
+    sources,
+    side: clean(value.side) || "unknown",
+    extraction: safeJsonObject(value.extraction, 6000),
+    media: safeJsonObject(value.media, 2000),
+    title,
+    summary: clean(value.summary),
+    updates: sanitizeStringList(value.updates, 10),
+    review: sanitizeReviewSnapshot(value.review)
+  };
+}
+
+function sanitizeSourceSnapshot(source) {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  const url = safeUrl(source.url);
+  const name = clean(source.name);
+  if (!url || !name) {
+    return null;
+  }
+
+  return {
+    id: clean(source.id),
+    registryId: clean(source.registryId),
+    name,
+    collector: clean(source.collector),
+    type: clean(source.type) || "unknown",
+    trustTier: clean(source.trustTier),
+    url,
+    collectorUrl: safeUrl(source.collectorUrl),
+    originalTitle: clean(source.originalTitle),
+    publishedAt: clean(source.publishedAt),
+    capturedAt: clean(source.capturedAt)
+  };
+}
+
+function sanitizeReviewSnapshot(review) {
+  const value = review && typeof review === "object" ? review : {};
+  return {
+    status: clean(value.status) || "candidate",
+    statusLabel: clean(value.statusLabel),
+    queue: clean(value.queue) || "open-source intake",
+    publicationStatus: clean(value.publicationStatus) || "review_only",
+    publicationLabel: clean(value.publicationLabel),
+    priority: clean(value.priority) || "normal",
+    duplicateKey: clean(value.duplicateKey),
+    visibleOn: sanitizeStringList(value.visibleOn, 8),
+    assignee: clean(value.assignee) || "editorial desk",
+    requiredActions: sanitizeStringList(value.requiredActions, 8),
+    checklist: Array.isArray(value.checklist) ? value.checklist.slice(0, 8).map(sanitizeChecklistItem).filter(Boolean) : [],
+    decidedAt: clean(value.decidedAt)
+  };
+}
+
+function sanitizeChecklistItem(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  return {
+    key: clean(item.key),
+    label: clean(item.label),
+    done: Boolean(item.done)
+  };
+}
+
+function sanitizeStringList(value, limit) {
+  return Array.isArray(value) ? value.map(clean).filter(Boolean).slice(0, limit) : [];
+}
+
+function safeJsonObject(value, maxLength) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  try {
+    const copy = JSON.parse(JSON.stringify(value));
+    return JSON.stringify(copy).length <= maxLength ? copy : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  return Math.min(Math.max(number, min), max);
 }
 
 function headerValue(request, headerName) {

@@ -1,7 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
-import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
+import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { activeOfficialFeedsForRegion, activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
@@ -34,10 +34,12 @@ export default async function handler(request, response) {
     });
     const decisions = await loadEditorialDecisions();
     const decidedEvents = applyEditorialDecisions(normalizedEvents, decisions);
-    const scopedEvents = eventsForRegionScope(decidedEvents, region);
+    const scopedLiveEvents = eventsForRegionScope(decidedEvents, region);
+    const snapshotEvents = eventsForRegionScope(eventsFromEditorialSnapshots(decisions), region);
+    const scopedEvents = dedupeEvents([...scopedLiveEvents, ...snapshotEvents]);
     const events = eventsForPublication(scopedEvents, publication);
 
-    if (!normalizedEvents.length && collection.upstreamErrors.length >= 2) {
+    if (!normalizedEvents.length && !snapshotEvents.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
     }
 
@@ -56,6 +58,7 @@ export default async function handler(request, response) {
         officialFeeds: activeOfficialFeedsForRegion(region).map((feed) => feed.url),
         socialApiSources: collection.socialApiSources,
         upstreamArticles: collection.articles.length,
+        snapshotEvents: snapshotEvents.length,
         scopedEvents: scopedEvents.length,
         returnedEvents: events.length,
         editorial: editorialSummary(scopedEvents),
@@ -78,6 +81,17 @@ export default async function handler(request, response) {
       message: error instanceof Error ? error.message : "Unknown upstream error"
     });
   }
+}
+
+function dedupeEvents(events) {
+  const byId = new Map();
+  events.forEach((event) => byId.set(event.id, event));
+  return [...byId.values()].sort((left, right) => timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt));
+}
+
+function timestamp(value) {
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function normalizePublicationMode(value) {

@@ -86,7 +86,7 @@ The embed header includes a theater selector, live/published count, source mode 
 ## Editorial API slice
 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
-- `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL.
+- `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. Review actions include a sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 - `/event?id=...&region=...` renders a public event record backed by `/api/event`.
@@ -106,7 +106,7 @@ EDITORIAL_GITHUB_PATH=editorial/decisions.json
 EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
 ```
 
-When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
+When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. Approved/corrected snapshots are materialized back into map/feed/detail/archive/API responses even if the original live article no longer appears in the current collector window. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
 
 For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions.
 

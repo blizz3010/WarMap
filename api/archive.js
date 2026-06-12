@@ -1,6 +1,6 @@
 import { archiveFromEvents, editorialSummary, publishedEventsFromEvents } from "./editorial-workflow.js";
 import { collectOpenWebArticles } from "./collectors.js";
-import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
+import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
@@ -15,8 +15,9 @@ export default async function handler(request, response) {
   const region = String(request.query?.region ?? "all");
   const decisions = await loadEditorialDecisions();
   const seedPublished = eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(seedEvents, decisions)), region);
+  const snapshotPublished = eventsForRegionScope(publishedEventsFromEvents(eventsFromEditorialSnapshots(decisions)), region);
   const livePublished = region === "all" ? [] : await publishedLiveEvents(region, request, decisions);
-  const published = dedupeEvents([...livePublished, ...seedPublished]);
+  const published = dedupeEvents([...livePublished, ...seedPublished, ...snapshotPublished]);
 
   response.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=600");
   response.status(200).json({
@@ -26,9 +27,10 @@ export default async function handler(request, response) {
       generatedAt: new Date().toISOString(),
       region,
       returnedEvents: published.length,
+      snapshotEvents: snapshotPublished.length,
       editorialDecisions: decisions.length,
       editorial: editorialSummary(published),
-      verification: "approved event archive; live approvals require persistent editorial storage"
+      verification: "approved event archive with editorial snapshots when available"
     }
   });
 }
@@ -52,5 +54,10 @@ async function publishedLiveEvents(region, request, decisions) {
 function dedupeEvents(events) {
   const byId = new Map();
   events.forEach((event) => byId.set(event.id, event));
-  return [...byId.values()];
+  return [...byId.values()].sort((left, right) => timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt));
+}
+
+function timestamp(value) {
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }

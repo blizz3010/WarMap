@@ -1,6 +1,6 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { enrichEditorialEvents } from "./editorial-workflow.js";
-import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
+import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
@@ -31,6 +31,23 @@ export default async function handler(request, response) {
         region,
         source: "approved seed archive",
         scopedEvents: scopedSeedEvents.length,
+        editorialDecisions: decisions.length
+      }
+    });
+    return;
+  }
+
+  const scopedSnapshotEvents = eventsForRegionScope(eventsFromEditorialSnapshots(decisions), region);
+  const snapshotMatch = findEvent(scopedSnapshotEvents, id);
+  if (snapshotMatch) {
+    response.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=600");
+    response.status(200).json({
+      event: snapshotMatch,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        region,
+        source: "editorial snapshot store",
+        snapshotEvents: scopedSnapshotEvents.length,
         editorialDecisions: decisions.length
       }
     });

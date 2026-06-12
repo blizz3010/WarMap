@@ -1521,6 +1521,7 @@ async function submitReviewAction(button) {
         duplicateKey: review.duplicateKey,
         sourceUrl: item.sources[0]?.url ?? "",
         correctedFields,
+        eventSnapshot: eventSnapshotForDecision(item),
         targetDuplicateKey: action === "merge" ? review.duplicateKey : "",
         notes: `Action from WarMap review panel for ${item.place}`
       })
@@ -1539,6 +1540,34 @@ async function submitReviewAction(button) {
     state.editorialMessage = error instanceof Error ? error.message : "Review action failed";
     renderIntelPanel(filteredEvents(true));
   }
+}
+
+function eventSnapshotForDecision(item) {
+  return {
+    id: item.id,
+    slug: item.slug,
+    timeLabel: item.timeLabel,
+    relativeTime: item.relativeTime,
+    firstSeenAt: item.firstSeenAt,
+    lastUpdatedAt: item.lastUpdatedAt,
+    place: item.place,
+    province: item.province,
+    country: item.country,
+    location: item.location,
+    category: item.category,
+    severity: item.severity,
+    verification: item.verification,
+    confidence: item.confidence,
+    sourceCount: item.sourceCount,
+    sources: item.sources,
+    side: item.side,
+    extraction: item.extraction,
+    media: item.media,
+    title: item.title,
+    summary: item.summary,
+    updates: item.updates,
+    review: item.review
+  };
 }
 
 function applyClientDecision(eventId, decision) {
