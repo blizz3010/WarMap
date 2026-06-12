@@ -1,6 +1,7 @@
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { buildEditorialStatusPayload, editorialReadinessBlockers, loadEditorialStatusDecisions } from "./editorial-status.js";
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
+import { notificationRuntimeSummary } from "./notification-service.js";
 import { PLATFORM_CONFIG } from "./platform-config.js";
 import { buildSourceCurationPayload } from "./source-curation.js";
 
@@ -9,7 +10,8 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
   const editorial = buildEditorialStatusPayload({ decisions, now });
   const extraction = extractionRuntimeSummary();
   const curation = buildSourceCurationPayload({ region, now });
-  const platform = platformReadinessSummary();
+  const notifications = notificationRuntimeSummary({ now });
+  const platform = platformReadinessSummary({ notifications });
   const blockers = [
     ...editorialReadinessBlockers(editorial),
     ...aiExtractionBlockers(extraction),
@@ -94,10 +96,16 @@ function curationBlockers(curation) {
   return blockers;
 }
 
-function platformReadinessSummary() {
+function platformReadinessSummary({ notifications = notificationRuntimeSummary() } = {}) {
   return {
+    notificationStatus: "/api/notification-status",
     browserNotifications: PLATFORM_CONFIG.notificationChannels.some((channel) => channel.id === "browser" && channel.status === "local-ready"),
-    serverNotificationsReady: PLATFORM_CONFIG.notificationChannels.some((channel) => ["email", "webhook", "push"].includes(channel.id) && channel.status === "active"),
+    serverNotificationsReady: notifications.serverDeliveryReady,
+    notificationRuntime: {
+      status: notifications.status,
+      configuredMinSeverity: notifications.configuredMinSeverity,
+      channels: notifications.channels
+    },
     activeLanguages: PLATFORM_CONFIG.languages.filter((language) => language.status === "active").map((language) => language.id),
     plannedLanguages: PLATFORM_CONFIG.languages.filter((language) => language.status === "planned").map((language) => language.id),
     paidLayersReady: PLATFORM_CONFIG.paidLayers.some((layer) => layer.status === "active-paid"),
@@ -111,8 +119,9 @@ function platformBlockers(platform) {
     blockers.push({
       id: "server-notifications",
       required: false,
-      status: "planned",
-      message: "Only local browser notifications are ready; email/webhook/push delivery needs accounts, subscriptions, and delivery infrastructure."
+      status: platform.notificationRuntime?.status ?? "planned",
+      message:
+        "Only local browser notifications are active. Configure NOTIFICATION_WEBHOOK_URL, NOTIFICATION_WEBHOOK_SECRET, and NOTIFICATION_ADMIN_TOKEN to enable signed server-side webhook delivery."
     });
   }
   if (platform.plannedLanguages.length) {

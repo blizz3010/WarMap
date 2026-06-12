@@ -15,6 +15,11 @@ import {
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
+import {
+  buildNotificationStatusPayload,
+  dispatchWebhookNotificationBatch,
+  notificationRuntimeSummary
+} from "../api/notification-service.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { buildProductionReadinessPayload } from "../api/production-readiness.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
@@ -63,6 +68,8 @@ const requiredFiles = [
   "api/events.js",
   "api/review-action.js",
   "api/news-normalizer.js",
+  "api/notification-service.js",
+  "api/notification-status.js",
   "api/platform-config.js",
   "api/production-readiness.js",
   "api/region-scope.js",
@@ -358,7 +365,10 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
   productionReadiness.sections.sourceCuration.activeSources < 1 ||
   !productionReadiness.sections.sourceCuration.sourceHealth?.includes("/api/source-health?region=ukraine-east") ||
-  !productionReadiness.sections.platform.browserNotifications
+  !productionReadiness.sections.platform.browserNotifications ||
+  productionReadiness.sections.platform.serverNotificationsReady ||
+  productionReadiness.sections.platform.notificationStatus !== "/api/notification-status" ||
+  !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned")
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
 }
@@ -502,6 +512,125 @@ const sampleUkraineEvents = normalizeArticlesToEvents(
 
 if (sampleUkraineEvents.length !== 1 || sampleUkraineEvents[0].place !== "Kharkiv" || sampleUkraineEvents[0].side !== "russia") {
   throw new Error("Live news normalizer failed Ukraine theater mapping");
+}
+
+const notificationStatus = withTemporaryNotificationEnv(() =>
+  buildNotificationStatusPayload({
+    collection: {
+      statusCode: 200,
+      payload: {
+        events: sampleUkraineEvents,
+        meta: {
+          region: "ukraine-east",
+          lookback: "30d",
+          publication: "all",
+          upstreamArticles: 1
+        }
+      }
+    },
+    query: {
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all",
+      minSeverity: "low"
+    },
+    now: new Date("2026-05-28T02:03:40Z")
+  })
+);
+if (
+  notificationStatus.kind !== "NotificationStatus" ||
+  notificationStatus.ready ||
+  notificationStatus.preview.count !== 1 ||
+  !notificationStatus.preview.events[0].sources[0].url ||
+  !notificationStatus.blockers.some((blocker) => blocker.id === "notification-webhook-url") ||
+  JSON.stringify(notificationStatus).includes("notification-secret")
+) {
+  throw new Error("Notification status payload failed preview, readiness, or secret-redaction checks");
+}
+
+const webhookDispatch = await withTemporaryNotificationEnvAsync(async () => {
+  process.env.NOTIFICATION_WEBHOOK_URL = "https://hooks.example.test/very/secret/path";
+  process.env.NOTIFICATION_WEBHOOK_SECRET = "notification-secret";
+  process.env.NOTIFICATION_ADMIN_TOKEN = "notification-admin";
+  process.env.NOTIFICATION_MIN_SEVERITY = "low";
+
+  const payload = buildNotificationStatusPayload({
+    collection: {
+      statusCode: 200,
+      payload: {
+        events: sampleUkraineEvents,
+        meta: {
+          region: "ukraine-east",
+          lookback: "30d",
+          publication: "all"
+        }
+      }
+    },
+    query: {
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all",
+      minSeverity: "low"
+    },
+    now: new Date("2026-05-28T02:03:50Z")
+  });
+
+  if (!payload.ready || payload.channels.find((channel) => channel.id === "webhook")?.targetHost !== "hooks.example.test") {
+    throw new Error("Configured notification runtime did not become webhook-ready");
+  }
+
+  let capturedBody = null;
+  const dispatch = await dispatchWebhookNotificationBatch(payload, {
+    now: new Date("2026-05-28T02:03:55Z"),
+    fetchImpl: async (url, options) => {
+      if (String(url) !== process.env.NOTIFICATION_WEBHOOK_URL) {
+        throw new Error("Webhook dispatch used the wrong URL");
+      }
+      if (!String(options?.headers?.["x-warmap-notification-signature"] ?? "").startsWith("sha256=")) {
+        throw new Error("Webhook dispatch did not sign the payload");
+      }
+      capturedBody = JSON.parse(options.body);
+      return jsonResponse(202, { ok: true });
+    }
+  });
+
+  return { dispatch, capturedBody, payload };
+});
+if (
+  !webhookDispatch.dispatch.sent ||
+  webhookDispatch.dispatch.eventCount !== 1 ||
+  webhookDispatch.capturedBody.kind !== "WarMapNotificationBatch" ||
+  !webhookDispatch.capturedBody.events[0].sources[0].url ||
+  JSON.stringify(webhookDispatch.dispatch).includes("notification-secret") ||
+  JSON.stringify(webhookDispatch.payload).includes("notification-secret") ||
+  JSON.stringify(webhookDispatch.payload).includes("very/secret/path")
+) {
+  throw new Error("Notification webhook dispatch failed send, source-link, or secret-redaction checks");
+}
+
+const notificationReadyProduction = await withTemporaryEditorialEnvAsync(async () =>
+  withTemporaryNotificationEnvAsync(async () => {
+    process.env.VERCEL = "1";
+    process.env.EDITORIAL_STORE_PROVIDER = "";
+    delete process.env.EDITORIAL_GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.EDITORIAL_REVIEW_TOKEN;
+    process.env.NOTIFICATION_WEBHOOK_URL = "https://hooks.example.test/dispatch";
+    process.env.NOTIFICATION_WEBHOOK_SECRET = "notification-secret";
+    process.env.NOTIFICATION_ADMIN_TOKEN = "notification-admin";
+    return buildProductionReadinessPayload({
+      region: "ukraine-east",
+      now: new Date("2026-05-28T02:04:10Z")
+    });
+  })
+);
+if (
+  !notificationReadyProduction.sections.platform.serverNotificationsReady ||
+  notificationReadyProduction.blockers.some((blocker) => blocker.id === "server-notifications") ||
+  JSON.stringify(notificationReadyProduction).includes("notification-secret") ||
+  JSON.stringify(notificationReadyProduction).includes("notification-admin")
+) {
+  throw new Error("Production readiness did not reflect configured notification webhook delivery safely");
 }
 
 if (sampleUkraineEvents[0].review.publicationStatus !== "review_only" || !sampleUkraineEvents[0].review.duplicateKey) {
@@ -893,7 +1022,8 @@ if (
   !v1Config.taxonomies.categories.some((category) => category.id === "strike" && category.color) ||
   !v1Config.taxonomies.actorSides.some((side) => side.id === "ukraine" && side.color) ||
   !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
-  !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid")
+  !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
+  v1Config.links.notificationStatus !== "/api/notification-status"
 ) {
   throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");
 }
@@ -1029,6 +1159,50 @@ async function withTemporarySourceHealthEnv(callback) {
     "COMPLIANT_SOCIAL_API_SOURCES",
     "ALLOWED_OSINT_TOKEN",
     "MISSING_ALLOWED_TOKEN"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return await callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+function withTemporaryNotificationEnv(callback) {
+  const keys = [
+    "NOTIFICATION_WEBHOOK_URL",
+    "NOTIFICATION_WEBHOOK_SECRET",
+    "NOTIFICATION_ADMIN_TOKEN",
+    "NOTIFICATION_MIN_SEVERITY"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+async function withTemporaryNotificationEnvAsync(callback) {
+  const keys = [
+    "NOTIFICATION_WEBHOOK_URL",
+    "NOTIFICATION_WEBHOOK_SECRET",
+    "NOTIFICATION_ADMIN_TOKEN",
+    "NOTIFICATION_MIN_SEVERITY"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 
