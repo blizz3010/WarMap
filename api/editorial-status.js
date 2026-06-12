@@ -37,6 +37,31 @@ export function buildEditorialStatusPayload(context = {}) {
   };
 }
 
+export async function loadEditorialStatusDecisions() {
+  return loadEditorialDecisions();
+}
+
+export function editorialReadinessBlockers(status) {
+  const blockers = [];
+  if (!status.readiness?.durableStoreReady) {
+    blockers.push({
+      id: "editorial-store",
+      required: true,
+      status: status.store?.mode ?? "unconfigured",
+      message: "Configure a durable editorial store before approvals can publish on Vercel."
+    });
+  }
+  if (!status.readiness?.reviewTokenReady) {
+    blockers.push({
+      id: "editorial-review-token",
+      required: true,
+      status: "missing",
+      message: "Configure EDITORIAL_REVIEW_TOKEN and send it from the review UI before approval actions are accepted."
+    });
+  }
+  return blockers;
+}
+
 export default async function handler(request, response) {
   if (request.method && request.method !== "GET") {
     response.setHeader("Allow", "GET");

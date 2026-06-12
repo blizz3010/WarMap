@@ -7,6 +7,7 @@ import eventHandler from "../api/event.js";
 import eventsHandler from "../api/events.js";
 import editorialStatusHandler from "../api/editorial-status.js";
 import platformConfigHandler from "../api/platform-config.js";
+import productionReadinessHandler from "../api/production-readiness.js";
 import reviewActionHandler from "../api/review-action.js";
 import reviewQueueHandler from "../api/review-queue.js";
 import sourceCurationHandler from "../api/source-curation.js";
@@ -35,6 +36,7 @@ const apiHandlers = new Map([
   ["/api/events", eventsHandler],
   ["/api/editorial-status", editorialStatusHandler],
   ["/api/platform-config", platformConfigHandler],
+  ["/api/production-readiness", productionReadinessHandler],
   ["/api/review-action", reviewActionHandler],
   ["/api/review-queue", reviewQueueHandler],
   ["/api/source-curation", sourceCurationHandler],
