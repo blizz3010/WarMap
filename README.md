@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/review-export`, `/api/editorial-store-health`, `/api/source-health`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, static decision exports, durable store checks, collector health, notification readiness, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/review-export`, `/api/editorial-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, static decision exports, durable store checks, collector health, scheduled-ingestion readiness, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -90,6 +90,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources, and redacts tokens.
+- `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
 - `/api/notification-status?region=ukraine-east` returns webhook/browser notification readiness plus a source-linked preview of publishable alerts; `POST /api/notification-status` can dispatch a signed webhook batch only when notification secrets are configured.
 - `/api/production-readiness?region=ukraine-east` rolls up editorial publishing, AI extraction, source curation, notifications, language, and paid-layer readiness into required and optional blockers.
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
@@ -126,6 +127,21 @@ When enabled, approved/rejected/corrected/retracted decisions are loaded by `/ap
 Use `/api/editorial-store-health` after configuring those variables on Vercel. A missing `editorial/decisions.json` file is reported as acceptable because the first approved write can create it; repo, branch, token, and malformed existing decision JSON are reported as blockers.
 
 For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions. The standalone review page also reads `/api/editorial-status` and shows whether durable writes and the reviewer token are ready before editors submit publish actions.
+
+## Scheduled ingestion heartbeat
+
+`vercel.json` includes one daily production cron job at `/api/cron/ingest` (`17 2 * * *`). It exercises the permitted source collectors, AI extraction, region scoping, editorial queue counts, published snapshot counts, and source-link sampling for the configured theaters. It does not persist events yet; PostgreSQL/PostGIS remains the durable storage target.
+
+Configure the cron secret before expecting the scheduled run to execute:
+
+```bash
+CRON_SECRET=long_random_cron_secret
+INGESTION_REGIONS=iran,ukraine-east,ukraine-south,ukraine-north,black-sea
+INGESTION_LOOKBACK=24h
+INGESTION_MAX_RECORDS=35
+```
+
+Vercel should call `GET /api/cron/ingest` with `Authorization: Bearer <CRON_SECRET>`. Without that token, the endpoint fails closed and `/api/ingestion-status` reports the missing configuration.
 
 ## Platform capability registry
 
