@@ -261,7 +261,7 @@ function socialItemToArticle(item, source) {
   };
 }
 
-function configuredSocialApiSources(region) {
+export function configuredSocialApiSources(region) {
   const sources = parseSocialApiSources();
   return sources.filter((source) => {
     const regions = Array.isArray(source.regions) && source.regions.length ? source.regions : ["*"];

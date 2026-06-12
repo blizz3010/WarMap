@@ -79,6 +79,11 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
     principles: CURATION_PRINCIPLES,
     workflowStages: WORKFLOW_STAGES,
     liveuamapReferences: LIVEUAMAP_REFERENCES,
+    endpoints: {
+      sourceHealth: `/api/source-health?region=${encodeURIComponent(normalizedRegion)}`,
+      events: `/api/events?region=${encodeURIComponent(normalizedRegion)}`,
+      reviewQueue: `/api/review-queue?region=${encodeURIComponent(normalizedRegion)}`
+    },
     sourceRegistry: {
       total: sources.length,
       active: active.length,
