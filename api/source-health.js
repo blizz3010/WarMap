@@ -20,8 +20,8 @@ export async function buildSourceHealthPayload({
   const socialSources = configuredSocialApiSources(normalizedRegion).slice(0, maxSources);
 
   const [activeChecks, socialChecks] = await Promise.all([
-    Promise.all(probedSources.map((source) => probeRegistrySource(source, { normalizedRegion, normalizedLookback, fetchImpl, timeoutMs }))),
-    Promise.all(socialSources.map((source) => probeSocialSource(source, { fetchImpl, timeoutMs })))
+    Promise.all(probedSources.map((source) => probeRegistrySource(source, { normalizedRegion, normalizedLookback, fetchImpl, timeoutMs, now }))),
+    Promise.all(socialSources.map((source) => probeSocialSource(source, { fetchImpl, timeoutMs, now })))
   ]);
 
   const plannedRows = plannedSourcesForRegion(normalizedRegion).map((source) => sourceHealthRow(source, {
@@ -29,7 +29,8 @@ export async function buildSourceHealthPayload({
     checked: false,
     ok: false,
     status: "planned",
-    message: plannedSourceMessage(source)
+    message: plannedSourceMessage(source),
+    diagnostic: plannedDiagnostic(source, now)
   }));
   const sources = [...activeChecks, ...socialChecks, ...plannedRows];
   const checked = sources.filter((source) => source.checked);
@@ -103,7 +104,14 @@ async function probeRegistrySource(source, context) {
         ok: false,
         status: String(response.status),
         url,
-        message: `${source.name} returned ${response.status}.`
+        message: `${source.name} returned ${response.status}.`,
+        diagnostic: {
+          code: "http.status",
+          category: "http",
+          httpStatus: response.status,
+          retryable: retryableStatus(response.status),
+          checkedAt: context.now.toISOString()
+        }
       });
     }
 
@@ -118,7 +126,10 @@ async function probeRegistrySource(source, context) {
         itemCount: Array.isArray(payload.articles) ? payload.articles.length : 0,
         message: Array.isArray(payload.articles)
           ? "GDELT returned an article list."
-          : "GDELT response did not include an article list."
+          : "GDELT response did not include an article list.",
+        diagnostic: Array.isArray(payload.articles)
+          ? successDiagnostic("gdelt.article-list", context.now)
+          : schemaDiagnostic("schema.missing-articles", context.now)
       });
     }
 
@@ -131,7 +142,10 @@ async function probeRegistrySource(source, context) {
       status: itemCount > 0 ? "reachable" : "empty",
       url,
       itemCount,
-      message: itemCount > 0 ? `${source.name} returned RSS items.` : `${source.name} returned no RSS items.`
+      message: itemCount > 0 ? `${source.name} returned RSS items.` : `${source.name} returned no RSS items.`,
+      diagnostic: itemCount > 0
+        ? successDiagnostic("feed.items", context.now)
+        : emptyDiagnostic("feed.empty", context.now)
     });
   } catch (error) {
     return sourceHealthRow(source, {
@@ -140,7 +154,8 @@ async function probeRegistrySource(source, context) {
       ok: false,
       status: "error",
       url,
-      message: `${source.name} health probe failed: ${String(error?.message ?? error)}`
+      message: `${source.name} health probe failed: ${String(error?.message ?? error)}`,
+      diagnostic: errorDiagnostic(error, context.now)
     });
   }
 }
@@ -152,7 +167,13 @@ async function probeSocialSource(source, context) {
       checked: false,
       ok: false,
       status: "missing-config",
-      message: `${source.name} requires ${source.tokenEnv}.`
+      message: `${source.name} requires ${source.tokenEnv}.`,
+      diagnostic: {
+        code: "config.missing-token-env",
+        category: "configuration",
+        retryable: false,
+        checkedAt: context.now.toISOString()
+      }
     });
   }
 
@@ -178,7 +199,14 @@ async function probeSocialSource(source, context) {
         checked: true,
         ok: false,
         status: String(response.status),
-        message: `${source.name} returned ${response.status}.`
+        message: `${source.name} returned ${response.status}.`,
+        diagnostic: {
+          code: "http.status",
+          category: "http",
+          httpStatus: response.status,
+          retryable: retryableStatus(response.status),
+          checkedAt: context.now.toISOString()
+        }
       });
     }
 
@@ -190,7 +218,10 @@ async function probeSocialSource(source, context) {
       ok: itemCount > 0,
       status: itemCount > 0 ? "reachable" : "empty",
       itemCount,
-      message: itemCount > 0 ? `${source.name} returned API items.` : `${source.name} returned no API items.`
+      message: itemCount > 0 ? `${source.name} returned API items.` : `${source.name} returned no API items.`,
+      diagnostic: itemCount > 0
+        ? successDiagnostic("social.items", context.now)
+        : emptyDiagnostic("social.empty", context.now)
     });
   } catch (error) {
     return sourceHealthRow(source, {
@@ -198,7 +229,8 @@ async function probeSocialSource(source, context) {
       checked: true,
       ok: false,
       status: "error",
-      message: `${source.name} health probe failed: ${String(error?.message ?? error)}`
+      message: `${source.name} health probe failed: ${String(error?.message ?? error)}`,
+      diagnostic: errorDiagnostic(error, context.now)
     });
   }
 }
@@ -231,8 +263,97 @@ function sourceHealthRow(source, state = {}) {
     message: state.message,
     itemCount: Number.isFinite(state.itemCount) ? state.itemCount : null,
     url: state.url ?? source.url ?? null,
-    regions: source.regions ?? ["*"]
+    regions: source.regions ?? ["*"],
+    diagnostic: sourceHealthDiagnostic(state)
   };
+}
+
+function sourceHealthDiagnostic(state = {}) {
+  const diagnostic = state.diagnostic ?? {};
+  return {
+    code: cleanDiagnosticText(diagnostic.code || (state.ok ? "probe.ok" : "probe.not-run")),
+    category: cleanDiagnosticText(diagnostic.category || (state.ok ? "success" : "unknown")),
+    retryable: Boolean(diagnostic.retryable),
+    checkedAt: diagnostic.checkedAt ?? null,
+    httpStatus: Number.isFinite(diagnostic.httpStatus) ? diagnostic.httpStatus : null
+  };
+}
+
+function successDiagnostic(code, now) {
+  return {
+    code,
+    category: "success",
+    retryable: false,
+    checkedAt: now.toISOString()
+  };
+}
+
+function emptyDiagnostic(code, now) {
+  return {
+    code,
+    category: "empty",
+    retryable: true,
+    checkedAt: now.toISOString()
+  };
+}
+
+function schemaDiagnostic(code, now) {
+  return {
+    code,
+    category: "schema",
+    retryable: false,
+    checkedAt: now.toISOString()
+  };
+}
+
+function plannedDiagnostic(source, now) {
+  return {
+    code: source.collector === "licensed-api"
+      ? "planned.licensed-api"
+      : source.collector === "social-api"
+        ? "planned.social-api"
+        : "planned.not-active",
+    category: "planned",
+    retryable: false,
+    checkedAt: now.toISOString()
+  };
+}
+
+function errorDiagnostic(error, now) {
+  const name = String(error?.name ?? "");
+  const message = String(error?.message ?? error ?? "");
+  if (name === "AbortError" || /abort|timeout/i.test(message)) {
+    return {
+      code: "network.timeout",
+      category: "network",
+      retryable: true,
+      checkedAt: now.toISOString()
+    };
+  }
+  if (name === "SyntaxError") {
+    return {
+      code: "parse.invalid-json",
+      category: "parse",
+      retryable: false,
+      checkedAt: now.toISOString()
+    };
+  }
+  return {
+    code: "network.error",
+    category: "network",
+    retryable: true,
+    checkedAt: now.toISOString()
+  };
+}
+
+function retryableStatus(status) {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function cleanDiagnosticText(value) {
+  return String(value ?? "")
+    .replace(/[^a-z0-9._-]/gi, "")
+    .slice(0, 64);
 }
 
 function plannedSourceMessage(source) {
