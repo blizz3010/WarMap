@@ -326,8 +326,9 @@ if (
   !sourceHealth.health.ready ||
   sourceHealth.health.summary.checkedSources < 4 ||
   sourceHealth.health.summary.configuredSocialApis !== 1 ||
-  !sourceHealth.health.sources.some((source) => source.id === "approved-osint" && source.ok && source.itemCount === 1) ||
-  !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned") ||
+  !sourceHealth.health.sources.some((source) => source.id === "approved-osint" && source.ok && source.itemCount === 1 && source.diagnostic?.code === "social.items") ||
+  !sourceHealth.health.sources.some((source) => source.id === "gdelt-doc" && source.ok && source.diagnostic?.code === "gdelt.article-list") ||
+  !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned" && source.diagnostic?.category === "planned") ||
   !sourceHealth.health.families.some((family) => family.collector === "social-api" && family.ok === 1) ||
   sourceHealth.urls.length < 4
 ) {
@@ -363,9 +364,31 @@ const missingSocialTokenHealth = await withTemporarySourceHealthEnv(async () => 
 });
 if (
   missingSocialTokenHealth.summary.missingConfiguration !== 1 ||
-  !missingSocialTokenHealth.sources.some((source) => source.id === "missing-token-api" && source.status === "missing-config")
+  !missingSocialTokenHealth.sources.some((source) => source.id === "missing-token-api" && source.status === "missing-config" && source.diagnostic?.code === "config.missing-token-env")
 ) {
   throw new Error("Source health payload failed missing social API token checks");
+}
+
+const failedSourceHealth = await withTemporarySourceHealthEnv(async () => {
+  return buildSourceHealthPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:03:50Z"),
+    maxSources: 1,
+    fetchImpl: async () => jsonResponse(503, { error: "temporarily unavailable" })
+  });
+});
+if (
+  failedSourceHealth.summary.failedSources !== 1 ||
+  !failedSourceHealth.sources.some(
+    (source) =>
+      source.id === "gdelt-doc" &&
+      source.status === "503" &&
+      source.diagnostic?.code === "http.status" &&
+      source.diagnostic?.httpStatus === 503 &&
+      source.diagnostic?.retryable
+  )
+) {
+  throw new Error("Source health payload failed HTTP diagnostic checks");
 }
 
 const productionReadiness = await withTemporaryEditorialEnvAsync(async () => {
