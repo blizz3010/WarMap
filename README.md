@@ -107,7 +107,7 @@ For the browser review panel or standalone review page, editors can provide the 
 - included and planned-paid map layers
 - explicit boundaries for missing push delivery, translation catalogs, billing, entitlements, and licensed layer datasets
 
-The current UI persists alert preferences, selected language, and time display mode in the browser. It does not send server-side notifications or unlock paid layers.
+The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. It does not send server-side notifications or unlock paid layers.
 
 ## Collector configuration
 

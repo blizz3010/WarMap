@@ -57,7 +57,7 @@ The current prototype implements the collector registry, separate media RSS and 
 3. Persist documents, claims, events, event updates, and media assets in PostgreSQL/PostGIS.
 4. Replace the current single-snapshot SSE route with durable invalidation fanout.
 5. Replace or harden the GitHub-backed decision adapter with PostgreSQL/PostGIS-backed event storage, then add merge/split and reviewer assignment screens.
-6. Add account, notification, localization, billing, and entitlement services before enabling email/webhook delivery or paid map layers.
+6. Add account, server-side notification, localization, billing, and entitlement services before enabling email/webhook delivery or paid map layers.
 7. Replace thumbnail placeholders with licensed or owned media assets and attribution text.
 
 ## Current live-feed limitations
@@ -67,5 +67,5 @@ The current prototype implements the collector registry, separate media RSS and 
 - Source count is article count for this prototype; production should cluster multiple documents into one event before marking anything corroborated.
 - The current endpoint intentionally labels normalized live items as `reported` until a real verification workflow exists.
 - Empty time windows stay empty instead of substituting synthetic events, so short live windows do not mislead users.
-- Alert settings are local browser preferences only; no server push, email, webhook, subscription, billing, entitlement, or translation catalog is configured yet.
+- Alert settings and browser notifications are local to the current browser only; no server push, email, webhook, subscription, billing, entitlement, or translation catalog is configured yet.
 - `/v1/stream/events` is a server-sent-event snapshot/invalidation contract, not a durable push fanout service.

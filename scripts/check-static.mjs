@@ -79,6 +79,14 @@ if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepE
   throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
 }
 
+if (
+  !appSource.includes("maybeNotifyForEvents(payload.events, previousEventIds)") ||
+  !appSource.includes("new window.Notification") ||
+  !appSource.includes("warmap.notifiedEventIds")
+) {
+  throw new Error("Expected local browser notifications for new stream/refreshed event leads");
+}
+
 if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes("archive-sources")) {
   throw new Error("Expected public archive page to render approved archive records with sources");
 }

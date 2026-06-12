@@ -23,6 +23,7 @@ const state = {
   language: readStoredValue("warmap.language", "en"),
   timeZoneMode: readStoredValue("warmap.timeZoneMode", "utc3"),
   notificationPrefs: readNotificationPrefs(),
+  notifiedEventIds: new Set(readNotifiedEventIds()),
   platformConfig: null,
   platformMessage: "",
   paused: false,
@@ -471,6 +472,8 @@ async function loadLiveEvents(options = {}) {
   const requestId = (liveRequestId += 1);
   const previousSelectedId = state.selectedEventId;
   const previousDetailOpen = state.detailOpen;
+  const previousEventIds = new Set(state.events.map((item) => item.id));
+  const hadLoadedEvents = state.streamLastRefreshAt > 0;
   if (!quiet) {
     updateStreamStatusLabel("Loading open-web news leads");
   }
@@ -516,6 +519,9 @@ async function loadLiveEvents(options = {}) {
       bindFilterInputControls();
     }
     render();
+    if (hadLoadedEvents && ["resume", "stream"].includes(reason)) {
+      maybeNotifyForEvents(payload.events, previousEventIds);
+    }
     selectHashEventIfAvailable(false);
     updateStreamStatusLabel(
       payload.events.length > 0
@@ -1777,13 +1783,23 @@ function updateNotificationPrefs(patch, message) {
     ...state.notificationPrefs,
     ...patch
   };
+  let nextMessage = message;
   if (!severities[nextPrefs.minSeverity]) {
     nextPrefs.minSeverity = "high";
+  }
+  if (patch.browser === true && !("Notification" in window)) {
+    nextPrefs.browser = false;
+    nextMessage = "Browser notifications are not supported in this browser";
+  } else if (patch.browser === true && window.Notification.permission === "denied") {
+    nextPrefs.browser = false;
+    nextMessage = "Browser permission is denied; alerts remain off";
+  } else if (patch.browser === true && window.Notification.permission !== "granted") {
+    nextMessage = "Alert preference saved; request browser permission to deliver alerts";
   }
 
   state.notificationPrefs = nextPrefs;
   writeStoredValue("warmap.notificationPrefs", JSON.stringify(nextPrefs));
-  state.platformMessage = message;
+  state.platformMessage = nextMessage;
   renderIntelPanel(filteredEvents(true));
 }
 
@@ -1813,6 +1829,86 @@ function notificationPermissionLabel() {
     return "Browser permission unsupported";
   }
   return `Browser permission ${window.Notification.permission}`;
+}
+
+function maybeNotifyForEvents(events, previousEventIds) {
+  if (!browserNotificationsReady()) {
+    return;
+  }
+
+  const candidates = notificationCandidates(events, previousEventIds).slice(0, 3);
+  if (!candidates.length) {
+    return;
+  }
+
+  let sentCount = 0;
+  candidates.forEach((item) => {
+    try {
+      const notification = new window.Notification(`WarMap: ${item.place}`, {
+        body: item.title,
+        tag: item.id,
+        data: { eventId: item.id },
+        silent: true
+      });
+      notification.onclick = () => {
+        window.focus();
+        selectEvent(item.id, true);
+      };
+      sentCount += 1;
+    } catch {
+      // Notification construction can fail when the browser revokes permission mid-session.
+    }
+    state.notifiedEventIds.add(item.id);
+  });
+
+  persistNotifiedEventIds();
+  if (sentCount > 0) {
+    state.platformMessage = `${sentCount} browser alert${sentCount === 1 ? "" : "s"} sent for new severe leads`;
+    if (state.activePanel === "alerts") {
+      renderIntelPanel(filteredEvents(true));
+    }
+  }
+}
+
+function browserNotificationsReady() {
+  return Boolean(
+    state.notificationPrefs.browser &&
+      "Notification" in window &&
+      window.Notification.permission === "granted"
+  );
+}
+
+function notificationCandidates(events, previousEventIds) {
+  const minRank = severityRank(state.notificationPrefs.minSeverity);
+  return events.filter(
+    (item) =>
+      item?.id &&
+      !previousEventIds.has(item.id) &&
+      !state.notifiedEventIds.has(item.id) &&
+      severityRank(item.severity) >= minRank &&
+      eventMatchesNotificationRegion(item)
+  );
+}
+
+function eventMatchesNotificationRegion(item) {
+  if (!state.notificationPrefs.regionOnly) {
+    return true;
+  }
+
+  const regionId = state.regionId;
+  const regionText = `${item.country ?? ""} ${item.province ?? ""} ${item.place ?? ""}`.toLowerCase();
+  if (regionId.startsWith("ukraine") || regionId === "black-sea") {
+    return regionText.includes("ukraine") || regionText.includes("crimea") || regionText.includes("black sea");
+  }
+  if (regionId === "iran" || regionId === "middle-east" || regionId === "gulf") {
+    return (
+      regionText.includes("iran") ||
+      regionText.includes("iraq") ||
+      regionText.includes("kuwait") ||
+      regionText.includes("gulf")
+    );
+  }
+  return true;
 }
 
 function severityRank(severity) {
@@ -2108,6 +2204,21 @@ function writeStoredValue(key, value) {
   }
 }
 
+function readNotifiedEventIds() {
+  try {
+    const parsed = JSON.parse(readStoredValue("warmap.notifiedEventIds", "[]"));
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string").slice(-120) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistNotifiedEventIds() {
+  const recentIds = [...state.notifiedEventIds].slice(-120);
+  state.notifiedEventIds = new Set(recentIds);
+  writeStoredValue("warmap.notifiedEventIds", JSON.stringify(recentIds));
+}
+
 function defaultNotificationPrefs() {
   return {
     browser: false,
@@ -2127,8 +2238,9 @@ function readNotificationPrefs() {
     if (!severities[prefs.minSeverity]) {
       prefs.minSeverity = defaults.minSeverity;
     }
+    const browserNotificationsAvailable = "Notification" in window && window.Notification.permission !== "denied";
     return {
-      browser: Boolean(prefs.browser),
+      browser: Boolean(prefs.browser) && browserNotificationsAvailable,
       regionOnly: Boolean(prefs.regionOnly),
       minSeverity: prefs.minSeverity
     };
