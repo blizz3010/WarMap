@@ -87,6 +87,7 @@ The embed header includes a theater selector, live/published count, source mode 
 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
+- `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
@@ -141,6 +142,8 @@ COMPLIANT_SOCIAL_API_SOURCES='[
 ```
 
 Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`, `link`, `permalink`, `publishedAt`, `createdAt`, `image`, and `mediaUrl`. Every social API item still enters the review queue as an unverified candidate.
+
+See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, and the activation checklist for planned official-site, licensed API, and social/API sources.
 
 ## AI extraction layer
 

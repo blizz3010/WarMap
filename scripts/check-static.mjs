@@ -14,6 +14,7 @@ import {
 import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
+import { buildSourceCurationPayload } from "../api/source-curation.js";
 import {
   buildV1EventsPayload,
   buildV1FeedPayload,
@@ -56,6 +57,7 @@ const requiredFiles = [
   "api/platform-config.js",
   "api/region-scope.js",
   "api/review-queue.js",
+  "api/source-curation.js",
   "api/source-registry.js",
   "api/v1/adapter.js",
   "api/v1/config.js",
@@ -205,6 +207,22 @@ if (!activeOfficialFeedsForRegion("ukraine").some((source) => source.id === "ukr
 
 if (!plannedSocialApiSourcesForRegion("ukraine").length) {
   throw new Error("Expected planned compliant social API collector family");
+}
+
+const ukraineCuration = buildSourceCurationPayload({
+  region: "ukraine-east",
+  now: new Date("2026-05-28T02:03:00Z")
+});
+if (
+  ukraineCuration.kind !== "SourceCuration" ||
+  !ukraineCuration.liveuamapReferences.some((reference) => reference.url === "https://liveuamap.com/promo/api") ||
+  !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "ukraine-mod-news") ||
+  !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api") ||
+  !ukraineCuration.readiness.canPublishFromCollectors ||
+  !ukraineCuration.readiness.needsOfficialSiteAdapters ||
+  !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages"))
+) {
+  throw new Error("Source curation payload failed Liveuamap boundary or source backlog checks");
 }
 
 if (!PLATFORM_CONFIG.languages.some((language) => language.id === "en" && language.status === "active")) {

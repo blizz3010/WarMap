@@ -79,6 +79,53 @@ export const SOURCE_REGISTRY = [
     regions: ["ukraine", "ukraine-east", "ukraine-south", "ukraine-north", "black-sea"]
   },
   {
+    id: "ukraine-mod-news",
+    name: "Ministry of Defence of Ukraine",
+    collector: "official-site",
+    sourceType: "official",
+    trustTier: "primary source",
+    country: "Ukraine",
+    access: "public official site; needs adapter and terms review before activation",
+    status: "planned",
+    url: "https://mod.gov.ua/en/news",
+    regions: ["ukraine", "ukraine-east", "ukraine-south", "ukraine-north", "black-sea"]
+  },
+  {
+    id: "ukraine-ses-news",
+    name: "State Emergency Service of Ukraine",
+    collector: "official-site",
+    sourceType: "official",
+    trustTier: "primary source",
+    country: "Ukraine",
+    access: "public official site; needs adapter and terms review before activation",
+    status: "planned",
+    url: "https://dsns.gov.ua/en/news/ostanni-novini",
+    regions: ["ukraine", "ukraine-east", "ukraine-south", "ukraine-north", "black-sea"]
+  },
+  {
+    id: "russia-mod-en",
+    name: "Russian Defence Ministry",
+    collector: "official-site",
+    sourceType: "official",
+    trustTier: "official claim requiring high editorial scrutiny",
+    country: "Russia",
+    access: "public official site; needs adapter and claim-labeling policy before activation",
+    status: "planned",
+    url: "https://eng.mil.ru/",
+    regions: ["ukraine", "ukraine-east", "ukraine-south", "ukraine-north", "black-sea"]
+  },
+  {
+    id: "liveuamap-api",
+    name: "Liveuamap API",
+    collector: "licensed-api",
+    sourceType: "aggregator",
+    trustTier: "third-party aggregator with original source links",
+    access: "commercial API only; do not scrape website pages or private endpoints",
+    status: "planned",
+    url: "https://liveuamap.com/promo/api",
+    regions: ["*"]
+  },
+  {
     id: "official-sites",
     name: "Official government and emergency sites",
     collector: "official-feed",
@@ -112,6 +159,14 @@ export function plannedSocialApiSourcesForRegion(regionId) {
   return SOURCE_REGISTRY.filter((source) => {
     return source.status === "planned" && source.collector === "social-api" && appliesToRegion(source, regionId);
   });
+}
+
+export function sourcesForRegion(regionId) {
+  return SOURCE_REGISTRY.filter((source) => appliesToRegion(source, regionId));
+}
+
+export function plannedSourcesForRegion(regionId) {
+  return sourcesForRegion(regionId).filter((source) => source.status === "planned");
 }
 
 export function registrySummary(regionId) {
