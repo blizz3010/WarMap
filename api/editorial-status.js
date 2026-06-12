@@ -48,7 +48,7 @@ export function editorialReadinessBlockers(status) {
       id: "editorial-store",
       required: true,
       status: status.store?.mode ?? "unconfigured",
-      message: "Configure a durable editorial store before approvals can publish on Vercel."
+      message: "Configure a durable editorial store before one-click approvals can publish on Vercel; use /api/review-export for commit-backed static decisions until then."
     });
   }
   if (!status.readiness?.reviewTokenReady) {
@@ -56,7 +56,7 @@ export function editorialReadinessBlockers(status) {
       id: "editorial-review-token",
       required: true,
       status: "missing",
-      message: "Configure EDITORIAL_REVIEW_TOKEN and send it from the review UI before approval actions are accepted."
+      message: "Configure EDITORIAL_REVIEW_TOKEN and send it from the review UI before durable approval actions are accepted."
     });
   }
   return blockers;

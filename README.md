@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/review-export`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, static decision exports, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -90,13 +90,14 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
 - `/api/production-readiness?region=ukraine-east` rolls up editorial publishing, AI extraction, source curation, notifications, language, and paid-layer readiness into required and optional blockers.
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
+- `POST /api/review-export` validates the same decision payload and returns a commit-ready static decision module for `api/editorial-decisions.js` when Vercel writes are not configured yet.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 - `/event?id=...&region=...` renders a public event record backed by `/api/event`.
 - `/archive?region=iran&lookback=90d` renders the public approved-event archive backed by `/api/archive`.
 - `/review?region=ukraine-east&lookback=30d` renders the standalone editorial queue backed by `/api/review-queue` and `/api/review-action`.
 
-Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured.
+Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured. Until those secrets exist, the standalone review page calls `/api/review-export` after a blocked approval/correction and shows a static module that can be committed to `api/editorial-decisions.js`; committed static decisions are loaded by the same map, feed, detail, archive, and API publication path.
 
 Optional GitHub-backed production review storage uses the GitHub Contents API and no extra npm dependency:
 
