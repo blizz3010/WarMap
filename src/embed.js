@@ -1,6 +1,23 @@
 import { categories, events as fallbackEvents, regions } from "./data.js";
 
-const region = regions[0];
+const PUBLICATION_MODES = new Set(["all", "published", "review"]);
+const params = new URLSearchParams(window.location.search);
+const state = {
+  regionId: initialRegionId(),
+  lookback: params.get("lookback") || "30d",
+  publication: PUBLICATION_MODES.has(params.get("publication")) ? params.get("publication") : "all",
+  selectedEventId: null,
+  events: []
+};
+
+const els = {
+  count: document.querySelector("#embedCount"),
+  feed: document.querySelector("#embedFeed"),
+  mapLink: document.querySelector("#embedMapLink"),
+  meta: document.querySelector("#embedMeta"),
+  region: document.querySelector("#embedRegionSelect")
+};
+
 const map = new maplibregl.Map({
   container: "embedMap",
   style: {
@@ -15,52 +32,218 @@ const map = new maplibregl.Map({
     },
     layers: [{ id: "base", type: "raster", source: "base" }]
   },
-  center: region.center,
-  zoom: 3.85,
+  center: currentRegion().center,
+  zoom: currentRegion().zoom,
   attributionControl: false
 });
 
 map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
-let markers = [];
+let markers = new Map();
+
+renderRegionOptions();
+bindControls();
 
 map.on("load", () => {
-  renderEmbed(fallbackEvents);
+  fitToRegion(false);
+  renderEmbed(fallbackEventsForRegion());
   loadLiveEmbed();
 });
 
-function renderEmbed(events) {
-  markers.forEach((marker) => marker.remove());
-  markers = [];
+function renderRegionOptions() {
+  els.region.innerHTML = regions.map((region) => `<option value="${escapeAttr(region.id)}">${escapeHtml(region.name)}</option>`).join("");
+  els.region.value = state.regionId;
+}
 
-  events.slice(0, 14).forEach((eventItem) => {
-    const node = document.createElement("span");
-    node.className = "embed-marker";
-    node.style.setProperty("--marker-color", categories[eventItem.category].color);
-    node.textContent = categories[eventItem.category].short;
-    const marker = new maplibregl.Marker({ element: node, anchor: "center" })
-      .setLngLat([eventItem.location.lon, eventItem.location.lat])
-      .addTo(map);
-    markers.push(marker);
+function bindControls() {
+  els.region.addEventListener("change", () => {
+    state.regionId = els.region.value;
+    state.selectedEventId = null;
+    writeEmbedUrl();
+    fitToRegion(true);
+    renderEmbed(fallbackEventsForRegion());
+    loadLiveEmbed();
   });
-
-  document.querySelector("#embedCount").textContent = `${events.length} live events`;
-  document.querySelector("#embedFeed").innerHTML = events
-    .slice(0, 5)
-    .map((eventItem) => `<span>${escapeHtml(eventItem.timeLabel)} - ${escapeHtml(eventItem.place)}: ${escapeHtml(eventItem.title)}</span>`)
-    .join("");
 }
 
 async function loadLiveEmbed() {
+  setMeta("Loading v1 event stream");
   try {
-    const response = await fetch("/api/events?region=iran", { headers: { Accept: "application/json" } });
+    const response = await fetch(v1EventsUrl(), { headers: { Accept: "application/json" } });
     const payload = await response.json();
-    if (response.ok && Array.isArray(payload.events) && payload.events.length) {
-      renderEmbed(payload.events);
+    if (!response.ok || !Array.isArray(payload.events)) {
+      throw new Error(payload.message || payload.error || `V1 events returned ${response.status}`);
     }
-  } catch {
-    renderEmbed(fallbackEvents);
+    renderEmbed(payload.events);
+    setMeta(
+      `${payload.meta?.publication ?? state.publication} publication - ${payload.meta?.returnedEvents ?? payload.events.length} events`
+    );
+  } catch (error) {
+    const fallback = fallbackEventsForRegion();
+    renderEmbed(fallback);
+    setMeta(error instanceof Error ? `Using fallback data - ${error.message}` : "Using fallback data");
   }
+}
+
+function renderEmbed(rawEvents) {
+  const events = rawEvents.map(normalizeEvent).filter((event) => isMappableEvent(event));
+  state.events = events;
+  if (state.selectedEventId && !events.some((event) => event.id === state.selectedEventId)) {
+    state.selectedEventId = null;
+  }
+
+  renderMarkers(events.slice(0, 30));
+  renderFeed(events.slice(0, 7));
+  updateChrome(events.length);
+}
+
+function renderMarkers(events) {
+  const visibleIds = new Set(events.map((event) => event.id));
+  for (const [id, marker] of markers) {
+    if (!visibleIds.has(id)) {
+      marker.remove();
+      markers.delete(id);
+    }
+  }
+
+  events.forEach((event) => {
+    if (markers.has(event.id)) {
+      markers.get(event.id).getElement().classList.toggle("is-selected", event.id === state.selectedEventId);
+      return;
+    }
+    const category = categories[event.category] ?? categories.other;
+    const node = document.createElement("button");
+    node.type = "button";
+    node.className = "embed-marker";
+    node.style.setProperty("--marker-color", category.color);
+    node.textContent = category.short;
+    node.title = event.title;
+    node.addEventListener("click", () => selectEvent(event.id, false));
+    const marker = new maplibregl.Marker({ element: node, anchor: "center" })
+      .setLngLat([event.location.lon, event.location.lat])
+      .addTo(map);
+    markers.set(event.id, marker);
+  });
+}
+
+function renderFeed(events) {
+  if (!events.length) {
+    els.feed.innerHTML = `<span>No events for ${escapeHtml(currentRegion().name)}</span>`;
+    return;
+  }
+
+  els.feed.innerHTML = events
+    .map(
+      (event) => `
+        <button type="button" class="${event.id === state.selectedEventId ? "is-selected" : ""}" data-embed-event="${escapeAttr(event.id)}">
+          <strong>${escapeHtml(event.timeLabel)}</strong>
+          <span>${escapeHtml(event.place)}</span>
+          <em>${escapeHtml(event.title)}</em>
+        </button>
+      `
+    )
+    .join("");
+
+  els.feed.querySelectorAll("[data-embed-event]").forEach((button) => {
+    button.addEventListener("click", () => selectEvent(button.dataset.embedEvent, true));
+  });
+}
+
+function selectEvent(eventId, panTo) {
+  state.selectedEventId = eventId;
+  const event = state.events.find((item) => item.id === eventId);
+  if (event && panTo) {
+    map.easeTo({
+      center: [event.location.lon, event.location.lat],
+      zoom: Math.max(map.getZoom(), 6),
+      duration: 450
+    });
+  }
+  renderMarkers(state.events.slice(0, 30));
+  renderFeed(state.events.slice(0, 7));
+}
+
+function updateChrome(count) {
+  els.count.textContent = `${count.toLocaleString()} ${state.publication === "published" ? "published" : "live"} events`;
+  els.mapLink.href = `/?region=${encodeURIComponent(state.regionId)}`;
+  els.mapLink.textContent = currentRegion().name;
+}
+
+function setMeta(message) {
+  els.meta.textContent = message;
+}
+
+function normalizeEvent(event) {
+  const location = event.location ?? {};
+  return {
+    id: event.id,
+    title: event.title ?? "Untitled event",
+    place: event.place ?? location.place ?? "Unknown",
+    category: event.category ?? "other",
+    timeLabel: event.time?.label ?? event.timeLabel ?? formatDate(event.firstSeenAt),
+    location: {
+      lat: Number(location.lat),
+      lon: Number(location.lon)
+    }
+  };
+}
+
+function isMappableEvent(event) {
+  return Number.isFinite(event.location.lat) && Number.isFinite(event.location.lon);
+}
+
+function fallbackEventsForRegion() {
+  const regionId = state.regionId;
+  if (regionId.startsWith("ukraine") || regionId === "black-sea") {
+    return [];
+  }
+  return fallbackEvents;
+}
+
+function fitToRegion(animated) {
+  const region = currentRegion();
+  map.fitBounds(
+    [
+      [region.bounds[0], region.bounds[1]],
+      [region.bounds[2], region.bounds[3]]
+    ],
+    {
+      padding: 18,
+      maxZoom: region.maxZoom ?? 6,
+      duration: animated ? 450 : 0
+    }
+  );
+}
+
+function currentRegion() {
+  return regions.find((region) => region.id === state.regionId) ?? regions[0];
+}
+
+function initialRegionId() {
+  const requested = params.get("region");
+  return regions.some((region) => region.id === requested) ? requested : "iran";
+}
+
+function v1EventsUrl() {
+  const query = new URLSearchParams({
+    region: state.regionId,
+    lookback: state.lookback,
+    publication: state.publication
+  });
+  return `/v1/events?${query.toString()}`;
+}
+
+function writeEmbedUrl() {
+  const next = new URLSearchParams(window.location.search);
+  next.set("region", state.regionId);
+  next.set("lookback", state.lookback);
+  next.set("publication", state.publication);
+  history.replaceState(null, "", `${window.location.pathname}?${next.toString()}`);
+}
+
+function formatDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime()) ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--";
 }
 
 function escapeHtml(value) {
@@ -74,4 +257,8 @@ function escapeHtml(value) {
     };
     return entities[character];
   });
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
 }

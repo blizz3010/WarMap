@@ -1,44 +1,12 @@
-import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeArticlesToEvents, normalizeLookback } from "./news-normalizer.js";
+import { collectOpenWebArticles } from "./collectors.js";
+import { extractionRuntimeSummary } from "./ai-extractor.js";
+import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
+import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
+import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { eventsForRegionScope } from "./region-scope.js";
+import { activeOfficialFeedsForRegion, activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
 
-const RSS_FEEDS = [
-  {
-    name: "BBC Middle East",
-    url: "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
-    country: "United Kingdom"
-  },
-  {
-    name: "Al Jazeera",
-    url: "https://www.aljazeera.com/xml/rss/all.xml",
-    country: "Qatar"
-  }
-];
-
-const REGION_TERMS = {
-  iran: ["iran", "iranian", "tehran", "isfahan", "irgc", "revolutionary guard", "khamenei", "hormuz"],
-  "middle-east": ["iran", "israel", "gaza", "lebanon", "syria", "iraq", "yemen", "hormuz", "red sea"],
-  gulf: ["iran", "kuwait", "qatar", "bahrain", "uae", "saudi", "persian gulf", "arabian gulf", "hormuz", "tanker"]
-};
-
-const WATCH_TERMS = [
-  "airstrike",
-  "attack",
-  "blast",
-  "dead",
-  "drone",
-  "explosion",
-  "irgc",
-  "killed",
-  "military",
-  "missile",
-  "nuclear",
-  "port",
-  "protest",
-  "sanction",
-  "security",
-  "strike",
-  "tanker",
-  "war"
-];
+const PUBLICATION_MODES = new Set(["all", "review", "published"]);
 
 export default async function handler(request, response) {
   if (request.method && request.method !== "GET") {
@@ -49,32 +17,30 @@ export default async function handler(request, response) {
 
   const region = String(request.query?.region ?? DEFAULT_REGION_ID);
   const maxRecords = Math.min(Number(request.query?.maxRecords ?? 75) || 75, 100);
-  const lookback = normalizeLookback(request.query?.lookback ?? "30d");
+  const publication = normalizePublicationMode(request.query?.publication);
   const generatedAt = new Date();
 
   try {
-    const [gdeltResult, rssResult] = await Promise.allSettled([
-      fetchGdeltArticles(region, maxRecords, lookback),
-      fetchRssArticles(region, lookback)
-    ]);
+    const collection = await collectOpenWebArticles({
+      region,
+      maxRecords,
+      lookback: request.query?.lookback ?? "30d"
+    });
 
-    const articles = [
-      ...(gdeltResult.status === "fulfilled" ? gdeltResult.value : []),
-      ...(rssResult.status === "fulfilled" ? rssResult.value : [])
-    ];
-
-    const events = normalizeArticlesToEvents(articles, {
+    const normalizedEvents = normalizeArticlesToEvents(collection.articles, {
       now: generatedAt,
       region,
       limit: 50
     });
+    const decisions = await loadEditorialDecisions();
+    const decidedEvents = applyEditorialDecisions(normalizedEvents, decisions);
+    const scopedLiveEvents = eventsForRegionScope(decidedEvents, region);
+    const snapshotEvents = eventsForRegionScope(eventsFromEditorialSnapshots(decisions), region);
+    const scopedEvents = dedupeEvents([...scopedLiveEvents, ...snapshotEvents]);
+    const events = eventsForPublication(scopedEvents, publication);
 
-    const upstreamErrors = [gdeltResult, rssResult]
-      .filter((result) => result.status === "rejected")
-      .map((result) => result.reason?.message ?? "unknown upstream error");
-
-    if (!events.length && upstreamErrors.length === 2) {
-      throw new Error(upstreamErrors.join("; "));
+    if (!normalizedEvents.length && !snapshotEvents.length && collection.upstreamErrors.length >= 2) {
+      throw new Error(collection.upstreamErrors.join("; "));
     }
 
     response.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=300");
@@ -83,15 +49,27 @@ export default async function handler(request, response) {
       meta: {
         generatedAt: generatedAt.toISOString(),
         region,
-        lookback,
+        lookback: collection.lookback,
+        publication,
         source: "GDELT DOC 2.0 plus RSS fallback",
         sourceUrl: "https://api.gdeltproject.org/api/v2/doc/doc",
-        rssFeeds: RSS_FEEDS.map((feed) => feed.url),
-        upstreamArticles: articles.length,
+        sourceRegistry: registrySummary(region),
+        rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
+        officialFeeds: activeOfficialFeedsForRegion(region).map((feed) => feed.url),
+        socialApiSources: collection.socialApiSources,
+        upstreamArticles: collection.articles.length,
+        snapshotEvents: snapshotEvents.length,
+        scopedEvents: scopedEvents.length,
         returnedEvents: events.length,
-        gdeltStatus: gdeltResult.status,
-        rssStatus: rssResult.status,
-        upstreamErrors,
+        editorial: editorialSummary(scopedEvents),
+        editorialDecisions: decisions.length,
+        extraction: extractionRuntimeSummary(),
+        gdeltStatus: collection.gdeltStatus,
+        rssStatus: collection.rssStatus,
+        officialStatus: collection.officialStatus,
+        socialStatus: collection.socialStatus,
+        collectorStatus: collection.collectorStatus,
+        upstreamErrors: collection.upstreamErrors,
         verification: "open-web leads, not confirmed incidents"
       }
     });
@@ -105,126 +83,18 @@ export default async function handler(request, response) {
   }
 }
 
-async function fetchGdeltArticles(region, maxRecords, lookback) {
-  const gdeltUrl = buildGdeltUrl(region, maxRecords, lookback);
-  const upstream = await fetchWithTimeout(gdeltUrl, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "WarMapLive/0.1 prototype contact=https://github.com/blizz3010/WarMap"
-    },
-    timeoutMs: 3500
-  });
-
-  if (!upstream.ok) {
-    throw new Error(`GDELT returned ${upstream.status}`);
-  }
-
-  const payload = await upstream.json();
-  return Array.isArray(payload.articles) ? payload.articles : [];
+function dedupeEvents(events) {
+  const byId = new Map();
+  events.forEach((event) => byId.set(event.id, event));
+  return [...byId.values()].sort((left, right) => timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt));
 }
 
-async function fetchRssArticles(region, lookback) {
-  const feedResults = await Promise.allSettled(
-    RSS_FEEDS.map(async (feed) => {
-      const upstream = await fetchWithTimeout(feed.url, {
-        headers: {
-          Accept: "application/rss+xml, application/xml, text/xml",
-          "User-Agent": "WarMapLive/0.1 prototype contact=https://github.com/blizz3010/WarMap"
-        },
-        timeoutMs: 5000
-      });
-      if (!upstream.ok) {
-        throw new Error(`${feed.name} returned ${upstream.status}`);
-      }
-      return extractRssItems(await upstream.text(), feed, region, lookback);
-    })
-  );
-
-  return feedResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+function timestamp(value) {
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function fetchWithTimeout(url, options) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
-  try {
-    return await fetch(url, {
-      headers: options.headers,
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function extractRssItems(xml, feed, region, lookback) {
-  const minTimestamp = Date.now() - lookbackDurationMs(lookback);
-  return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
-    .map((match) => rssItemToArticle(match[0], feed))
-    .filter((article) => article.title && article.url)
-    .filter((article) => !article.pubDate || Date.parse(article.pubDate) >= minTimestamp)
-    .filter((article) => isRelevantArticle(article, region))
-    .slice(0, 30);
-}
-
-function rssItemToArticle(itemXml, feed) {
-  const url = decodeXml(readTag(itemXml, "link") || readTag(itemXml, "guid"));
-  return {
-    title: decodeXml(readTag(itemXml, "title")),
-    description: stripTags(decodeXml(readTag(itemXml, "description"))),
-    url,
-    domain: domainFromUrl(url),
-    sourceName: feed.name,
-    sourcecountry: feed.country,
-    language: "English",
-    pubDate: decodeXml(readTag(itemXml, "pubDate")),
-    socialimage: decodeXml(readMediaUrl(itemXml))
-  };
-}
-
-function isRelevantArticle(article, region) {
-  const text = `${article.title} ${article.description}`.toLowerCase();
-  const regionTerms = REGION_TERMS[region] ?? REGION_TERMS[DEFAULT_REGION_ID];
-  return regionTerms.some((term) => text.includes(term)) && WATCH_TERMS.some((term) => text.includes(term));
-}
-
-function readTag(xml, tagName) {
-  const match = xml.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
-  return match ? match[1].replace(/^<!\[CDATA\[|\]\]>$/g, "").trim() : "";
-}
-
-function readMediaUrl(xml) {
-  const match = xml.match(/<media:(?:thumbnail|content)\b[^>]*\surl=["']([^"']+)["'][^>]*>/i);
-  return match?.[1] ?? "";
-}
-
-function decodeXml(value) {
-  return String(value ?? "")
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&apos;", "'")
-    .trim();
-}
-
-function stripTags(value) {
-  return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function domainFromUrl(value) {
-  try {
-    return new URL(value).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-
-function lookbackDurationMs(lookback) {
-  const match = String(lookback).match(/^(\d+)([hd])$/);
-  if (!match) {
-    return 30 * 24 * 60 * 60 * 1000;
-  }
-  const amount = Number(match[1]);
-  return amount * (match[2] === "h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
+function normalizePublicationMode(value) {
+  const mode = String(value ?? "all").toLowerCase();
+  return PUBLICATION_MODES.has(mode) ? mode : "all";
 }

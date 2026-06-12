@@ -2,6 +2,32 @@
   "buildCommand": "node scripts/check-static.mjs",
   "outputDirectory": ".",
   "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/v1/config",
+      "destination": "/api/v1/config"
+    },
+    {
+      "source": "/v1/events",
+      "destination": "/api/v1/events"
+    },
+    {
+      "source": "/v1/feed",
+      "destination": "/api/v1/feed"
+    },
+    {
+      "source": "/v1/timeline",
+      "destination": "/api/v1/timeline"
+    },
+    {
+      "source": "/v1/search",
+      "destination": "/api/v1/search"
+    },
+    {
+      "source": "/v1/stream/events",
+      "destination": "/api/v1/stream/events"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

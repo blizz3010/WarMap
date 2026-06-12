@@ -37,12 +37,15 @@
           <button type="button" class="is-active" data-focus-panel="feed">News Live</button>
           <button type="button" data-focus-panel="map">Map</button>
           <button type="button" data-focus-panel="time">Time</button>
+          <button type="button" data-focus-panel="review">Review</button>
+          <button type="button" data-focus-panel="alerts">Alerts</button>
           <button type="button" data-focus-panel="key">Key</button>
         </nav>
 
         <div class="top-meta" aria-label="Map settings">
           <button type="button" id="filterToggle" aria-pressed="false">Filters</button>
           <button type="button" id="layersToggle" aria-pressed="false">Layers</button>
+          <a class="top-meta-link" href="/review">Review desk</a>
           <button type="button" id="languageButton">EN</button>
           <button type="button" id="timeButton">UTC+3</button>
           <button type="button" id="pauseStreamButton" aria-pressed="false">Pause</button>
@@ -125,7 +128,13 @@
             <label><input type="radio" name="basemap" value="dark" checked /> Dark map</label>
             <label><input type="radio" name="basemap" value="light" /> Light map</label>
             <label><input type="radio" name="basemap" value="satellite" /> Satellite</label>
+            <section class="layer-section" aria-label="Premium layer roadmap">
+              <h3>Premium overlays</h3>
+              <div class="premium-layer-list" id="premiumLayerList"></div>
+            </section>
           </div>
+
+          <aside class="map-intel-panel" id="intelPanel" aria-label="Map intelligence panel" aria-hidden="true"></aside>
 
           <div class="map-status">
             <span id="mapVisibleCount">Showing 0 events</span>

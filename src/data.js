@@ -2,6 +2,7 @@ export const regions = [
   {
     id: "iran",
     name: "Iran",
+    group: "Middle East",
     center: [53.6, 32.7],
     zoom: 4.85,
     bounds: [44.0, 25.2, 62.3, 39.6],
@@ -11,6 +12,7 @@ export const regions = [
   {
     id: "middle-east",
     name: "Middle East",
+    group: "Middle East",
     center: [48.2, 30.3],
     zoom: 3.6,
     bounds: [31.2, 16.0, 66.5, 42.8]
@@ -18,9 +20,60 @@ export const regions = [
   {
     id: "gulf",
     name: "Gulf",
+    group: "Middle East",
     center: [52.3, 26.4],
     zoom: 4.5,
     bounds: [43.0, 21.1, 63.1, 32.5]
+  },
+  {
+    id: "ukraine",
+    name: "Ukraine",
+    group: "Ukraine theaters",
+    center: [31.4, 48.7],
+    zoom: 5.15,
+    bounds: [21.8, 44.1, 40.5, 52.5],
+    fitPadding: 22,
+    maxZoom: 5.6
+  },
+  {
+    id: "ukraine-east",
+    name: "Ukraine - East",
+    group: "Ukraine theaters",
+    center: [37.1, 48.8],
+    zoom: 6.15,
+    bounds: [33.9, 46.7, 40.4, 51.2],
+    fitPadding: 28,
+    maxZoom: 6.7
+  },
+  {
+    id: "ukraine-south",
+    name: "Ukraine - South",
+    group: "Ukraine theaters",
+    center: [32.7, 46.6],
+    zoom: 6.0,
+    bounds: [27.6, 44.2, 37.9, 49.2],
+    fitPadding: 28,
+    maxZoom: 6.7
+  },
+  {
+    id: "ukraine-north",
+    name: "Ukraine - North",
+    group: "Ukraine theaters",
+    center: [31.2, 50.5],
+    zoom: 6.15,
+    bounds: [25.0, 49.0, 37.0, 52.5],
+    fitPadding: 28,
+    maxZoom: 6.8
+  },
+  {
+    id: "black-sea",
+    name: "Black Sea / Crimea",
+    group: "Ukraine theaters",
+    center: [32.9, 45.6],
+    zoom: 5.85,
+    bounds: [27.0, 43.0, 38.5, 47.7],
+    fitPadding: 28,
+    maxZoom: 6.6
   }
 ];
 
@@ -28,46 +81,86 @@ export const categories = {
   military: {
     label: "Military",
     short: "MIL",
+    icon: "shield",
     color: "#ef4444"
   },
   strike: {
     label: "Explosions / Strikes",
     short: "EX",
+    icon: "blast",
     color: "#f97316"
   },
   air: {
     label: "Air Operations",
     short: "AIR",
+    icon: "air",
     color: "#3b82f6"
   },
   security: {
     label: "Security",
     short: "SEC",
+    icon: "police",
     color: "#8b5cf6"
   },
   politics: {
     label: "Politics / Diplomacy",
     short: "POL",
+    icon: "statement",
     color: "#14b8a6"
   },
   protest: {
     label: "Protests / Unrest",
     short: "PRO",
+    icon: "crowd",
     color: "#22c55e"
   },
   infrastructure: {
     label: "Infrastructure",
     short: "INF",
+    icon: "facility",
     color: "#f59e0b"
   },
   humanitarian: {
     label: "Humanitarian",
     short: "HUM",
+    icon: "aid",
     color: "#06b6d4"
   },
   other: {
     label: "Other",
     short: "OTH",
+    icon: "report",
+    color: "#94a3b8"
+  }
+};
+
+export const actorSides = {
+  ukraine: {
+    label: "Ukraine / allied",
+    color: "#3b82f6"
+  },
+  russia: {
+    label: "Russia / occupation",
+    color: "#ef4444"
+  },
+  iran: {
+    label: "Iran / aligned",
+    color: "#22c55e"
+  },
+  israel: {
+    label: "Israel / aligned",
+    color: "#f97316"
+  },
+  civilian: {
+    label: "Civilian / humanitarian",
+    color: "#06b6d4"
+  },
+  regional: {
+    label: "Regional / multilateral",
+    color: "#a78bfa"
+  },
+  unknown: {
+    label: "Unassigned",
     color: "#94a3b8"
   }
 };
@@ -117,31 +210,36 @@ const sourceCatalog = {
     id: "src_regional_authority",
     name: "Regional authority",
     type: "official",
-    trustTier: "primary"
+    trustTier: "primary",
+    url: "https://www.irna.ir/"
   },
   stateMedia: {
     id: "src_state_media",
     name: "State media monitor",
     type: "media",
-    trustTier: "known outlet"
+    trustTier: "known outlet",
+    url: "https://www.presstv.ir/"
   },
   localMedia: {
     id: "src_local_media",
     name: "Local media desk",
     type: "media",
-    trustTier: "known outlet"
+    trustTier: "known outlet",
+    url: "https://www.iranintl.com/en"
   },
   osintDesk: {
     id: "src_osint_desk",
     name: "OSINT verification desk",
     type: "osint",
-    trustTier: "analyst reviewed"
+    trustTier: "analyst reviewed",
+    url: "https://www.bellingcat.com/"
   },
   maritimeAdvisory: {
     id: "src_maritime_advisory",
     name: "Maritime advisory",
     type: "official",
-    trustTier: "primary"
+    trustTier: "primary",
+    url: "https://www.ukmto.org/"
   }
 };
 
@@ -164,9 +262,12 @@ function event({
   confidence,
   sourceIds,
   media = false,
+  side = country === "Iran" ? "iran" : "regional",
   updates
 }) {
   const sources = sourceIds.map((sourceId) => sourceCatalog[sourceId]);
+  const isApproved = ["verified", "official"].includes(verification);
+  const publicationStatus = isApproved ? "published" : "review_only";
   return {
     id,
     slug: id.replace(/^evt_/, ""),
@@ -188,6 +289,28 @@ function event({
     confidence,
     sourceCount: sources.length,
     sources,
+    side,
+    review: {
+      status: isApproved ? "approved" : "candidate",
+      statusLabel: isApproved ? "Approved" : "Candidate",
+      queue: isApproved ? "published map" : "open-source review",
+      publicationStatus,
+      publicationLabel: isApproved ? "Published" : "Review only",
+      priority: severity === "critical" ? "urgent" : severity === "high" ? "high" : severity === "medium" ? "normal" : "low",
+      duplicateKey: [country, province, place, category, baseDate].join("-").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      visibleOn: isApproved ? ["map", "feed", "detail", "archive", "api"] : ["review queue", "api"],
+      assignee: "editorial desk",
+      requiredActions: isApproved
+        ? ["Monitor for corrections"]
+        : ["Confirm source reliability", "Check location precision", "Review duplicate matches"],
+      checklist: [
+        { key: "source-visible", label: "Original source link retained", done: true },
+        { key: "location", label: "Location precision assigned", done: true },
+        { key: "dedupe", label: "Duplicate key generated", done: true },
+        { key: "approval", label: "Editorial approval recorded", done: isApproved }
+      ],
+      decidedAt: isApproved ? `${baseDate}T${time}:45+03:00` : null
+    },
     media: media
       ? {
           kind: "image",
@@ -505,6 +628,6 @@ export const events = [
 
 export const platformNotes = [
   "Prototype event data is synthetic and shaped from the supplied research brief and observable Liveuamap-style interface.",
-  "Production should ingest official structured feeds first, then official sites/RSS, licensed wires, structured crisis data, and social/open-web leads.",
-  "Every public event should preserve source count, verification state, geocode precision, first seen time, last update time, and revision history."
+  "Production should ingest official structured feeds first, then official sites/RSS, licensed wires, structured crisis data, and compliant social/open-web leads.",
+  "Every public event should preserve source count, source links, side/color taxonomy, verification state, geocode precision, first seen time, last update time, review status, and revision history."
 ];
