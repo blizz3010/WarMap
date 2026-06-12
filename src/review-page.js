@@ -10,6 +10,7 @@ const state = {
   lookback: clean(params.get("lookback") || "30d"),
   token: readStoredValue("warmap.editorialToken", ""),
   message: "",
+  exportBundle: null,
   status: null,
   queue: null
 };
@@ -92,6 +93,7 @@ function renderReviewQueue() {
       </section>
 
       ${state.message ? `<p class="editorial-message">${escapeHtml(state.message)}</p>` : ""}
+      ${state.exportBundle ? renderExportBundle() : ""}
 
       <section class="review-workspace">
         <div class="review-candidate-list">
@@ -268,6 +270,17 @@ function bindReviewControls() {
   stateNode.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => submitReviewAction(button));
   });
+
+  stateNode.querySelector("[data-copy-export]")?.addEventListener("click", async () => {
+    const text = stateNode.querySelector("[data-export-text]")?.value ?? "";
+    try {
+      await navigator.clipboard?.writeText(text);
+      state.message = "Static decision module copied.";
+    } catch {
+      state.message = "Select and copy the static decision module.";
+    }
+    renderReviewQueue();
+  });
 }
 
 async function submitReviewAction(button) {
@@ -280,6 +293,16 @@ async function submitReviewAction(button) {
 
   button.disabled = true;
   const correctedFields = action === "correct" ? correctionFieldsForCandidate(item.id, item) : {};
+  const decisionPayload = {
+    action,
+    eventId: item.id,
+    duplicateKey: reviewInfo(item).duplicateKey,
+    sourceUrl: item.sources?.[0]?.url ?? "",
+    correctedFields,
+    eventSnapshot: eventSnapshotForDecision(item),
+    targetDuplicateKey: action === "merge" ? reviewInfo(item).duplicateKey : "",
+    notes: `Action from WarMap standalone review page for ${item.place}`
+  };
   state.message = `${titleCase(action)} submitted for ${item.place}`;
   renderReviewQueue();
 
@@ -290,22 +313,26 @@ async function submitReviewAction(button) {
         "content-type": "application/json",
         ...editorialAuthHeaders()
       },
-      body: JSON.stringify({
-        action,
-        eventId: item.id,
-        duplicateKey: reviewInfo(item).duplicateKey,
-        sourceUrl: item.sources?.[0]?.url ?? "",
-        correctedFields,
-        eventSnapshot: eventSnapshotForDecision(item),
-        targetDuplicateKey: action === "merge" ? reviewInfo(item).duplicateKey : "",
-        notes: `Action from WarMap standalone review page for ${item.place}`
-      })
+      body: JSON.stringify(decisionPayload)
     });
     const payload = await response.json();
     if (!response.ok) {
+      if (payload.error === "EDITORIAL_STORE_NOT_CONFIGURED" || payload.error === "EDITORIAL_AUTH_NOT_CONFIGURED") {
+        const exportBundle = await createDecisionExport(decisionPayload);
+        state.exportBundle = {
+          action,
+          place: item.place,
+          error: payload.message,
+          ...exportBundle
+        };
+        state.message = `${titleCase(action)} could not be saved yet. A commit-ready static decision export is ready below.`;
+        renderReviewQueue();
+        return;
+      }
       throw new Error(payload.message || `Review action returned ${response.status}`);
     }
 
+    state.exportBundle = null;
     state.message = payload.persisted
       ? `${titleCase(action)} saved for ${item.place}`
       : `${titleCase(action)} accepted for this runtime`;
@@ -314,6 +341,42 @@ async function submitReviewAction(button) {
     state.message = error instanceof Error ? error.message : "Review action failed";
     renderReviewQueue();
   }
+}
+
+function renderExportBundle() {
+  const bundle = state.exportBundle;
+  return `
+    <section class="review-export-panel" aria-label="Static editorial decision export">
+      <header>
+        <div>
+          <strong>Static decision export</strong>
+          <span>${escapeHtml(titleCase(bundle.action))} for ${escapeHtml(bundle.place)}</span>
+        </div>
+        <button type="button" data-copy-export>Copy module</button>
+      </header>
+      <p>${escapeHtml(bundle.error || "Durable editorial writes are not configured.")}</p>
+      <ol>
+        ${(bundle.instructions ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ol>
+      <textarea readonly data-export-text>${escapeHtml(bundle.staticModule ?? "")}</textarea>
+      <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")}</small>
+    </section>
+  `;
+}
+
+async function createDecisionExport(payload) {
+  const response = await fetch("/api/review-export", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const exportBundle = await response.json();
+  if (!response.ok) {
+    throw new Error(exportBundle.message || `Review export returned ${response.status}`);
+  }
+  return exportBundle;
 }
 
 function eventSnapshotForDecision(item) {

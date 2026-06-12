@@ -9,6 +9,7 @@ import editorialStatusHandler from "../api/editorial-status.js";
 import platformConfigHandler from "../api/platform-config.js";
 import productionReadinessHandler from "../api/production-readiness.js";
 import reviewActionHandler from "../api/review-action.js";
+import reviewExportHandler from "../api/review-export.js";
 import reviewQueueHandler from "../api/review-queue.js";
 import sourceCurationHandler from "../api/source-curation.js";
 import v1ConfigHandler from "../api/v1/config.js";
@@ -38,6 +39,7 @@ const apiHandlers = new Map([
   ["/api/platform-config", platformConfigHandler],
   ["/api/production-readiness", productionReadinessHandler],
   ["/api/review-action", reviewActionHandler],
+  ["/api/review-export", reviewExportHandler],
   ["/api/review-queue", reviewQueueHandler],
   ["/api/source-curation", sourceCurationHandler],
   ["/api/v1/config", v1ConfigHandler],

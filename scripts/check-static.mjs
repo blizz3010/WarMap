@@ -15,6 +15,7 @@ import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsyn
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { buildProductionReadinessPayload } from "../api/production-readiness.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
+import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import {
   buildV1EventsPayload,
@@ -58,6 +59,7 @@ const requiredFiles = [
   "api/platform-config.js",
   "api/production-readiness.js",
   "api/region-scope.js",
+  "api/review-export.js",
   "api/review-queue.js",
   "api/source-curation.js",
   "api/source-registry.js",
@@ -123,9 +125,18 @@ if (!eventPageSource.includes("/archive?") || eventPageSource.includes('href="/a
 if (
   !reviewPageSource.includes("/api/review-queue?") ||
   !reviewPageSource.includes("/api/review-action") ||
+  !reviewPageSource.includes("/api/review-export") ||
   !reviewPageSource.includes("/api/editorial-status")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
+}
+
+if (
+  !reviewPageSource.includes("renderExportBundle") ||
+  !reviewPageSource.includes("data-copy-export") ||
+  !reviewPageSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
+) {
+  throw new Error("Expected standalone review page to expose static decision exports when writes are blocked");
 }
 
 if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("publishReady")) {
@@ -427,6 +438,17 @@ const approvedSampleDecision = normalizeDecisionPayload(
 );
 const approvedSampleEvents = applyEditorialDecisions(sampleUkraineEvents, [approvedSampleDecision]);
 const approvedSnapshotEvents = eventsFromEditorialSnapshots([approvedSampleDecision]);
+const approvedExport = buildEditorialDecisionExport(
+  {
+    action: "approve",
+    eventId: sampleUkraineEvents[0].id,
+    duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+    sourceUrl: sampleUkraineEvents[0].sources[0].url,
+    eventSnapshot: sampleUkraineEvents[0],
+    notes: "static export smoke test"
+  },
+  { now: new Date("2026-05-28T02:03:30Z") }
+);
 const correctedSampleDecision = normalizeDecisionPayload(
   {
     action: "correct",
@@ -498,6 +520,16 @@ if (
   !approvedSnapshotEvents[0]?.sources.every((source) => hasHttpUrl(source.url))
 ) {
   throw new Error("Editorial approval snapshots did not materialize a durable published event");
+}
+
+if (
+  approvedExport.kind !== "EditorialDecisionExport" ||
+  approvedExport.targetFile !== "api/editorial-decisions.js" ||
+  !approvedExport.staticModule.includes("STATIC_EDITORIAL_DECISIONS") ||
+  !approvedExport.staticModule.includes(sampleUkraineEvents[0].sources[0].url) ||
+  eventsFromEditorialSnapshots([approvedExport.decision])[0]?.review.publicationStatus !== "published"
+) {
+  throw new Error("Editorial decision export failed to produce a commit-ready published snapshot");
 }
 
 if (!detailEventsForRegion(approvedSnapshotEvents, [], "ukraine-east").some((event) => event.id === sampleUkraineEvents[0].id)) {
