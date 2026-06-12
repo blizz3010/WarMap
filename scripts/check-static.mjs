@@ -9,6 +9,7 @@ import { buildEditorialStatusPayload } from "../api/editorial-status.js";
 import {
   applyEditorialDecisions,
   authorizeEditorialRequest,
+  editorialGithubStoreHealth,
   editorialStoreCapabilities,
   eventsFromEditorialSnapshots,
   normalizeDecisionPayload
@@ -53,6 +54,7 @@ const requiredFiles = [
   "api/archive.js",
   "api/collectors.js",
   "api/editorial-decisions.js",
+  "api/editorial-store-health.js",
   "api/editorial-status.js",
   "api/editorial-store.js",
   "api/editorial-workflow.js",
@@ -256,6 +258,7 @@ const productionReadiness = await withTemporaryEditorialEnvAsync(async () => {
   process.env.VERCEL = "1";
   process.env.EDITORIAL_STORE_PROVIDER = "";
   delete process.env.EDITORIAL_GITHUB_TOKEN;
+  delete process.env.GITHUB_TOKEN;
   delete process.env.EDITORIAL_REVIEW_TOKEN;
   return buildProductionReadinessPayload({
     region: "ukraine-east",
@@ -611,6 +614,7 @@ withTemporaryEditorialEnv(() => {
   process.env.VERCEL = "1";
   process.env.EDITORIAL_STORE_PROVIDER = "github";
   process.env.EDITORIAL_GITHUB_TOKEN = "fake-token";
+  delete process.env.GITHUB_TOKEN;
   process.env.EDITORIAL_GITHUB_REPO = "owner/repo";
   process.env.EDITORIAL_GITHUB_BRANCH = "main";
   delete process.env.EDITORIAL_REVIEW_TOKEN;
@@ -652,6 +656,98 @@ withTemporaryEditorialEnv(() => {
   });
   if (!readyStatus.readiness.publishReady || !readyStatus.store.github?.configured) {
     throw new Error("Editorial status payload failed publish-ready checks");
+  }
+});
+
+await withTemporaryEditorialEnvAsync(async () => {
+  process.env.EDITORIAL_STORE_PROVIDER = "github";
+  process.env.EDITORIAL_GITHUB_TOKEN = "fake-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.EDITORIAL_GITHUB_REPO = "owner/repo";
+  process.env.EDITORIAL_GITHUB_BRANCH = "main";
+  process.env.EDITORIAL_GITHUB_PATH = "editorial/decisions.json";
+  process.env.EDITORIAL_REVIEW_TOKEN = "review-secret";
+
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url, options) => {
+    urls.push(String(url));
+    const authorization = options?.headers?.Authorization ?? "";
+    if (authorization.includes("fake-token") === false) {
+      throw new Error("Expected GitHub store health to send the configured token");
+    }
+
+    if (String(url) === "https://api.github.com/repos/owner/repo") {
+      return jsonResponse(200, { full_name: "owner/repo" });
+    }
+
+    if (String(url) === "https://api.github.com/repos/owner/repo/branches/main") {
+      return jsonResponse(200, { name: "main" });
+    }
+
+    if (String(url) === "https://api.github.com/repos/owner/repo/contents/editorial/decisions.json?ref=main") {
+      return jsonResponse(200, {
+        content: Buffer.from("[]\n", "utf8").toString("base64"),
+        sha: "abc123"
+      });
+    }
+
+    throw new Error(`Unexpected GitHub store health URL: ${url}`);
+  };
+
+  try {
+    const health = await editorialGithubStoreHealth({ now: new Date("2026-05-28T02:07:00Z") });
+    if (
+      !health.ready ||
+      health.store.tokenConfigured !== true ||
+      health.store.reviewTokenConfigured !== true ||
+      health.checks.find((check) => check.id === "github-decision-file")?.decisionCount !== 0 ||
+      urls.length !== 3
+    ) {
+      throw new Error("Editorial GitHub store health failed configured read-only checks");
+    }
+
+    if (JSON.stringify(health).includes("fake-token") || JSON.stringify(health).includes("review-secret")) {
+      throw new Error("Editorial GitHub store health leaked a configured secret");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await withTemporaryEditorialEnvAsync(async () => {
+  process.env.EDITORIAL_STORE_PROVIDER = "github";
+  process.env.EDITORIAL_GITHUB_TOKEN = "fake-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.EDITORIAL_GITHUB_REPO = "owner/repo";
+  process.env.EDITORIAL_GITHUB_BRANCH = "main";
+  process.env.EDITORIAL_GITHUB_PATH = "editorial/decisions.json";
+  process.env.EDITORIAL_REVIEW_TOKEN = "review-secret";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.github.com/repos/owner/repo") {
+      return jsonResponse(200, { full_name: "owner/repo" });
+    }
+
+    if (String(url) === "https://api.github.com/repos/owner/repo/branches/main") {
+      return jsonResponse(200, { name: "main" });
+    }
+
+    if (String(url) === "https://api.github.com/repos/owner/repo/contents/editorial/decisions.json?ref=main") {
+      return jsonResponse(404, { message: "Not Found" });
+    }
+
+    throw new Error(`Unexpected GitHub store health URL: ${url}`);
+  };
+
+  try {
+    const health = await editorialGithubStoreHealth({ now: new Date("2026-05-28T02:08:00Z") });
+    if (!health.ready || health.checks.find((check) => check.id === "github-decision-file")?.status !== "missing-ok") {
+      throw new Error("Editorial GitHub store health should allow a missing decisions file");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -770,6 +866,7 @@ function withTemporaryEditorialEnv(callback) {
     "VERCEL",
     "EDITORIAL_STORE_PROVIDER",
     "EDITORIAL_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
     "EDITORIAL_GITHUB_REPO",
     "EDITORIAL_GITHUB_BRANCH",
     "EDITORIAL_GITHUB_PATH",
@@ -795,6 +892,7 @@ async function withTemporaryEditorialEnvAsync(callback) {
     "VERCEL",
     "EDITORIAL_STORE_PROVIDER",
     "EDITORIAL_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
     "EDITORIAL_GITHUB_REPO",
     "EDITORIAL_GITHUB_BRANCH",
     "EDITORIAL_GITHUB_PATH",
@@ -849,4 +947,14 @@ function assertThrows(callback, expectedMessage) {
     throw error;
   }
   throw new Error(`Expected error containing: ${expectedMessage}`);
+}
+
+function jsonResponse(status, payload) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return payload;
+    }
+  };
 }

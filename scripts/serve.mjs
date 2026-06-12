@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import archiveHandler from "../api/archive.js";
 import eventHandler from "../api/event.js";
 import eventsHandler from "../api/events.js";
+import editorialStoreHealthHandler from "../api/editorial-store-health.js";
 import editorialStatusHandler from "../api/editorial-status.js";
 import platformConfigHandler from "../api/platform-config.js";
 import productionReadinessHandler from "../api/production-readiness.js";
@@ -35,6 +36,7 @@ const apiHandlers = new Map([
   ["/api/archive", archiveHandler],
   ["/api/event", eventHandler],
   ["/api/events", eventsHandler],
+  ["/api/editorial-store-health", editorialStoreHealthHandler],
   ["/api/editorial-status", editorialStatusHandler],
   ["/api/platform-config", platformConfigHandler],
   ["/api/production-readiness", productionReadinessHandler],
