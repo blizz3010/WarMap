@@ -27,6 +27,7 @@ import {
 } from "../api/notification-service.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { buildProductionReadinessPayload } from "../api/production-readiness.js";
+import { buildPublicationStatusFromDecisions } from "../api/publication-service.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
 import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
@@ -81,6 +82,8 @@ const requiredFiles = [
   "api/notification-status.js",
   "api/platform-config.js",
   "api/production-readiness.js",
+  "api/publication-service.js",
+  "api/publication-status.js",
   "api/region-scope.js",
   "api/review-export.js",
   "api/review-queue.js",
@@ -382,6 +385,8 @@ if (
   productionReadiness.sections.ingestion.ready ||
   productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||
   productionReadiness.sections.ingestion.cron !== "/api/cron/ingest" ||
+  productionReadiness.sections.publication.status !== "/api/publication-status" ||
+  !Array.isArray(productionReadiness.sections.publication.surfaces) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ingestion-cron-secret" && blocker.status === "missing") ||
   !productionReadiness.sections.platform.browserNotifications ||
   productionReadiness.sections.platform.serverNotificationsReady ||
@@ -942,6 +947,31 @@ if (!detailEventsForRegion(approvedSnapshotEvents, [], "ukraine-east").some((eve
   throw new Error("Editorial approval snapshots failed theater-scoped detail recovery");
 }
 
+const publicationStatus = buildPublicationStatusFromDecisions({
+  decisions: [approvedSampleDecision],
+  sourceEvents: [],
+  region: "ukraine-east",
+  lookback: "30d",
+  now: new Date("2026-05-28T02:09:00Z")
+});
+const publishedRecord = publicationStatus.records.find((record) => record.id === sampleUkraineEvents[0].id);
+if (
+  publicationStatus.kind !== "PublicationStatus" ||
+  !publicationStatus.ready ||
+  publicationStatus.summary.published !== 1 ||
+  publicationStatus.summary.complete !== 1 ||
+  publicationStatus.summary.sourceLinked !== 1 ||
+  publicationStatus.surfaces.length !== 5 ||
+  !publishedRecord ||
+  !publishedRecord.sources[0]?.url ||
+  !publishedRecord.links.detail.startsWith("/event?") ||
+  !publishedRecord.links.archive.startsWith("/archive?") ||
+  !publishedRecord.links.api.startsWith("/v1/events?") ||
+  !Object.values(publishedRecord.surfaces).every(Boolean)
+) {
+  throw new Error("Publication status failed approved-event surface and source-link checks");
+}
+
 if (applyEditorialDecisions(sampleUkraineEvents, [correctedSampleDecision])[0].review.status !== "corrected") {
   throw new Error("Editorial correction decisions did not mark the sample as corrected");
 }
@@ -978,6 +1008,7 @@ withTemporaryEditorialEnv(() => {
     status.readiness.reviewTokenReady ||
     status.readiness.publishReady ||
     status.counts.editorialDecisions !== 1 ||
+    status.endpoints.publicationStatus !== "/api/publication-status" ||
     !status.requiredConfiguration.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && !item.configured)
   ) {
     throw new Error("Editorial status payload failed unconfigured token readiness checks");
@@ -1152,6 +1183,7 @@ if (
   !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
   v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
+  v1Config.links.publicationStatus !== "/api/publication-status" ||
   v1Config.links.notificationStatus !== "/api/notification-status"
 ) {
   throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");

@@ -160,6 +160,7 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       platformConfig: "/api/platform-config",
       sourceHealth: "/api/source-health",
       ingestionStatus: "/api/ingestion-status",
+      publicationStatus: "/api/publication-status",
       notificationStatus: "/api/notification-status"
     }
   };

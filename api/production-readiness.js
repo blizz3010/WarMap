@@ -4,6 +4,7 @@ import { buildIngestionStatusPayload, ingestionReadinessBlockers } from "./inges
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
 import { notificationRuntimeSummary } from "./notification-service.js";
 import { PLATFORM_CONFIG } from "./platform-config.js";
+import { buildPublicationStatusPayload, publicationReadinessBlockers } from "./publication-service.js";
 import { buildSourceCurationPayload } from "./source-curation.js";
 
 export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_ID, now = new Date() } = {}) {
@@ -12,6 +13,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
   const extraction = extractionRuntimeSummary();
   const curation = buildSourceCurationPayload({ region, now });
   const ingestion = buildIngestionStatusPayload({ now });
+  const publication = await buildPublicationStatusPayload({ region, now });
   const notifications = notificationRuntimeSummary({ now });
   const platform = platformReadinessSummary({ notifications });
   const blockers = [
@@ -19,6 +21,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
     ...aiExtractionBlockers(extraction),
     ...curationBlockers(curation),
     ...ingestionReadinessBlockers(ingestion.runtime),
+    ...publicationReadinessBlockers(publication.records),
     ...platformBlockers(platform)
   ];
 
@@ -45,6 +48,17 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
         regions: ingestion.runtime.regions,
         lookback: ingestion.runtime.lookback,
         maxRecords: ingestion.runtime.maxRecords
+      },
+      publication: {
+        ready: publication.ready,
+        status: "/api/publication-status",
+        published: publication.summary.published,
+        complete: publication.summary.complete,
+        sourceLinked: publication.summary.sourceLinked,
+        surfaces: publication.surfaces.map((surface) => ({
+          id: surface.id,
+          path: surface.path
+        }))
       },
       platform
     },
