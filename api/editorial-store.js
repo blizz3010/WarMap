@@ -11,6 +11,7 @@ export const EDITORIAL_ACTIONS = new Set([
   "merge",
   "split"
 ]);
+const SNAPSHOT_REQUIRED_ACTIONS = new Set(["approve", "correct"]);
 
 const GITHUB_API_VERSION = "2022-11-28";
 const memoryDecisions = [];
@@ -128,6 +129,10 @@ export function normalizeDecisionPayload(payload, context = {}) {
   if (!eventId && !duplicateKey && !sourceUrl) {
     throw new Error("Decision must include eventId, duplicateKey, or sourceUrl");
   }
+  const eventSnapshot = sanitizeEventSnapshot(payload?.eventSnapshot);
+  if (SNAPSHOT_REQUIRED_ACTIONS.has(action) && !eventSnapshot) {
+    throw new Error("Approve and correct actions require a valid eventSnapshot with title, coordinates, and source URL");
+  }
 
   return normalizeDecision({
     action,
@@ -139,7 +144,7 @@ export function normalizeDecisionPayload(payload, context = {}) {
     notes: clean(payload?.notes),
     reviewer: clean(payload?.reviewer) || "editorial desk",
     correctedFields: sanitizeCorrectedFields(payload?.correctedFields),
-    eventSnapshot: sanitizeEventSnapshot(payload?.eventSnapshot),
+    eventSnapshot,
     createdAt: context.now?.toISOString?.() ?? new Date().toISOString()
   });
 }

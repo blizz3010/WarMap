@@ -309,6 +309,7 @@ const correctedSampleDecision = normalizeDecisionPayload(
   {
     action: "correct",
     eventId: sampleUkraineEvents[0].id,
+    eventSnapshot: sampleUkraineEvents[0],
     correctedFields: {
       place: "Kharkiv",
       severity: "critical",
@@ -317,6 +318,20 @@ const correctedSampleDecision = normalizeDecisionPayload(
     notes: "static correction smoke test"
   },
   { now: new Date("2026-05-28T02:04:03Z") }
+);
+assertThrows(
+  () =>
+    normalizeDecisionPayload(
+      {
+        action: "approve",
+        eventId: sampleUkraineEvents[0].id,
+        duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+        sourceUrl: sampleUkraineEvents[0].sources[0].url,
+        notes: "missing snapshot should fail"
+      },
+      { now: new Date("2026-05-28T02:04:30Z") }
+    ),
+  "Approve and correct actions require a valid eventSnapshot"
 );
 const mergedSampleDecision = normalizeDecisionPayload(
   {
@@ -537,4 +552,16 @@ function withTemporaryEditorialEnv(callback) {
       }
     });
   }
+}
+
+function assertThrows(callback, expectedMessage) {
+  try {
+    callback();
+  } catch (error) {
+    if (String(error?.message ?? "").includes(expectedMessage)) {
+      return;
+    }
+    throw error;
+  }
+  throw new Error(`Expected error containing: ${expectedMessage}`);
 }

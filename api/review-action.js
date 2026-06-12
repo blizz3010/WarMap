@@ -40,7 +40,7 @@ export default async function handler(request, response) {
   } catch (error) {
     response.setHeader("Cache-Control", "no-store");
     response.status(400).json({
-      error: "INVALID_EDITORIAL_ACTION",
+      error: "INVALID_EDITORIAL_DECISION",
       message: error instanceof Error ? error.message : "Invalid editorial action",
       capabilities: editorialStoreCapabilities()
     });
