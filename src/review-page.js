@@ -10,6 +10,7 @@ const state = {
   lookback: clean(params.get("lookback") || "30d"),
   token: readStoredValue("warmap.editorialToken", ""),
   message: "",
+  status: null,
   queue: null
 };
 
@@ -21,10 +22,17 @@ async function loadReviewQueue() {
   mapLink.href = `/?${new URLSearchParams({ region: state.region }).toString()}`;
 
   try {
-    const response = await fetch(apiUrl, { headers: { Accept: "application/json" } });
-    const payload = await response.json();
-    if (!response.ok || !Array.isArray(payload.candidates)) {
-      throw new Error(payload.message || payload.error || `Review queue returned ${response.status}`);
+    const [queueResponse, statusResponse] = await Promise.all([
+      fetch(apiUrl, { headers: { Accept: "application/json" } }),
+      fetch("/api/editorial-status", { headers: { Accept: "application/json" } })
+    ]);
+    const payload = await queueResponse.json();
+    const statusPayload = await statusResponse.json().catch(() => null);
+    if (statusResponse.ok && statusPayload?.kind === "EditorialStatus") {
+      state.status = statusPayload;
+    }
+    if (!queueResponse.ok || !Array.isArray(payload.candidates)) {
+      throw new Error(payload.message || payload.error || `Review queue returned ${queueResponse.status}`);
     }
 
     state.queue = payload;
@@ -103,6 +111,11 @@ function renderReviewQueue() {
           </section>
 
           <section class="event-page-section">
+            <h2>Publishing Readiness</h2>
+            ${renderPublishingStatus()}
+          </section>
+
+          <section class="event-page-section">
             <h2>Collector Status</h2>
             <ul class="status-list">
               ${Object.entries(meta.collectorStatus ?? {})
@@ -125,6 +138,43 @@ function renderReviewQueue() {
   `;
 
   bindReviewControls();
+}
+
+function renderPublishingStatus() {
+  const status = state.status;
+  if (!status) {
+    return '<p class="status-summary">Editorial status unavailable.</p>';
+  }
+
+  const readiness = status.readiness ?? {};
+  return `
+    <p class="status-summary ${readiness.publishReady ? "is-ready" : "is-blocked"}">
+      ${readiness.publishReady ? "Publishing writes are ready." : "Publishing writes need configuration."}
+    </p>
+    <dl class="event-page-facts archive-facts">
+      <div><dt>Store</dt><dd>${escapeHtml(storeModeLabel(status.store?.mode))}</dd></div>
+      <div><dt>Writes</dt><dd>${readiness.durableStoreReady ? "Ready" : "Missing"}</dd></div>
+      <div><dt>Reviewer token</dt><dd>${readiness.reviewTokenReady ? "Ready" : "Missing"}</dd></div>
+      <div><dt>Decisions</dt><dd>${Number(status.counts?.editorialDecisions ?? 0)}</dd></div>
+    </dl>
+    <ul class="status-list">
+      ${(status.requiredConfiguration ?? [])
+        .map(
+          (item) =>
+            `<li><span>${escapeHtml(item.name)}</span><strong>${item.configured ? "set" : "needed"}</strong></li>`
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function storeModeLabel(mode) {
+  return {
+    "github-contents": "GitHub Contents",
+    "github-contents-unconfigured": "GitHub missing config",
+    "local-file": "Local file",
+    "static-readonly": "Read only"
+  }[mode] ?? titleCase(mode || "unknown");
 }
 
 function renderCandidate(item) {
