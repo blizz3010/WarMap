@@ -113,6 +113,7 @@ const archivePageSource = readFileSync(new URL("src/archive-page.js", `file:///$
 const embedSource = readFileSync(new URL("src/embed.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const embedPageSource = readFileSync(new URL("embed.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const indexPageSource = readFileSync(new URL("index.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 
@@ -122,6 +123,16 @@ if (!vercelConfig.crons?.some((job) => job.path === "/api/cron/ingest" && job.sc
 
 if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.includes("/v1/stream/events")) {
   throw new Error("Expected client to subscribe to the v1 event stream");
+}
+
+if (
+  !indexPageSource.includes('id="theaterSwitch"') ||
+  !indexPageSource.includes('id="theaterSummary"') ||
+  !appSource.includes("function renderTheaterSwitch()") ||
+  !appSource.includes("data-theater-region") ||
+  !appSource.includes("function changeRegion(regionId)")
+) {
+  throw new Error("Expected first-screen theater strip controls for Ukraine area switching");
 }
 
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
