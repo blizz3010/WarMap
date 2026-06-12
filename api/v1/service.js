@@ -158,7 +158,8 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       search: "/v1/search",
       stream: "/v1/stream/events",
       platformConfig: "/api/platform-config",
-      sourceHealth: "/api/source-health"
+      sourceHealth: "/api/source-health",
+      notificationStatus: "/api/notification-status"
     }
   };
 }

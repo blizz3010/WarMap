@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/review-export`, `/api/editorial-store-health`, `/api/source-health`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, static decision exports, durable store checks, collector health, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/review-export`, `/api/editorial-store-health`, `/api/source-health`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, static decision exports, durable store checks, collector health, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -90,6 +90,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources, and redacts tokens.
+- `/api/notification-status?region=ukraine-east` returns webhook/browser notification readiness plus a source-linked preview of publishable alerts; `POST /api/notification-status` can dispatch a signed webhook batch only when notification secrets are configured.
 - `/api/production-readiness?region=ukraine-east` rolls up editorial publishing, AI extraction, source curation, notifications, language, and paid-layer readiness into required and optional blockers.
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
 - `POST /api/review-export` validates the same decision payload and returns a commit-ready static decision module for `api/editorial-decisions.js` when Vercel writes are not configured yet.
@@ -135,7 +136,18 @@ For the browser review panel or standalone review page, editors can provide the 
 - included and planned-paid map layers
 - explicit boundaries for missing push delivery, translation catalogs, billing, entitlements, and licensed layer datasets
 
-The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. Language selection updates core shell copy and document direction locally, while event articles and source text remain in their source language. It does not send server-side notifications or unlock paid layers.
+The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. `/api/notification-status` exposes the server notification readiness path and preview batch. Webhook delivery stays disabled until `NOTIFICATION_WEBHOOK_URL`, `NOTIFICATION_WEBHOOK_SECRET`, and `NOTIFICATION_ADMIN_TOKEN` are configured. Language selection updates core shell copy and document direction locally, while event articles and source text remain in their source language. It does not unlock paid layers.
+
+Optional webhook notifications are intentionally admin-triggered and signed:
+
+```bash
+NOTIFICATION_WEBHOOK_URL=https://example.com/warmap-webhook
+NOTIFICATION_WEBHOOK_SECRET=long_random_signing_secret
+NOTIFICATION_ADMIN_TOKEN=long_random_admin_token
+NOTIFICATION_MIN_SEVERITY=high
+```
+
+With those variables configured, send `Authorization: Bearer <NOTIFICATION_ADMIN_TOKEN>` to `POST /api/notification-status`. The webhook receives a `WarMapNotificationBatch` payload with event links and original source links, plus `x-warmap-notification-timestamp` and `x-warmap-notification-signature` headers.
 
 ## Collector configuration
 

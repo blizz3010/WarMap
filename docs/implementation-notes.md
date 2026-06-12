@@ -16,7 +16,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Public archive page: `/archive?region=...&lookback=...` renders approved records grouped by day with theater controls, original source links, map/detail/API links, and archive summary facts.
 - Standalone review page: `/review?region=...&lookback=...` renders queued candidates with source links, extraction metadata, correction fields, reviewer-token storage, and publish/hold/reject/merge/split actions.
 - Key/Time/Review panels: icon taxonomy, side/color legend, source registry status, review queue counts, candidate queue cards, correction controls, merge decisions, and split-review decisions.
-- Alerts panel and platform registry: `/api/platform-config` exposes language choices, local browser-alert capability, planned delivery channels, paid-layer metadata, and explicit operational boundaries.
+- Alerts panel and platform registry: `/api/platform-config` exposes language choices, local browser-alert capability, planned delivery channels, paid-layer metadata, and explicit operational boundaries. `/api/notification-status` reports server notification readiness and can dispatch signed webhook batches when notification secrets are configured.
 - Public v1 API: clean `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes are rewritten to Vercel functions and expose stable dashboard-facing shapes.
 - Realtime invalidation: the browser opens `/v1/stream/events` with `EventSource`, refreshes quietly when snapshots invalidate events, preserves filters/detail selection, and closes the stream when paused.
 - Embed view: compact dashboard widget at `/embed` backed by `/v1/events`, with theater switching, publication-mode query support, synchronized marker/feed selection, and a full-map return link.
@@ -53,7 +53,7 @@ Liveuamap's public About page describes proprietary AI crawlers, expert analysts
 4. Require a sanitized event snapshot for approval/correction decisions so approved records can survive source-feed churn and lookback expiration.
 5. Publish approved items to the map, synchronized feed, detail drawer/page, archive, and versioned API while keeping original source links visible.
 
-The current prototype implements the collector registry, separate media RSS and official-feed collectors, an opt-in compliant-social-API adapter, source-curation/readiness API, source-health API, production-readiness API, structured AI extraction metadata with deterministic fallback plus optional HTTP LLM-provider enhancement, side/category taxonomy, approximate duplicate matching, review metadata, correction/merge/split actions, approval snapshots, queue API, publishing-readiness status API, read-only GitHub store health checks, standalone review workspace, blocked-write static decision export, local review-action storage, detail API/page, approved archive API/page, platform capability registry, local alert preferences, browser notification delivery, local shell-copy localization, language direction switching, locked paid-layer metadata, dashboard-facing `/v1/config`, versioned public v1 API wrappers, and client-side stream invalidation. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
+The current prototype implements the collector registry, separate media RSS and official-feed collectors, an opt-in compliant-social-API adapter, source-curation/readiness API, source-health API, production-readiness API, structured AI extraction metadata with deterministic fallback plus optional HTTP LLM-provider enhancement, side/category taxonomy, approximate duplicate matching, review metadata, correction/merge/split actions, approval snapshots, queue API, publishing-readiness status API, read-only GitHub store health checks, standalone review workspace, blocked-write static decision export, local review-action storage, detail API/page, approved archive API/page, platform capability registry, local alert preferences, browser notification delivery, signed webhook notification readiness/dispatch API, local shell-copy localization, language direction switching, locked paid-layer metadata, dashboard-facing `/v1/config`, versioned public v1 API wrappers, and client-side stream invalidation. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
 
 ## Production next steps
 
@@ -62,7 +62,7 @@ The current prototype implements the collector registry, separate media RSS and 
 3. Persist documents, claims, events, event updates, and media assets in PostgreSQL/PostGIS.
 4. Replace the current single-snapshot SSE route with durable invalidation fanout.
 5. Replace or harden the GitHub-backed decision adapter with PostgreSQL/PostGIS-backed event storage, then add merge/split and reviewer assignment screens.
-6. Add account, server-side notification, localization, billing, and entitlement services before enabling email/webhook delivery or paid map layers.
+6. Add account, subscription, retry-queue, localization, billing, and entitlement services before enabling email delivery, automated webhook fanout, or paid map layers.
 7. Replace thumbnail placeholders with licensed or owned media assets and attribution text.
 
 ## Current live-feed limitations
@@ -72,6 +72,6 @@ The current prototype implements the collector registry, separate media RSS and 
 - Source count is article count for this prototype; production should cluster multiple documents into one event before marking anything corroborated.
 - The current endpoint intentionally labels normalized live items as `reported` until a real verification workflow exists.
 - Empty time windows stay empty instead of substituting synthetic events, so short live windows do not mislead users.
-- Alert settings and browser notifications are local to the current browser only; no server push, email, webhook, subscription, billing, entitlement, or full article translation catalog is configured yet.
+- Alert settings and browser notifications are local to the current browser only. Server webhook notification dispatch is available only when the webhook URL, signing secret, and admin token are configured; no server push, email, subscription, retry queue, billing, entitlement, or full article translation catalog is configured yet.
 - Language selection updates core shell copy and `lang`/`dir`; event titles, summaries, source names, and article text remain in source language.
 - `/v1/stream/events` is a server-sent-event snapshot/invalidation contract, not a durable push fanout service.
