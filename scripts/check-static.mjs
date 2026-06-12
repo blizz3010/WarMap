@@ -14,6 +14,11 @@ import {
   eventsFromEditorialSnapshots,
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
+import {
+  authorizeIngestionCronRequest,
+  buildIngestionStatusPayload,
+  runIngestionHeartbeat
+} from "../api/ingestion-service.js";
 import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import {
   buildNotificationStatusPayload,
@@ -44,6 +49,7 @@ import {
 } from "../api/source-registry.js";
 
 const requiredFiles = [
+  "vercel.json",
   "index.html",
   "event.html",
   "archive.html",
@@ -66,7 +72,10 @@ const requiredFiles = [
   "api/editorial-workflow.js",
   "api/event.js",
   "api/events.js",
+  "api/cron/ingest.js",
   "api/review-action.js",
+  "api/ingestion-service.js",
+  "api/ingestion-status.js",
   "api/news-normalizer.js",
   "api/notification-service.js",
   "api/notification-status.js",
@@ -99,6 +108,11 @@ const embedSource = readFileSync(new URL("src/embed.js", `file:///${root.replace
 const embedPageSource = readFileSync(new URL("embed.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
+
+if (!vercelConfig.crons?.some((job) => job.path === "/api/cron/ingest" && job.schedule === "17 2 * * *")) {
+  throw new Error("Expected Vercel cron configuration for the ingestion heartbeat");
+}
 
 if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.includes("/v1/stream/events")) {
   throw new Error("Expected client to subscribe to the v1 event stream");
@@ -365,6 +379,10 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
   productionReadiness.sections.sourceCuration.activeSources < 1 ||
   !productionReadiness.sections.sourceCuration.sourceHealth?.includes("/api/source-health?region=ukraine-east") ||
+  productionReadiness.sections.ingestion.ready ||
+  productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||
+  productionReadiness.sections.ingestion.cron !== "/api/cron/ingest" ||
+  !productionReadiness.blockers.some((blocker) => blocker.id === "ingestion-cron-secret" && blocker.status === "missing") ||
   !productionReadiness.sections.platform.browserNotifications ||
   productionReadiness.sections.platform.serverNotificationsReady ||
   productionReadiness.sections.platform.notificationStatus !== "/api/notification-status" ||
@@ -546,6 +564,116 @@ if (
   JSON.stringify(notificationStatus).includes("notification-secret")
 ) {
   throw new Error("Notification status payload failed preview, readiness, or secret-redaction checks");
+}
+
+const ingestionStatus = withTemporaryIngestionEnv(() =>
+  buildIngestionStatusPayload({
+    now: new Date("2026-05-28T02:03:35Z")
+  })
+);
+if (
+  ingestionStatus.kind !== "IngestionStatus" ||
+  ingestionStatus.ready ||
+  ingestionStatus.runtime.cronPath !== "/api/cron/ingest" ||
+  ingestionStatus.runtime.schedule !== "17 2 * * *" ||
+  !ingestionStatus.plan.regions.some((region) => region.id === "ukraine-east") ||
+  !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-cron-secret") ||
+  JSON.stringify(ingestionStatus).includes("topsecret123")
+) {
+  throw new Error("Ingestion status payload failed cron-readiness or secret-redaction checks");
+}
+
+const missingCronSecret = withTemporaryIngestionEnv(() => authorizeIngestionCronRequest({ headers: {} }));
+if (missingCronSecret.ok || missingCronSecret.code !== "CRON_SECRET_NOT_CONFIGURED") {
+  throw new Error("Cron authorization should fail closed when CRON_SECRET is missing");
+}
+
+const authorizedCron = withTemporaryIngestionEnv(() => {
+  process.env.CRON_SECRET = "topsecret123";
+  return authorizeIngestionCronRequest({
+    headers: {
+      authorization: "Bearer topsecret123"
+    }
+  });
+});
+if (!authorizedCron.ok || authorizedCron.authMode !== "cron-secret") {
+  throw new Error("Cron authorization failed with the configured secret");
+}
+
+const rejectedCron = withTemporaryIngestionEnv(() => {
+  process.env.CRON_SECRET = "topsecret123";
+  return authorizeIngestionCronRequest({
+    headers: {
+      authorization: "Bearer wrong-secret"
+    }
+  });
+});
+if (rejectedCron.ok || rejectedCron.code !== "CRON_AUTH_INVALID") {
+  throw new Error("Cron authorization should reject an invalid token");
+}
+
+const ingestionRun = await withTemporaryIngestionEnvAsync(async () => {
+  process.env.CRON_SECRET = "topsecret123";
+  return runIngestionHeartbeat({
+    regions: ["ukraine-east"],
+    lookback: "24h",
+    maxRecords: 5,
+    now: new Date("2026-05-28T02:03:45Z"),
+    collectImpl: async () => ({
+      articles: [
+        {
+          title: "Russian drone strike reported near Kharkiv",
+          url: "https://example.com/world/ukraine-kharkiv-drone-cron",
+          domain: "example.com",
+          sourcecountry: "United States",
+          language: "English",
+          seendate: "20260528T010203Z"
+        }
+      ],
+      lookback: "24h",
+      collectorStatus: {
+        fixture: "fulfilled"
+      },
+      upstreamErrors: [],
+      rssFeeds: ["https://example.com/rss"],
+      officialFeeds: ["https://example.com/official.rss"],
+      socialApiSources: []
+    })
+  });
+});
+if (
+  ingestionRun.kind !== "IngestionRun" ||
+  !ingestionRun.ok ||
+  ingestionRun.summary.regions !== 1 ||
+  ingestionRun.summary.upstreamArticles !== 1 ||
+  ingestionRun.summary.candidates !== 1 ||
+  !ingestionRun.regions[0].sourceSamples[0]?.sourceUrl ||
+  ingestionRun.persistence.stored ||
+  JSON.stringify(ingestionRun).includes("topsecret123")
+) {
+  throw new Error("Ingestion heartbeat failed fixture run, source-link, or secret-redaction checks");
+}
+
+const ingestionReadyProduction = await withTemporaryEditorialEnvAsync(async () =>
+  withTemporaryIngestionEnvAsync(async () => {
+    process.env.VERCEL = "1";
+    process.env.EDITORIAL_STORE_PROVIDER = "";
+    delete process.env.EDITORIAL_GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.EDITORIAL_REVIEW_TOKEN;
+    process.env.CRON_SECRET = "topsecret123";
+    return buildProductionReadinessPayload({
+      region: "ukraine-east",
+      now: new Date("2026-05-28T02:04:05Z")
+    });
+  })
+);
+if (
+  !ingestionReadyProduction.sections.ingestion.ready ||
+  ingestionReadyProduction.blockers.some((blocker) => blocker.id === "ingestion-cron-secret") ||
+  JSON.stringify(ingestionReadyProduction).includes("topsecret123")
+) {
+  throw new Error("Production readiness did not reflect configured ingestion cron safely");
 }
 
 const webhookDispatch = await withTemporaryNotificationEnvAsync(async () => {
@@ -1023,6 +1151,7 @@ if (
   !v1Config.taxonomies.actorSides.some((side) => side.id === "ukraine" && side.color) ||
   !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
+  v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
   v1Config.links.notificationStatus !== "/api/notification-status"
 ) {
   throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");
@@ -1159,6 +1288,50 @@ async function withTemporarySourceHealthEnv(callback) {
     "COMPLIANT_SOCIAL_API_SOURCES",
     "ALLOWED_OSINT_TOKEN",
     "MISSING_ALLOWED_TOKEN"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return await callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+function withTemporaryIngestionEnv(callback) {
+  const keys = [
+    "CRON_SECRET",
+    "INGESTION_REGIONS",
+    "INGESTION_LOOKBACK",
+    "INGESTION_MAX_RECORDS"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+async function withTemporaryIngestionEnvAsync(callback) {
+  const keys = [
+    "CRON_SECRET",
+    "INGESTION_REGIONS",
+    "INGESTION_LOOKBACK",
+    "INGESTION_MAX_RECORDS"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 

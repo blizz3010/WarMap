@@ -1,5 +1,6 @@
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { buildEditorialStatusPayload, editorialReadinessBlockers, loadEditorialStatusDecisions } from "./editorial-status.js";
+import { buildIngestionStatusPayload, ingestionReadinessBlockers } from "./ingestion-service.js";
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
 import { notificationRuntimeSummary } from "./notification-service.js";
 import { PLATFORM_CONFIG } from "./platform-config.js";
@@ -10,12 +11,14 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
   const editorial = buildEditorialStatusPayload({ decisions, now });
   const extraction = extractionRuntimeSummary();
   const curation = buildSourceCurationPayload({ region, now });
+  const ingestion = buildIngestionStatusPayload({ now });
   const notifications = notificationRuntimeSummary({ now });
   const platform = platformReadinessSummary({ notifications });
   const blockers = [
     ...editorialReadinessBlockers(editorial),
     ...aiExtractionBlockers(extraction),
     ...curationBlockers(curation),
+    ...ingestionReadinessBlockers(ingestion.runtime),
     ...platformBlockers(platform)
   ];
 
@@ -33,6 +36,15 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
         plannedSources: curation.sourceRegistry.planned,
         readiness: curation.readiness,
         sourceHealth: curation.endpoints?.sourceHealth ?? null
+      },
+      ingestion: {
+        ready: ingestion.ready,
+        status: ingestion.endpoints.status,
+        cron: ingestion.endpoints.cron,
+        schedule: ingestion.runtime.schedule,
+        regions: ingestion.runtime.regions,
+        lookback: ingestion.runtime.lookback,
+        maxRecords: ingestion.runtime.maxRecords
       },
       platform
     },

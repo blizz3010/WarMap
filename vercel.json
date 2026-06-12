@@ -2,6 +2,12 @@
   "buildCommand": "node scripts/check-static.mjs",
   "outputDirectory": ".",
   "cleanUrls": true,
+  "crons": [
+    {
+      "path": "/api/cron/ingest",
+      "schedule": "17 2 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/v1/config",
