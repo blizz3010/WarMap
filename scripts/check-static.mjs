@@ -143,6 +143,16 @@ if (
   throw new Error("Expected standalone review page to expose static decision exports when writes are blocked");
 }
 
+if (
+  !appSource.includes("/api/review-export") ||
+  !appSource.includes("renderInlineReviewExportBundle") ||
+  !appSource.includes("data-copy-review-export") ||
+  !appSource.includes("inline-review-export") ||
+  !appSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
+) {
+  throw new Error("Expected inline review panel to expose static decision exports when writes are blocked");
+}
+
 if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("publishReady")) {
   throw new Error("Expected standalone review page to show editorial publishing readiness");
 }

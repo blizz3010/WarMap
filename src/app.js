@@ -37,6 +37,7 @@ const state = {
   sourceTypes: new Set(Object.keys(sourceTypes)),
   events: fallbackEvents,
   editorialMessage: "",
+  editorialExportBundle: null,
   feedMeta: {
     source: "Prototype data",
     verification: "synthetic fallback"
@@ -681,6 +682,7 @@ function bindControls() {
   els.resetFilters.addEventListener("click", resetFilters);
   els.timeRange.addEventListener("change", () => {
     state.timeRange = els.timeRange.value;
+    clearInlineReviewExport();
     render();
     loadLiveEvents();
     restartEventStream();
@@ -688,6 +690,7 @@ function bindControls() {
 
   els.regionSelect.addEventListener("change", () => {
     state.regionId = els.regionSelect.value;
+    clearInlineReviewExport();
     updateRegionFocus();
     fitToRegion(true);
     render();
@@ -1401,6 +1404,16 @@ function renderIntelPanel(visible = filteredEvents(true)) {
   els.intelPanel.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => submitReviewAction(button));
   });
+  els.intelPanel.querySelector("[data-copy-review-export]")?.addEventListener("click", async () => {
+    const text = els.intelPanel.querySelector("[data-review-export-text]")?.value ?? "";
+    try {
+      await navigator.clipboard?.writeText(text);
+      state.editorialMessage = "Static decision module copied.";
+    } catch {
+      state.editorialMessage = "Select and copy the static decision module.";
+    }
+    renderIntelPanel(visible);
+  });
   bindPlatformPanelControls();
 }
 
@@ -1427,6 +1440,7 @@ function renderReviewPanel(visible) {
       <div><strong>${visible.length}</strong><span>Visible</span></div>
     </section>
     ${state.editorialMessage ? `<p class="editorial-message">${escapeHtml(state.editorialMessage)}</p>` : ""}
+    ${state.editorialExportBundle ? renderInlineReviewExportBundle() : ""}
     ${
       extraction
         ? `<section class="intel-section"><h3>Extraction</h3><p>${escapeHtml(extraction.provider)} - ${escapeHtml(extraction.mode)} - ${escapeHtml(extraction.schemaVersion)}</p></section>`
@@ -1495,6 +1509,31 @@ function renderReviewPanel(visible) {
   `;
 }
 
+function renderInlineReviewExportBundle() {
+  const bundle = state.editorialExportBundle;
+  return `
+    <section class="review-export-panel inline-review-export" aria-label="Static editorial decision export">
+      <header>
+        <div>
+          <strong>Static decision export</strong>
+          <span>${escapeHtml(titleCase(bundle.action))} for ${escapeHtml(bundle.place)}</span>
+        </div>
+        <button type="button" data-copy-review-export>Copy module</button>
+      </header>
+      <p>${escapeHtml(bundle.error || "Durable editorial writes are not configured.")}</p>
+      <ol>
+        ${(bundle.instructions ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ol>
+      <textarea readonly data-review-export-text>${escapeHtml(bundle.staticModule ?? "")}</textarea>
+      <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")}</small>
+    </section>
+  `;
+}
+
+function clearInlineReviewExport() {
+  state.editorialExportBundle = null;
+}
+
 async function submitReviewAction(button) {
   const eventId = button.dataset.reviewEventId;
   const action = button.dataset.reviewAction;
@@ -1505,6 +1544,17 @@ async function submitReviewAction(button) {
 
   const review = reviewInfo(item);
   const correctedFields = action === "correct" ? correctionFieldsForAction(button, item) : {};
+  const decisionPayload = {
+    action,
+    eventId: item.id,
+    duplicateKey: review.duplicateKey,
+    sourceUrl: item.sources[0]?.url ?? "",
+    correctedFields,
+    eventSnapshot: eventSnapshotForDecision(item),
+    targetDuplicateKey: action === "merge" ? review.duplicateKey : "",
+    notes: `Action from WarMap review panel for ${item.place}`
+  };
+  state.editorialExportBundle = null;
   state.editorialMessage = `${titleCase(action)} submitted`;
   renderIntelPanel(filteredEvents(true));
 
@@ -1515,22 +1565,26 @@ async function submitReviewAction(button) {
         "content-type": "application/json",
         ...editorialAuthHeaders()
       },
-      body: JSON.stringify({
-        action,
-        eventId: item.id,
-        duplicateKey: review.duplicateKey,
-        sourceUrl: item.sources[0]?.url ?? "",
-        correctedFields,
-        eventSnapshot: eventSnapshotForDecision(item),
-        targetDuplicateKey: action === "merge" ? review.duplicateKey : "",
-        notes: `Action from WarMap review panel for ${item.place}`
-      })
+      body: JSON.stringify(decisionPayload)
     });
     const payload = await response.json();
     if (!response.ok) {
+      if (payload.error === "EDITORIAL_STORE_NOT_CONFIGURED" || payload.error === "EDITORIAL_AUTH_NOT_CONFIGURED") {
+        const exportBundle = await createDecisionExport(decisionPayload);
+        state.editorialExportBundle = {
+          action,
+          place: item.place,
+          error: payload.message,
+          ...exportBundle
+        };
+        state.editorialMessage = `${titleCase(action)} could not be saved yet. A commit-ready static decision export is ready below.`;
+        renderIntelPanel(filteredEvents(true));
+        return;
+      }
       throw new Error(payload.message || `Review action returned ${response.status}`);
     }
 
+    state.editorialExportBundle = null;
     applyClientDecision(item.id, payload.decision);
     state.editorialMessage = payload.persisted
       ? `${titleCase(action)} saved`
@@ -1540,6 +1594,21 @@ async function submitReviewAction(button) {
     state.editorialMessage = error instanceof Error ? error.message : "Review action failed";
     renderIntelPanel(filteredEvents(true));
   }
+}
+
+async function createDecisionExport(payload) {
+  const response = await fetch("/api/review-export", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const exportBundle = await response.json();
+  if (!response.ok) {
+    throw new Error(exportBundle.message || `Review export returned ${response.status}`);
+  }
+  return exportBundle;
 }
 
 function eventSnapshotForDecision(item) {
