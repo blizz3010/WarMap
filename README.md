@@ -11,6 +11,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, detail records, approved history, and platform capability metadata
+- clean public `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
 - compact embed view at `/embed`
@@ -52,6 +53,18 @@ The check validates the static app files and the event, region, category, severi
 - lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
 The browser and embed views fetch `/api/events?region=iran&publication=all` and keep the static data as a safe fallback. `publication=published` returns only approved events when a persistent editorial store is added.
+
+## Public v1 API
+
+The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
+
+- `/v1/events?region=ukraine-east&publication=published` returns event resources with location, review state, extraction metadata, visible original source links, and map/detail/API links.
+- `/v1/feed?region=ukraine-east` returns feed-optimized event cards.
+- `/v1/timeline?region=ukraine-east` groups event cards by day.
+- `/v1/search?region=ukraine-east&q=Kharkiv` searches title, summary, place, category, severity, and source names.
+- `/v1/stream/events?region=ukraine-east` returns a server-sent-event snapshot with invalidation metadata and a suggested poll interval.
+
+The default v1 publication mode is `published`, matching the public-map contract. Use `publication=all` only for internal dashboards or review tooling that intentionally needs candidates.
 
 ## Editorial API slice
 

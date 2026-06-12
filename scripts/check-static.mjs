@@ -11,6 +11,14 @@ import {
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import {
+  buildV1EventsPayload,
+  buildV1FeedPayload,
+  buildV1SearchPayload,
+  buildV1StreamSnapshot,
+  buildV1TimelinePayload,
+  formatServerSentEvent
+} from "../api/v1/service.js";
+import {
   activeOfficialFeedsForRegion,
   activeRssFeedsForRegion,
   plannedSocialApiSourcesForRegion,
@@ -37,7 +45,14 @@ const requiredFiles = [
   "api/news-normalizer.js",
   "api/platform-config.js",
   "api/review-queue.js",
-  "api/source-registry.js"
+  "api/source-registry.js",
+  "api/v1/adapter.js",
+  "api/v1/events.js",
+  "api/v1/feed.js",
+  "api/v1/search.js",
+  "api/v1/service.js",
+  "api/v1/stream/events.js",
+  "api/v1/timeline.js"
 ];
 const root = fileURLToPath(new URL("..", import.meta.url));
 
@@ -287,6 +302,58 @@ withTemporaryEditorialEnv(() => {
 
 if (!buildGdeltUrl("iran").startsWith("https://api.gdeltproject.org/api/v2/doc/doc?")) {
   throw new Error("GDELT URL builder returned an unexpected endpoint");
+}
+
+const v1Context = {
+  query: {
+    region: "iran",
+    lookback: "30d",
+    publication: "all"
+  }
+};
+const v1Events = buildV1EventsPayload(
+  {
+    events,
+    meta: {
+      generatedAt: "2026-05-28T00:00:00.000Z",
+      region: "iran",
+      lookback: "30d",
+      publication: "all"
+    }
+  },
+  v1Context
+);
+const v1Feed = buildV1FeedPayload({ events, meta: v1Events.meta }, v1Context);
+const v1Timeline = buildV1TimelinePayload({ events, meta: v1Events.meta }, v1Context);
+const v1Search = buildV1SearchPayload(
+  { events, meta: v1Events.meta },
+  {
+    query: {
+      ...v1Context.query,
+      q: "Tehran"
+    }
+  }
+);
+const v1Stream = formatServerSentEvent(buildV1StreamSnapshot({ events, meta: v1Events.meta }, v1Context));
+
+if (v1Events.apiVersion !== "v1" || v1Events.kind !== "EventCollection" || !v1Events.events.length) {
+  throw new Error("V1 events payload shape is invalid");
+}
+
+if (!v1Events.events.every((event) => event.sources.every((source) => hasHttpUrl(source.url)))) {
+  throw new Error("V1 events must preserve visible original source URLs");
+}
+
+if (!v1Events.events[0].links.detail.startsWith("/event?") || !v1Events.links.stream.startsWith("/v1/stream/events")) {
+  throw new Error("V1 events links are incomplete");
+}
+
+if (!v1Feed.feed.length || !v1Timeline.timeline.length || !v1Search.results.some((event) => event.location.place === "Tehran")) {
+  throw new Error("V1 feed, timeline, or search payload failed static checks");
+}
+
+if (!v1Stream.includes("event: warmap.snapshot") || !v1Stream.includes("data: {")) {
+  throw new Error("V1 stream snapshot is not formatted as server-sent events");
 }
 
 console.log(`Static checks passed: ${events.length} events, ${regions.length} regions, ${Object.keys(categories).length} categories.`);

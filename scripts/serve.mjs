@@ -8,6 +8,11 @@ import eventsHandler from "../api/events.js";
 import platformConfigHandler from "../api/platform-config.js";
 import reviewActionHandler from "../api/review-action.js";
 import reviewQueueHandler from "../api/review-queue.js";
+import v1EventsHandler from "../api/v1/events.js";
+import v1FeedHandler from "../api/v1/feed.js";
+import v1SearchHandler from "../api/v1/search.js";
+import v1StreamEventsHandler from "../api/v1/stream/events.js";
+import v1TimelineHandler from "../api/v1/timeline.js";
 
 const root = normalize(join(fileURLToPath(new URL("..", import.meta.url))));
 const port = Number(process.env.PORT || 5173);
@@ -27,7 +32,17 @@ const apiHandlers = new Map([
   ["/api/events", eventsHandler],
   ["/api/platform-config", platformConfigHandler],
   ["/api/review-action", reviewActionHandler],
-  ["/api/review-queue", reviewQueueHandler]
+  ["/api/review-queue", reviewQueueHandler],
+  ["/api/v1/events", v1EventsHandler],
+  ["/api/v1/feed", v1FeedHandler],
+  ["/api/v1/search", v1SearchHandler],
+  ["/api/v1/stream/events", v1StreamEventsHandler],
+  ["/api/v1/timeline", v1TimelineHandler],
+  ["/v1/events", v1EventsHandler],
+  ["/v1/feed", v1FeedHandler],
+  ["/v1/search", v1SearchHandler],
+  ["/v1/stream/events", v1StreamEventsHandler],
+  ["/v1/timeline", v1TimelineHandler]
 ]);
 
 const server = createServer(async (request, response) => {
@@ -44,6 +59,14 @@ const server = createServer(async (request, response) => {
       json(payload) {
         response.setHeader("content-type", "application/json; charset=utf-8");
         response.end(JSON.stringify(payload));
+      },
+      write(chunk) {
+        response.write(chunk);
+        return this;
+      },
+      end(chunk) {
+        response.end(chunk);
+        return this;
       }
     });
     return;
