@@ -211,6 +211,7 @@ function renderCandidate(item) {
       <div class="review-candidate-links">
         <a href="/?${new URLSearchParams({ region: state.region }).toString()}#event=${encodeURIComponent(item.id)}">Map</a>
         <a href="/event?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}">Detail</a>
+        <a href="${escapeAttr(reviewDossierUrl(item))}">Dossier</a>
         <a href="/api/event?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}">API</a>
       </div>
 
@@ -465,6 +466,10 @@ function updateReviewUrl() {
 
 function reviewQueueUrl() {
   return `/api/review-queue?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function reviewDossierUrl(item) {
+  return `/api/review-dossier?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function editorialAuthHeaders() {

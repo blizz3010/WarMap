@@ -29,6 +29,7 @@ import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { buildProductionReadinessPayload } from "../api/production-readiness.js";
 import { buildPublicationStatusFromDecisions } from "../api/publication-service.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
+import { buildReviewDossierFromCandidates } from "../api/review-dossier-service.js";
 import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import { buildSourceHealthPayload } from "../api/source-health.js";
@@ -85,6 +86,8 @@ const requiredFiles = [
   "api/publication-service.js",
   "api/publication-status.js",
   "api/region-scope.js",
+  "api/review-dossier.js",
+  "api/review-dossier-service.js",
   "api/review-export.js",
   "api/review-queue.js",
   "api/source-curation.js",
@@ -156,6 +159,7 @@ if (!eventPageSource.includes("/archive?") || eventPageSource.includes('href="/a
 
 if (
   !reviewPageSource.includes("/api/review-queue?") ||
+  !reviewPageSource.includes("/api/review-dossier?") ||
   !reviewPageSource.includes("/api/review-action") ||
   !reviewPageSource.includes("/api/review-export") ||
   !reviewPageSource.includes("/api/editorial-status")
@@ -774,6 +778,47 @@ if (sampleUkraineEvents[0].review.requiredActions[0] !== "Review AI extraction")
   throw new Error("Live news normalizer failed AI review action metadata");
 }
 
+const duplicateUkraineCandidate = {
+  ...sampleUkraineEvents[0],
+  id: "live_duplicate_fixture",
+  slug: "duplicate-kharkiv-fixture",
+  title: "Additional report of Russian drone strike near Kharkiv",
+  sources: [
+    {
+      ...sampleUkraineEvents[0].sources[0],
+      url: "https://example.com/world/ukraine-kharkiv-drone-duplicate",
+      name: "Second fixture source"
+    }
+  ],
+  sourceCount: 1
+};
+const reviewDossier = buildReviewDossierFromCandidates({
+  candidateId: sampleUkraineEvents[0].id,
+  candidates: [sampleUkraineEvents[0], duplicateUkraineCandidate],
+  region: "ukraine-east",
+  lookback: "30d",
+  generatedAt: "2026-05-28T02:03:10.000Z",
+  meta: {
+    upstreamArticles: 2,
+    editorialDecisions: 0,
+    collectorStatus: {
+      gdelt: "fulfilled"
+    }
+  }
+});
+if (
+  reviewDossier?.kind !== "ReviewDossier" ||
+  reviewDossier.candidate.id !== sampleUkraineEvents[0].id ||
+  !reviewDossier.evidence.sources[0]?.url ||
+  reviewDossier.evidence.extraction.eventType !== "strike" ||
+  !reviewDossier.evidence.duplicateContext.relatedCandidates.some((candidate) => candidate.id === duplicateUkraineCandidate.id) ||
+  !reviewDossier.editorial.checks.publicationSnapshotReady ||
+  !reviewDossier.publicationPreview.canExportApproval ||
+  !reviewDossier.editorial.actionTemplates.some((template) => template.action === "approve" && template.eventSnapshot?.sources?.[0]?.url)
+) {
+  throw new Error("Review dossier failed source, extraction, duplicate, or approval-template checks");
+}
+
 if (
   eventsForRegionScope(sampleUkraineEvents, "ukraine-east").length !== 1 ||
   eventsForRegionScope(sampleUkraineEvents, "black-sea").length !== 0
@@ -1008,6 +1053,7 @@ withTemporaryEditorialEnv(() => {
     status.readiness.reviewTokenReady ||
     status.readiness.publishReady ||
     status.counts.editorialDecisions !== 1 ||
+    status.endpoints.dossier !== "/api/review-dossier" ||
     status.endpoints.publicationStatus !== "/api/publication-status" ||
     !status.requiredConfiguration.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && !item.configured)
   ) {
@@ -1184,6 +1230,7 @@ if (
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
   v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
   v1Config.links.publicationStatus !== "/api/publication-status" ||
+  v1Config.links.reviewDossier !== "/api/review-dossier" ||
   v1Config.links.notificationStatus !== "/api/notification-status"
 ) {
   throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");
