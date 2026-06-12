@@ -4,6 +4,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/v1/config",
+      "destination": "/api/v1/config"
+    },
+    {
       "source": "/v1/events",
       "destination": "/api/v1/events"
     },

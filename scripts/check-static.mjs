@@ -13,6 +13,7 @@ import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import {
   buildV1EventsPayload,
   buildV1FeedPayload,
+  buildV1ConfigPayload,
   buildV1SearchPayload,
   buildV1StreamSnapshot,
   buildV1TimelinePayload,
@@ -47,6 +48,7 @@ const requiredFiles = [
   "api/review-queue.js",
   "api/source-registry.js",
   "api/v1/adapter.js",
+  "api/v1/config.js",
   "api/v1/events.js",
   "api/v1/feed.js",
   "api/v1/search.js",
@@ -323,6 +325,15 @@ const v1Events = buildV1EventsPayload(
   },
   v1Context
 );
+const v1Config = buildV1ConfigPayload({
+  actorSides,
+  categories,
+  platformConfig: PLATFORM_CONFIG,
+  regions,
+  severities,
+  sourceRegistry: SOURCE_REGISTRY,
+  sourceTypes
+});
 const v1Feed = buildV1FeedPayload({ events, meta: v1Events.meta }, v1Context);
 const v1Timeline = buildV1TimelinePayload({ events, meta: v1Events.meta }, v1Context);
 const v1Search = buildV1SearchPayload(
@@ -338,6 +349,17 @@ const v1Stream = formatServerSentEvent(buildV1StreamSnapshot({ events, meta: v1E
 
 if (v1Events.apiVersion !== "v1" || v1Events.kind !== "EventCollection" || !v1Events.events.length) {
   throw new Error("V1 events payload shape is invalid");
+}
+
+if (
+  v1Config.kind !== "Configuration" ||
+  !v1Config.regions.some((region) => region.id === "ukraine-east") ||
+  !v1Config.taxonomies.categories.some((category) => category.id === "strike" && category.color) ||
+  !v1Config.taxonomies.actorSides.some((side) => side.id === "ukraine" && side.color) ||
+  !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
+  !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid")
+) {
+  throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");
 }
 
 if (!v1Events.events.every((event) => event.sources.every((source) => hasHttpUrl(source.url)))) {

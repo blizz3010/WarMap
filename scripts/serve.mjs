@@ -8,6 +8,7 @@ import eventsHandler from "../api/events.js";
 import platformConfigHandler from "../api/platform-config.js";
 import reviewActionHandler from "../api/review-action.js";
 import reviewQueueHandler from "../api/review-queue.js";
+import v1ConfigHandler from "../api/v1/config.js";
 import v1EventsHandler from "../api/v1/events.js";
 import v1FeedHandler from "../api/v1/feed.js";
 import v1SearchHandler from "../api/v1/search.js";
@@ -33,11 +34,13 @@ const apiHandlers = new Map([
   ["/api/platform-config", platformConfigHandler],
   ["/api/review-action", reviewActionHandler],
   ["/api/review-queue", reviewQueueHandler],
+  ["/api/v1/config", v1ConfigHandler],
   ["/api/v1/events", v1EventsHandler],
   ["/api/v1/feed", v1FeedHandler],
   ["/api/v1/search", v1SearchHandler],
   ["/api/v1/stream/events", v1StreamEventsHandler],
   ["/api/v1/timeline", v1TimelineHandler],
+  ["/v1/config", v1ConfigHandler],
   ["/v1/events", v1EventsHandler],
   ["/v1/feed", v1FeedHandler],
   ["/v1/search", v1SearchHandler],

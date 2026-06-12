@@ -15,7 +15,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Public event detail page: `/event?id=...&region=...` renders the approved/candidate record from `/api/event` with original source links, review state, archive/API links, and a return link to the correct theater map.
 - Key/Time/Review panels: icon taxonomy, side/color legend, source registry status, review queue counts, candidate queue cards, correction controls, merge decisions, and split-review decisions.
 - Alerts panel and platform registry: `/api/platform-config` exposes language choices, local browser-alert capability, planned delivery channels, paid-layer metadata, and explicit operational boundaries.
-- Public v1 API: clean `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes are rewritten to Vercel functions and expose stable dashboard-facing shapes.
+- Public v1 API: clean `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes are rewritten to Vercel functions and expose stable dashboard-facing shapes.
 - Embed view: compact map and ticker at `/embed`.
 - Live feed endpoint: `/api/events` fetches open-web article leads from GDELT, registry-backed media RSS, registry-backed official feeds, and opt-in compliant social APIs, then normalizes them into the same event shape and lets the client fall back to static prototype data if upstream sources fail.
 - AI extraction layer: `api/ai-extractor.js` attaches a structured extraction record with provider, schema version, event type, location, summary, duplicate key, confidence fields, and keyword signals. The current provider is a deterministic local fallback; future LLM providers must still feed the same review queue.
@@ -45,11 +45,11 @@ Liveuamap's public About page describes proprietary AI crawlers, expert analysts
 3. Queue every candidate for editorial actions: verify, reject, merge, split, correct time, correct location, update severity, approve, correct, or retract.
 4. Publish approved items to the map, synchronized feed, detail drawer/page, archive, and versioned API while keeping original source links visible.
 
-The current prototype implements the collector registry, separate media RSS and official-feed collectors, an opt-in compliant-social-API adapter, structured AI extraction metadata with deterministic fallback, side/category taxonomy, approximate duplicate matching, review metadata, correction/merge/split actions, queue API, local review-action storage, detail API/page, approved archive, platform capability registry, local alert preferences, language selection, locked paid-layer metadata, and versioned public v1 API wrappers. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
+The current prototype implements the collector registry, separate media RSS and official-feed collectors, an opt-in compliant-social-API adapter, structured AI extraction metadata with deterministic fallback, side/category taxonomy, approximate duplicate matching, review metadata, correction/merge/split actions, queue API, local review-action storage, detail API/page, approved archive, platform capability registry, local alert preferences, language selection, locked paid-layer metadata, dashboard-facing `/v1/config`, and versioned public v1 API wrappers. Vercel deployments can use the optional `EDITORIAL_STORE_PROVIDER=github` adapter to persist decisions through the GitHub Contents API, but the review endpoint still refuses writes unless `EDITORIAL_REVIEW_TOKEN` is configured and supplied.
 
 ## Production next steps
 
-1. Move region definitions, side colors, and category taxonomies to backend-managed configuration.
+1. Move the `/v1/config` source of truth from static modules to backend-managed configuration storage.
 2. Expand the source registry into connector SDKs for licensed wires, CAP feeds, richer official APIs, and approved social/open-web leads.
 3. Persist documents, claims, events, event updates, and media assets in PostgreSQL/PostGIS.
 4. Replace the current single-snapshot SSE route with durable invalidation fanout.

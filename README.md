@@ -11,7 +11,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - Vercel `/api/events`, `/api/review-queue`, `/api/review-action`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, review actions, detail records, approved history, and platform capability metadata
-- clean public `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
+- clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
 - compact embed view at `/embed`
@@ -58,6 +58,7 @@ The browser and embed views fetch `/api/events?region=iran&publication=all` and 
 
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
 
+- `/v1/config` returns theater presets, category icon taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, notification channels, and paid-layer capability records.
 - `/v1/events?region=ukraine-east&publication=published` returns event resources with location, review state, extraction metadata, visible original source links, and map/detail/API links.
 - `/v1/feed?region=ukraine-east` returns feed-optimized event cards.
 - `/v1/timeline?region=ukraine-east` groups event cards by day.

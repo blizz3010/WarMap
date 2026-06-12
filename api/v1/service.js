@@ -103,6 +103,65 @@ export function buildV1StreamSnapshot(payload, context = {}) {
   };
 }
 
+export function buildV1ConfigPayload(payload = {}, context = {}) {
+  const regions = Array.isArray(payload.regions) ? payload.regions : [];
+  const sourceRegistry = Array.isArray(payload.sourceRegistry) ? payload.sourceRegistry : [];
+  const platformConfig = payload.platformConfig ?? {};
+
+  return {
+    apiVersion: V1_API_VERSION,
+    schemaVersion: V1_SCHEMA_VERSION,
+    kind: "Configuration",
+    generatedAt: context.generatedAt ?? new Date().toISOString(),
+    regions: regions.map(toRegionResource),
+    taxonomies: {
+      categories: taxonomyEntries(payload.categories, (category) => ({
+        label: category.label,
+        short: category.short,
+        icon: category.icon,
+        color: category.color
+      })),
+      severities: taxonomyEntries(payload.severities, (severity) => ({
+        label: severity.label,
+        color: severity.color,
+        rank: severity.rank
+      })),
+      actorSides: taxonomyEntries(payload.actorSides, (side) => ({
+        label: side.label,
+        color: side.color
+      })),
+      sourceTypes: taxonomyEntries(payload.sourceTypes, (label) => ({
+        label
+      }))
+    },
+    sources: {
+      registry: sourceRegistry.map(toSourceRegistryResource),
+      summary: {
+        total: sourceRegistry.length,
+        active: sourceRegistry.filter((source) => source.status === "active").length,
+        planned: sourceRegistry.filter((source) => source.status === "planned").length,
+        collectors: [...new Set(sourceRegistry.map((source) => source.collector))].filter(Boolean).sort()
+      }
+    },
+    platform: {
+      schemaVersion: platformConfig.schemaVersion,
+      languages: platformConfig.languages ?? [],
+      notificationChannels: platformConfig.notificationChannels ?? [],
+      paidLayers: platformConfig.paidLayers ?? [],
+      operationalBoundaries: platformConfig.operationalBoundaries ?? {}
+    },
+    links: {
+      self: "/v1/config",
+      events: "/v1/events",
+      feed: "/v1/feed",
+      timeline: "/v1/timeline",
+      search: "/v1/search",
+      stream: "/v1/stream/events",
+      platformConfig: "/api/platform-config"
+    }
+  };
+}
+
 export function formatServerSentEvent(snapshot) {
   return [
     `id: ${snapshot.id}`,
@@ -112,6 +171,47 @@ export function formatServerSentEvent(snapshot) {
     "",
     ""
   ].join("\n");
+}
+
+function toRegionResource(region) {
+  return {
+    id: region.id,
+    name: region.name,
+    group: region.group ?? "Regions",
+    center: region.center,
+    zoom: region.zoom,
+    bounds: region.bounds,
+    fitPadding: region.fitPadding ?? null,
+    maxZoom: region.maxZoom ?? null,
+    links: {
+      map: `/?region=${encodeURIComponent(region.id)}`,
+      events: `/v1/events?region=${encodeURIComponent(region.id)}`,
+      feed: `/v1/feed?region=${encodeURIComponent(region.id)}`,
+      timeline: `/v1/timeline?region=${encodeURIComponent(region.id)}`
+    }
+  };
+}
+
+function taxonomyEntries(collection = {}, mapper) {
+  return Object.entries(collection).map(([id, value]) => ({
+    id,
+    ...mapper(value)
+  }));
+}
+
+function toSourceRegistryResource(source) {
+  return {
+    id: source.id,
+    name: source.name,
+    collector: source.collector,
+    sourceType: source.sourceType,
+    trustTier: source.trustTier,
+    access: source.access ?? null,
+    status: source.status,
+    country: source.country ?? null,
+    url: source.url ?? null,
+    regions: source.regions ?? []
+  };
 }
 
 function filteredResources(events = [], context = {}) {
