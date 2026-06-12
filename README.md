@@ -88,6 +88,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
+- `/api/production-readiness?region=ukraine-east` rolls up editorial publishing, AI extraction, source curation, notifications, language, and paid-layer readiness into required and optional blockers.
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.

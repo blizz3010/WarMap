@@ -13,6 +13,7 @@ import {
 } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
+import { buildProductionReadinessPayload } from "../api/production-readiness.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import {
@@ -55,6 +56,7 @@ const requiredFiles = [
   "api/review-action.js",
   "api/news-normalizer.js",
   "api/platform-config.js",
+  "api/production-readiness.js",
   "api/region-scope.js",
   "api/review-queue.js",
   "api/source-curation.js",
@@ -223,6 +225,27 @@ if (
   !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages"))
 ) {
   throw new Error("Source curation payload failed Liveuamap boundary or source backlog checks");
+}
+
+const productionReadiness = await withTemporaryEditorialEnvAsync(async () => {
+  process.env.VERCEL = "1";
+  process.env.EDITORIAL_STORE_PROVIDER = "";
+  delete process.env.EDITORIAL_GITHUB_TOKEN;
+  delete process.env.EDITORIAL_REVIEW_TOKEN;
+  return buildProductionReadinessPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:04:00Z")
+  });
+});
+if (
+  productionReadiness.kind !== "ProductionReadiness" ||
+  productionReadiness.ready ||
+  !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
+  !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
+  productionReadiness.sections.sourceCuration.activeSources < 1 ||
+  !productionReadiness.sections.platform.browserNotifications
+) {
+  throw new Error("Production readiness payload failed required blocker or platform checks");
 }
 
 if (!PLATFORM_CONFIG.languages.some((language) => language.id === "en" && language.status === "active")) {
@@ -665,6 +688,31 @@ function withTemporaryEditorialEnv(callback) {
 
   try {
     callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+async function withTemporaryEditorialEnvAsync(callback) {
+  const keys = [
+    "VERCEL",
+    "EDITORIAL_STORE_PROVIDER",
+    "EDITORIAL_GITHUB_TOKEN",
+    "EDITORIAL_GITHUB_REPO",
+    "EDITORIAL_GITHUB_BRANCH",
+    "EDITORIAL_GITHUB_PATH",
+    "EDITORIAL_REVIEW_TOKEN"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return await callback();
   } finally {
     keys.forEach((key) => {
       if (previous.get(key) === undefined) {
