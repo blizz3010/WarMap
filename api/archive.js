@@ -2,6 +2,7 @@ import { archiveFromEvents, editorialSummary, publishedEventsFromEvents } from "
 import { collectOpenWebArticles } from "./collectors.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
 
 export default async function handler(request, response) {
@@ -13,12 +14,7 @@ export default async function handler(request, response) {
 
   const region = String(request.query?.region ?? "all");
   const decisions = await loadEditorialDecisions();
-  const seedPublished = publishedEventsFromEvents(applyEditorialDecisions(seedEvents, decisions)).filter((event) => {
-    if (region === "all") return true;
-    if (region === "iran") return event.country === "Iran" || event.place === "Persian Gulf";
-    if (region.startsWith("ukraine") || region === "black-sea") return event.country === "Ukraine";
-    return true;
-  });
+  const seedPublished = eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(seedEvents, decisions)), region);
   const livePublished = region === "all" ? [] : await publishedLiveEvents(region, request, decisions);
   const published = dedupeEvents([...livePublished, ...seedPublished]);
 
@@ -50,7 +46,7 @@ async function publishedLiveEvents(region, request, decisions) {
     limit: 75
   });
 
-  return publishedEventsFromEvents(applyEditorialDecisions(events, decisions));
+  return eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(events, decisions)), region);
 }
 
 function dedupeEvents(events) {

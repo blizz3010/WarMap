@@ -19,12 +19,13 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 - Alerts panel and platform registry: `/api/platform-config` exposes language choices, local browser-alert capability, planned delivery channels, paid-layer metadata, and explicit operational boundaries.
 - Public v1 API: clean `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes are rewritten to Vercel functions and expose stable dashboard-facing shapes.
 - Realtime invalidation: the browser opens `/v1/stream/events` with `EventSource`, refreshes quietly when snapshots invalidate events, preserves filters/detail selection, and closes the stream when paused.
-- Embed view: compact map and ticker at `/embed`.
+- Embed view: compact dashboard widget at `/embed` backed by `/v1/events`, with theater switching, publication-mode query support, synchronized marker/feed selection, and a full-map return link.
 - Live feed endpoint: `/api/events` fetches open-web article leads from GDELT, registry-backed media RSS, registry-backed official feeds, and opt-in compliant social APIs, then normalizes them into the same event shape and lets the client fall back to static prototype data if upstream sources fail.
 - AI extraction layer: `api/ai-extractor.js` attaches a structured extraction record with provider, schema version, event type, location, summary, duplicate key, confidence fields, and keyword signals. The current provider is a deterministic local fallback; future LLM providers must still feed the same review queue.
 - Editorial endpoints: `/api/review-queue`, `/api/review-action`, `/api/event`, and `/api/archive` expose review candidates, approval/rejection actions, detail records, and approved history.
 - Iran focus mode: default map bounds, zoom, and a subtle country highlight keep Iran visually dominant while still allowing nearby regional markers.
 - Longer event history: date filtering now supports 30-day, 90-day, and all-available windows and passes the requested lookback into the live endpoint.
+- Theater bounds scoping: normalized open-web leads are filtered against configured region bounds before list, review, archive, and v1 responses are returned, so Ukraine sub-theaters do not inherit unrelated nationwide leads.
 
 ## Data shape
 

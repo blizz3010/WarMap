@@ -16,7 +16,13 @@
     <section class="embed-shell" aria-label="Embedded WarMap Live">
       <header class="embed-header">
         <a href="/" target="_blank" rel="noreferrer">WarMap <em>Live</em></a>
+        <label>
+          <span>Theater</span>
+          <select id="embedRegionSelect"></select>
+        </label>
+        <a id="embedMapLink" href="/" target="_blank" rel="noreferrer">Open map</a>
         <span id="embedCount">Loading events</span>
+        <small id="embedMeta">Connecting</small>
       </header>
       <div id="embedMap"></div>
       <footer class="embed-feed" id="embedFeed"></footer>

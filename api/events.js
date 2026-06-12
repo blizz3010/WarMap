@@ -3,6 +3,7 @@ import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { eventsForRegionScope } from "./region-scope.js";
 import { activeOfficialFeedsForRegion, activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
 
 const PUBLICATION_MODES = new Set(["all", "review", "published"]);
@@ -33,7 +34,8 @@ export default async function handler(request, response) {
     });
     const decisions = await loadEditorialDecisions();
     const decidedEvents = applyEditorialDecisions(normalizedEvents, decisions);
-    const events = eventsForPublication(decidedEvents, publication);
+    const scopedEvents = eventsForRegionScope(decidedEvents, region);
+    const events = eventsForPublication(scopedEvents, publication);
 
     if (!normalizedEvents.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
@@ -54,8 +56,9 @@ export default async function handler(request, response) {
         officialFeeds: activeOfficialFeedsForRegion(region).map((feed) => feed.url),
         socialApiSources: collection.socialApiSources,
         upstreamArticles: collection.articles.length,
+        scopedEvents: scopedEvents.length,
         returnedEvents: events.length,
-        editorial: editorialSummary(decidedEvents),
+        editorial: editorialSummary(scopedEvents),
         editorialDecisions: decisions.length,
         extraction: extractionRuntimeSummary(),
         gdeltStatus: collection.gdeltStatus,

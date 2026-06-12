@@ -10,6 +10,7 @@ import {
 } from "../api/editorial-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
+import { eventsForRegionScope } from "../api/region-scope.js";
 import {
   buildV1EventsPayload,
   buildV1FeedPayload,
@@ -49,6 +50,7 @@ const requiredFiles = [
   "api/review-action.js",
   "api/news-normalizer.js",
   "api/platform-config.js",
+  "api/region-scope.js",
   "api/review-queue.js",
   "api/source-registry.js",
   "api/v1/adapter.js",
@@ -68,6 +70,8 @@ for (const file of requiredFiles) {
 
 const appSource = readFileSync(new URL("src/app.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const archivePageSource = readFileSync(new URL("src/archive-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const embedSource = readFileSync(new URL("src/embed.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const embedPageSource = readFileSync(new URL("embed.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 
@@ -89,6 +93,15 @@ if (
 
 if (!appSource.includes("const UI_COPY") || !appSource.includes("languageSelectedPartial") || !appSource.includes("document.documentElement.dir")) {
   throw new Error("Expected local shell-copy localization catalog and RTL-aware document chrome");
+}
+
+if (
+  !embedSource.includes("return `/v1/events?${query.toString()}`") ||
+  !embedSource.includes("data-embed-event") ||
+  !embedSource.includes("fitToRegion(true)") ||
+  !embedPageSource.includes("embedRegionSelect")
+) {
+  throw new Error("Expected dashboard embed to use v1 events, theater switching, and synchronized feed controls");
 }
 
 if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes("archive-sources")) {
@@ -245,6 +258,13 @@ if (sampleUkraineEvents[0].review.publicationStatus !== "review_only" || !sample
 
 if (sampleUkraineEvents[0].review.requiredActions[0] !== "Review AI extraction") {
   throw new Error("Live news normalizer failed AI review action metadata");
+}
+
+if (
+  eventsForRegionScope(sampleUkraineEvents, "ukraine-east").length !== 1 ||
+  eventsForRegionScope(sampleUkraineEvents, "black-sea").length !== 0
+) {
+  throw new Error("Region scope filtering failed to separate Ukraine sub-theaters");
 }
 
 const queue = reviewQueueFromEvents(events);

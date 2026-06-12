@@ -16,7 +16,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
-- compact embed view at `/embed`
+- compact dashboard embed view at `/embed?region=ukraine-east&publication=all`
 
 The app now attempts to load real open-web news leads first. These are not verified incidents: they are article-derived leads normalized onto the map for review. If the live sources fail or return no mapped items, the UI falls back to synthetic prototype content from `src/data.js`.
 
@@ -47,6 +47,7 @@ The check validates the static app files and the event, region, category, severi
 - official feeds: active government/multilateral RSS-compatible feeds, tracked separately from media RSS
 - compliant social APIs: opt-in JSON API sources configured only through `COMPLIANT_SOCIAL_API_SOURCES`
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
+- theater scoping: normalized events are filtered through the selected region bounds before publication/review responses are returned
 - candidate extraction: event category, severity, actor side, place, summary, source metadata, and review status
 - AI extraction metadata: provider, schema version, event type, location, summary, duplicate key, confidence fields, and keyword signals
 - duplicate matching: same-place, same-category, close-time article candidates can merge into a corroborated review item
@@ -54,7 +55,7 @@ The check validates the static app files and the event, region, category, severi
 - verification state: `reported` by default, because these are source leads
 - lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
-The browser and embed views fetch `/api/events?region=iran&publication=all` and keep the static data as a safe fallback. `publication=published` returns only approved events when a persistent editorial store is added.
+The browser map fetches `/api/events?region=iran&publication=all` and keeps the static data as a safe fallback. The embed view uses the public `/v1/events` contract so it can be dropped into dashboard surfaces without depending on legacy internal response shapes. `publication=published` returns only approved events when a persistent editorial store is added.
 
 The browser map also opens `/v1/stream/events` with `EventSource` when available. Stream snapshots invalidate events and trigger a quiet refresh that preserves filters and the selected detail card; the Pause button closes the stream and Resume reconnects it.
 
@@ -70,6 +71,16 @@ The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions 
 - `/v1/stream/events?region=ukraine-east` returns a server-sent-event snapshot with invalidation metadata and a suggested poll interval.
 
 The default v1 publication mode is `published`, matching the public-map contract. Use `publication=all` only for internal dashboards or review tooling that intentionally needs candidates.
+
+## Dashboard embed
+
+`/embed` is the lightweight iframe surface for the future war dashboard. It uses `/v1/events` and supports the same theater and publication contract:
+
+- `/embed?region=iran&publication=all` shows live review candidates for an internal dashboard.
+- `/embed?region=ukraine-east&lookback=30d&publication=all` opens directly on an eastern Ukraine theater.
+- `/embed?region=ukraine&publication=published` limits the widget to editor-approved public records.
+
+The embed header includes a theater selector, live/published count, source mode status, and a link back to the full map. Feed rows and map markers share the selected event state.
 
 ## Editorial API slice
 
