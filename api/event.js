@@ -1,7 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { enrichEditorialEvents } from "./editorial-workflow.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
-import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
 
@@ -61,7 +61,7 @@ export default async function handler(request, response) {
       maxRecords: 100,
       lookback: request.query?.lookback ?? "30d"
     });
-    const liveEvents = normalizeArticlesToEvents(collection.articles, {
+    const liveEvents = await normalizeArticlesToEventsAsync(collection.articles, {
       now: generatedAt,
       region,
       limit: 100

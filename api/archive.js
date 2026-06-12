@@ -1,7 +1,7 @@
 import { archiveFromEvents, editorialSummary, publishedEventsFromEvents } from "./editorial-workflow.js";
 import { collectOpenWebArticles } from "./collectors.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
-import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
 
@@ -42,7 +42,7 @@ async function publishedLiveEvents(region, request, decisions) {
     maxRecords: Math.min(Number(request.query?.maxRecords ?? 75) || 75, 100),
     lookback: request.query?.lookback ?? "30d"
   });
-  const events = normalizeArticlesToEvents(collection.articles, {
+  const events = await normalizeArticlesToEventsAsync(collection.articles, {
     now: generatedAt,
     region,
     limit: 75

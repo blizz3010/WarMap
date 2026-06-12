@@ -154,7 +154,18 @@ Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`,
 - duplicate key and duplicate bucket
 - field-level confidence and keyword signals
 
-The API exposes the extraction runtime in response metadata. A future provider can set `AI_EXTRACTION_PROVIDER` and `AI_EXTRACTION_MODEL`, but extracted records still remain review-only until an editor approves them.
+The API exposes the extraction runtime in response metadata. To attach a real provider without adding npm dependencies, configure an HTTP JSON extractor:
+
+```bash
+AI_EXTRACTION_PROVIDER=llm-http
+AI_EXTRACTION_ENDPOINT=https://example.com/extract-war-event
+AI_EXTRACTION_TOKEN=optional_bearer_token
+AI_EXTRACTION_MODEL=provider_model_name
+AI_EXTRACTION_TIMEOUT_MS=2500
+AI_EXTRACTION_MAX_ARTICLES=12
+```
+
+WarMap sends the article candidate, current deterministic fallback extraction, source metadata, and required output contract. The provider can return JSON fields such as `eventType`, `severity`, `actorSide`, `summary`, `location`, `duplicateKey`, `confidence`, `fieldConfidence`, and `signals`. Provider output is sanitized, bounded, and merged onto the fallback. Extracted records still remain review-only until an editor approves them.
 
 ## Production direction
 

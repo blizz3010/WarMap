@@ -2,7 +2,7 @@ import { collectOpenWebArticles } from "./collectors.js";
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
-import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { activeOfficialFeedsForRegion, activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
 
@@ -27,7 +27,7 @@ export default async function handler(request, response) {
       lookback: request.query?.lookback ?? "30d"
     });
 
-    const normalizedEvents = normalizeArticlesToEvents(collection.articles, {
+    const normalizedEvents = await normalizeArticlesToEventsAsync(collection.articles, {
       now: generatedAt,
       region,
       limit: 50
