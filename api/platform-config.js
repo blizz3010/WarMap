@@ -98,7 +98,7 @@ export const PLATFORM_CONFIG = {
     notifications:
       "No server-side push, email, webhook, or subscription delivery is configured in this prototype.",
     localization:
-      "Language selection is persisted and exposed to the UI, but full translated copy requires a localization catalog.",
+      "Language selection is persisted and backed by a local shell-copy catalog; event articles and source text remain in their source language.",
     paidLayers:
       "Paid layer records are product metadata only until billing, entitlement checks, and licensed datasets exist."
   }

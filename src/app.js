@@ -112,8 +112,316 @@ const PLATFORM_CONFIG_FALLBACK = {
   ],
   operationalBoundaries: {
     notifications: "No server-side notification delivery is configured in this prototype.",
-    localization: "Language selection is local until a translation catalog is added.",
+    localization: "A local shell-copy catalog is available; event content remains in source language.",
     paidLayers: "Paid layer records are metadata only until billing and entitlements exist."
+  }
+};
+
+const UI_COPY = {
+  en: {
+    brandTagline: "Automated news map prototype",
+    region: "Region",
+    tabFeed: "News Live",
+    tabMap: "Map",
+    tabTime: "Time",
+    tabReview: "Review",
+    tabAlerts: "Alerts",
+    tabKey: "Key",
+    filters: "Filters",
+    hideFilters: "Hide filters",
+    layers: "Layers",
+    hideLayers: "Hide layers",
+    reviewDesk: "Review desk",
+    search: "Search",
+    searchPlaceholder: "Locations, events, sources...",
+    pause: "Pause",
+    resume: "Resume",
+    reset: "Reset",
+    close: "Close",
+    verification: "Verification",
+    sourceType: "Source type",
+    severity: "Severity",
+    category: "Category",
+    dateRange: "Date range",
+    aim: "Aim",
+    fit: "Fit",
+    premiumOverlays: "Premium overlays",
+    viewportOnly: "Viewport only",
+    newEvents: "New events",
+    updatedAt: "Updated {time}",
+    showingEvents: "Showing {visible} of {total} events",
+    alertsPanelKicker: "Alerts",
+    alertsPanelTitle: "Notification and Language Setup",
+    wouldAlert: "Would alert",
+    languages: "Languages",
+    lockedLayers: "Locked layers",
+    browserAlerts: "Browser Alerts",
+    currentTheaterOnly: "Current theater only",
+    minAlertSeverity: "Minimum alert severity",
+    requestPermission: "Request browser permission",
+    language: "Language",
+    languageSelectedSentence: "{language} selected.",
+    plannedDeliveryChannels: "Planned Delivery Channels",
+    noPlannedChannels: "No planned channels configured",
+    mapKey: "Map Key",
+    iconLegend: "Icon and Side Legend",
+    iconTaxonomy: "Icon Taxonomy",
+    sideColors: "Side Colors",
+    curationChain: "Curation Chain",
+    alertPrefsSaved: "Alert preferences saved locally",
+    alertPermissionNeeded: "Alert preference saved; request browser permission to deliver alerts",
+    alertPermissionDenied: "Browser permission is denied; alerts remain off",
+    alertPermissionUnsupported: "Browser notifications are not supported in this browser",
+    browserPermission: "Browser permission {permission}",
+    browserPermissionUnsupported: "Browser permission unsupported",
+    sentAlerts: "{count} browser alert{plural} sent for new severe leads",
+    languageSelected: "{language} selected",
+    languageSelectedPartial: "{language} selected with the local shell catalog; full article translation is planned",
+    severityThresholdSaved: "{severity} threshold saved"
+  },
+  uk: {
+    brandTagline: "Автоматизований прототип новинної мапи",
+    region: "Регіон",
+    tabFeed: "Новини Live",
+    tabMap: "Мапа",
+    tabTime: "Час",
+    tabReview: "Огляд",
+    tabAlerts: "Сповіщення",
+    tabKey: "Легенда",
+    filters: "Фільтри",
+    hideFilters: "Сховати фільтри",
+    layers: "Шари",
+    hideLayers: "Сховати шари",
+    reviewDesk: "Панель огляду",
+    search: "Пошук",
+    searchPlaceholder: "Локації, події, джерела...",
+    pause: "Пауза",
+    resume: "Відновити",
+    reset: "Скинути",
+    close: "Закрити",
+    verification: "Перевірка",
+    sourceType: "Тип джерела",
+    severity: "Серйозність",
+    category: "Категорія",
+    dateRange: "Діапазон дат",
+    aim: "Центр",
+    fit: "Вмістити",
+    premiumOverlays: "Преміум-шари",
+    viewportOnly: "Лише область перегляду",
+    newEvents: "Нові події",
+    updatedAt: "Оновлено {time}",
+    showingEvents: "Показано {visible} з {total} подій",
+    alertsPanelKicker: "Сповіщення",
+    alertsPanelTitle: "Налаштування сповіщень і мови",
+    wouldAlert: "Мали б сповіщення",
+    languages: "Мови",
+    lockedLayers: "Закриті шари",
+    browserAlerts: "Браузерні сповіщення",
+    currentTheaterOnly: "Лише поточний театр",
+    minAlertSeverity: "Мінімальна серйозність сповіщення",
+    requestPermission: "Запитати дозвіл браузера",
+    language: "Мова",
+    languageSelectedSentence: "Вибрано {language}.",
+    plannedDeliveryChannels: "Заплановані канали доставки",
+    noPlannedChannels: "Запланованих каналів немає",
+    mapKey: "Легенда мапи",
+    iconLegend: "Легенда іконок і сторін",
+    iconTaxonomy: "Таксономія іконок",
+    sideColors: "Кольори сторін",
+    curationChain: "Ланцюг курації",
+    alertPrefsSaved: "Налаштування сповіщень збережено локально",
+    alertPermissionNeeded: "Налаштування збережено; дозвольте сповіщення в браузері",
+    alertPermissionDenied: "Дозвіл браузера відхилено; сповіщення вимкнено",
+    alertPermissionUnsupported: "Цей браузер не підтримує сповіщення",
+    browserPermission: "Дозвіл браузера: {permission}",
+    browserPermissionUnsupported: "Дозвіл браузера не підтримується",
+    sentAlerts: "Надіслано {count} браузерн. сповіщень для нових серйозних повідомлень",
+    languageSelected: "Вибрано {language}",
+    languageSelectedPartial: "Вибрано {language} з локальним каталогом інтерфейсу; переклад статей заплановано",
+    severityThresholdSaved: "Поріг {severity} збережено"
+  },
+  fa: {
+    brandTagline: "نمونه اولیه نقشه خبری خودکار",
+    region: "منطقه",
+    tabFeed: "خبر زنده",
+    tabMap: "نقشه",
+    tabTime: "زمان",
+    tabReview: "بازبینی",
+    tabAlerts: "هشدارها",
+    tabKey: "راهنما",
+    filters: "فیلترها",
+    hideFilters: "پنهان کردن فیلترها",
+    layers: "لایه‌ها",
+    hideLayers: "پنهان کردن لایه‌ها",
+    reviewDesk: "میز بازبینی",
+    search: "جستجو",
+    searchPlaceholder: "مکان‌ها، رویدادها، منابع...",
+    pause: "توقف",
+    resume: "ادامه",
+    reset: "بازنشانی",
+    close: "بستن",
+    verification: "راستی‌آزمایی",
+    sourceType: "نوع منبع",
+    severity: "شدت",
+    category: "دسته",
+    dateRange: "بازه زمانی",
+    aim: "تمرکز",
+    fit: "جا دادن",
+    premiumOverlays: "لایه‌های ویژه",
+    viewportOnly: "فقط نمای فعلی",
+    newEvents: "رویدادهای تازه",
+    updatedAt: "به‌روزرسانی {time}",
+    showingEvents: "نمایش {visible} از {total} رویداد",
+    alertsPanelKicker: "هشدارها",
+    alertsPanelTitle: "تنظیمات هشدار و زبان",
+    wouldAlert: "قابل هشدار",
+    languages: "زبان‌ها",
+    lockedLayers: "لایه‌های قفل‌شده",
+    browserAlerts: "هشدارهای مرورگر",
+    currentTheaterOnly: "فقط میدان فعلی",
+    minAlertSeverity: "حداقل شدت هشدار",
+    requestPermission: "درخواست مجوز مرورگر",
+    language: "زبان",
+    languageSelectedSentence: "{language} انتخاب شد.",
+    plannedDeliveryChannels: "کانال‌های تحویل برنامه‌ریزی‌شده",
+    noPlannedChannels: "کانال برنامه‌ریزی‌شده‌ای نیست",
+    mapKey: "راهنمای نقشه",
+    iconLegend: "راهنمای نمادها و طرف‌ها",
+    iconTaxonomy: "رده‌بندی نمادها",
+    sideColors: "رنگ طرف‌ها",
+    curationChain: "زنجیره گزینش",
+    alertPrefsSaved: "تنظیمات هشدار به‌صورت محلی ذخیره شد",
+    alertPermissionNeeded: "تنظیمات ذخیره شد؛ برای ارسال هشدار مجوز مرورگر لازم است",
+    alertPermissionDenied: "مجوز مرورگر رد شده است؛ هشدارها خاموش می‌مانند",
+    alertPermissionUnsupported: "این مرورگر از اعلان‌ها پشتیبانی نمی‌کند",
+    browserPermission: "مجوز مرورگر: {permission}",
+    browserPermissionUnsupported: "مجوز مرورگر پشتیبانی نمی‌شود",
+    sentAlerts: "{count} هشدار مرورگر برای گزارش‌های جدی تازه ارسال شد",
+    languageSelected: "{language} انتخاب شد",
+    languageSelectedPartial: "{language} با کاتالوگ محلی رابط انتخاب شد؛ ترجمه مقاله‌ها برنامه‌ریزی شده است",
+    severityThresholdSaved: "آستانه {severity} ذخیره شد"
+  },
+  ar: {
+    brandTagline: "نموذج أولي لخريطة أخبار آلية",
+    region: "المنطقة",
+    tabFeed: "الأخبار المباشرة",
+    tabMap: "الخريطة",
+    tabTime: "الوقت",
+    tabReview: "المراجعة",
+    tabAlerts: "التنبيهات",
+    tabKey: "الدليل",
+    filters: "الفلاتر",
+    hideFilters: "إخفاء الفلاتر",
+    layers: "الطبقات",
+    hideLayers: "إخفاء الطبقات",
+    reviewDesk: "مكتب المراجعة",
+    search: "بحث",
+    searchPlaceholder: "مواقع، أحداث، مصادر...",
+    pause: "إيقاف",
+    resume: "استئناف",
+    reset: "إعادة ضبط",
+    close: "إغلاق",
+    verification: "التحقق",
+    sourceType: "نوع المصدر",
+    severity: "الخطورة",
+    category: "الفئة",
+    dateRange: "النطاق الزمني",
+    aim: "تركيز",
+    fit: "ملاءمة",
+    premiumOverlays: "طبقات مدفوعة",
+    viewportOnly: "ضمن العرض فقط",
+    newEvents: "أحداث جديدة",
+    updatedAt: "تم التحديث {time}",
+    showingEvents: "عرض {visible} من {total} حدث",
+    alertsPanelKicker: "التنبيهات",
+    alertsPanelTitle: "إعدادات التنبيهات واللغة",
+    wouldAlert: "قد يرسل تنبيها",
+    languages: "اللغات",
+    lockedLayers: "طبقات مقفلة",
+    browserAlerts: "تنبيهات المتصفح",
+    currentTheaterOnly: "المسرح الحالي فقط",
+    minAlertSeverity: "الحد الأدنى لخطورة التنبيه",
+    requestPermission: "طلب إذن المتصفح",
+    language: "اللغة",
+    languageSelectedSentence: "تم اختيار {language}.",
+    plannedDeliveryChannels: "قنوات التسليم المخطط لها",
+    noPlannedChannels: "لا توجد قنوات مخطط لها",
+    mapKey: "دليل الخريطة",
+    iconLegend: "دليل الأيقونات والأطراف",
+    iconTaxonomy: "تصنيف الأيقونات",
+    sideColors: "ألوان الأطراف",
+    curationChain: "سلسلة التحرير",
+    alertPrefsSaved: "تم حفظ إعدادات التنبيه محليا",
+    alertPermissionNeeded: "تم حفظ الإعداد؛ اطلب إذن المتصفح لإرسال التنبيهات",
+    alertPermissionDenied: "تم رفض إذن المتصفح؛ ستبقى التنبيهات متوقفة",
+    alertPermissionUnsupported: "هذا المتصفح لا يدعم التنبيهات",
+    browserPermission: "إذن المتصفح: {permission}",
+    browserPermissionUnsupported: "إذن المتصفح غير مدعوم",
+    sentAlerts: "تم إرسال {count} تنبيه متصفح لتقارير خطيرة جديدة",
+    languageSelected: "تم اختيار {language}",
+    languageSelectedPartial: "تم اختيار {language} مع كتالوج واجهة محلي؛ ترجمة المقالات مخطط لها",
+    severityThresholdSaved: "تم حفظ عتبة {severity}"
+  },
+  ru: {
+    brandTagline: "Автоматический прототип новостной карты",
+    region: "Регион",
+    tabFeed: "Новости Live",
+    tabMap: "Карта",
+    tabTime: "Время",
+    tabReview: "Проверка",
+    tabAlerts: "Оповещения",
+    tabKey: "Легенда",
+    filters: "Фильтры",
+    hideFilters: "Скрыть фильтры",
+    layers: "Слои",
+    hideLayers: "Скрыть слои",
+    reviewDesk: "Панель проверки",
+    search: "Поиск",
+    searchPlaceholder: "Локации, события, источники...",
+    pause: "Пауза",
+    resume: "Возобновить",
+    reset: "Сбросить",
+    close: "Закрыть",
+    verification: "Проверка",
+    sourceType: "Тип источника",
+    severity: "Серьезность",
+    category: "Категория",
+    dateRange: "Диапазон дат",
+    aim: "Центр",
+    fit: "Вместить",
+    premiumOverlays: "Премиум-слои",
+    viewportOnly: "Только область экрана",
+    newEvents: "Новые события",
+    updatedAt: "Обновлено {time}",
+    showingEvents: "Показано {visible} из {total} событий",
+    alertsPanelKicker: "Оповещения",
+    alertsPanelTitle: "Настройки оповещений и языка",
+    wouldAlert: "Сработало бы",
+    languages: "Языки",
+    lockedLayers: "Закрытые слои",
+    browserAlerts: "Оповещения браузера",
+    currentTheaterOnly: "Только текущий театр",
+    minAlertSeverity: "Минимальная серьезность оповещения",
+    requestPermission: "Запросить разрешение браузера",
+    language: "Язык",
+    languageSelectedSentence: "Выбран {language}.",
+    plannedDeliveryChannels: "Планируемые каналы доставки",
+    noPlannedChannels: "Планируемые каналы не настроены",
+    mapKey: "Легенда карты",
+    iconLegend: "Легенда значков и сторон",
+    iconTaxonomy: "Таксономия значков",
+    sideColors: "Цвета сторон",
+    curationChain: "Цепочка редакции",
+    alertPrefsSaved: "Настройки оповещений сохранены локально",
+    alertPermissionNeeded: "Настройка сохранена; запросите разрешение браузера для доставки",
+    alertPermissionDenied: "Разрешение браузера отклонено; оповещения выключены",
+    alertPermissionUnsupported: "Этот браузер не поддерживает уведомления",
+    browserPermission: "Разрешение браузера: {permission}",
+    browserPermissionUnsupported: "Разрешение браузера не поддерживается",
+    sentAlerts: "Отправлено {count} браузерных оповещений о новых серьезных сообщениях",
+    languageSelected: "Выбран {language}",
+    languageSelectedPartial: "Выбран {language} с локальным каталогом интерфейса; перевод статей запланирован",
+    severityThresholdSaved: "Порог {severity} сохранен"
   }
 };
 
@@ -360,7 +668,7 @@ function bindControls() {
 
   els.pauseStreamButton.addEventListener("click", () => {
     state.paused = !state.paused;
-    els.pauseStreamButton.textContent = state.paused ? "Resume" : "Pause";
+    els.pauseStreamButton.textContent = state.paused ? uiCopy("resume") : uiCopy("pause");
     els.pauseStreamButton.setAttribute("aria-pressed", String(state.paused));
     if (state.paused) {
       stopEventStream("Auto-update paused");
@@ -701,8 +1009,13 @@ function render() {
   renderChromeState();
   renderIntelPanel(visible);
   updateCounts();
-  els.mapVisibleCount.textContent = `Showing ${visible.length.toLocaleString()} of ${state.events.length.toLocaleString()} events`;
-  els.updatedAt.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  els.mapVisibleCount.textContent = uiCopy("showingEvents", {
+    visible: visible.length.toLocaleString(),
+    total: state.events.length.toLocaleString()
+  });
+  els.updatedAt.textContent = uiCopy("updatedAt", {
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  });
 }
 
 function filteredEvents(applyViewport) {
@@ -1394,21 +1707,21 @@ function renderKeyPanel() {
   return `
     <header class="intel-heading">
       <div>
-        <span>Map Key</span>
-        <h2>Icon and Side Legend</h2>
+        <span>${escapeHtml(uiCopy("mapKey"))}</span>
+        <h2>${escapeHtml(uiCopy("iconLegend"))}</h2>
       </div>
-      <button type="button" data-close-intel>Close</button>
+      <button type="button" data-close-intel>${escapeHtml(uiCopy("close"))}</button>
     </header>
     <section class="intel-section">
-      <h3>Icon Taxonomy</h3>
+      <h3>${escapeHtml(uiCopy("iconTaxonomy"))}</h3>
       <ul class="taxonomy-list">${categoryRows}</ul>
     </section>
     <section class="intel-section">
-      <h3>Side Colors</h3>
+      <h3>${escapeHtml(uiCopy("sideColors"))}</h3>
       <ul class="taxonomy-list">${sideRows}</ul>
     </section>
     <section class="intel-section">
-      <h3>Curation Chain</h3>
+      <h3>${escapeHtml(uiCopy("curationChain"))}</h3>
       <ol class="pipeline-list">
         <li><strong>Collect</strong><span>RSS, public APIs, official feeds, compliant social APIs</span></li>
         <li><strong>Extract</strong><span>Type, place, summary, source, candidate duplicate key</span></li>
@@ -1481,19 +1794,19 @@ function renderAlertsPanel(visible) {
   return `
     <header class="intel-heading">
       <div>
-        <span>Alerts</span>
-        <h2>Notification and Language Setup</h2>
+        <span>${escapeHtml(uiCopy("alertsPanelKicker"))}</span>
+        <h2>${escapeHtml(uiCopy("alertsPanelTitle"))}</h2>
       </div>
-      <button type="button" data-close-intel>Close</button>
+      <button type="button" data-close-intel>${escapeHtml(uiCopy("close"))}</button>
     </header>
     <section class="intel-stats">
-      <div><strong>${alertableCount}</strong><span>Would alert</span></div>
-      <div><strong>${config.languages.length}</strong><span>Languages</span></div>
-      <div><strong>${lockedLayerCount}</strong><span>Locked layers</span></div>
+      <div><strong>${alertableCount}</strong><span>${escapeHtml(uiCopy("wouldAlert"))}</span></div>
+      <div><strong>${config.languages.length}</strong><span>${escapeHtml(uiCopy("languages"))}</span></div>
+      <div><strong>${lockedLayerCount}</strong><span>${escapeHtml(uiCopy("lockedLayers"))}</span></div>
     </section>
     ${state.platformMessage ? `<p class="editorial-message">${escapeHtml(state.platformMessage)}</p>` : ""}
     <section class="intel-section">
-      <h3>Browser Alerts</h3>
+      <h3>${escapeHtml(uiCopy("browserAlerts"))}</h3>
       <label class="preference-row">
         <input type="checkbox" data-notification-pref="browser" ${prefs.browser ? "checked" : ""} />
         <span>
@@ -1504,11 +1817,11 @@ function renderAlertsPanel(visible) {
       <label class="preference-row">
         <input type="checkbox" data-notification-pref="regionOnly" ${prefs.regionOnly ? "checked" : ""} />
         <span>
-          <strong>Current theater only</strong>
+          <strong>${escapeHtml(uiCopy("currentTheaterOnly"))}</strong>
           <small>${escapeHtml(currentRegion().name)}</small>
         </span>
       </label>
-      <div class="choice-group" aria-label="Minimum alert severity">
+      <div class="choice-group" aria-label="${escapeAttr(uiCopy("minAlertSeverity"))}">
         ${Object.entries(severities)
           .sort((left, right) => (left[1].rank ?? 0) - (right[1].rank ?? 0))
           .map(
@@ -1521,13 +1834,13 @@ function renderAlertsPanel(visible) {
           .join("")}
       </div>
       <button type="button" class="permission-button" data-request-notification-permission>
-        Request browser permission
+        ${escapeHtml(uiCopy("requestPermission"))}
       </button>
       <p>${escapeHtml(config.operationalBoundaries.notifications)}</p>
     </section>
     <section class="intel-section">
-      <h3>Language</h3>
-      <p>${escapeHtml(activeLang.label)} selected. ${escapeHtml(config.operationalBoundaries.localization)}</p>
+      <h3>${escapeHtml(uiCopy("language"))}</h3>
+      <p>${escapeHtml(uiCopy("languageSelectedSentence", { language: activeLang.label }))} ${escapeHtml(config.operationalBoundaries.localization)}</p>
       <div class="language-option-list">
         ${config.languages
           .map(
@@ -1543,7 +1856,7 @@ function renderAlertsPanel(visible) {
       </div>
     </section>
     <section class="intel-section">
-      <h3>Planned Delivery Channels</h3>
+      <h3>${escapeHtml(uiCopy("plannedDeliveryChannels"))}</h3>
       <ul class="capability-list">
         ${plannedChannels
           .map(
@@ -1555,7 +1868,7 @@ function renderAlertsPanel(visible) {
               </li>
             `
           )
-          .join("") || "<li><span>No planned channels configured</span></li>"}
+          .join("") || `<li><span>${escapeHtml(uiCopy("noPlannedChannels"))}</span></li>`}
       </ul>
     </section>
   `;
@@ -1570,7 +1883,7 @@ function bindPlatformPanelControls() {
     input.addEventListener("change", () => {
       updateNotificationPrefs(
         { [input.dataset.notificationPref]: input.checked },
-        "Alert preferences saved locally"
+        uiCopy("alertPrefsSaved")
       );
     });
   });
@@ -1579,7 +1892,9 @@ function bindPlatformPanelControls() {
     button.addEventListener("click", () => {
       updateNotificationPrefs(
         { minSeverity: button.dataset.notificationSeverity },
-        `${severities[button.dataset.notificationSeverity]?.label ?? "Severity"} threshold saved`
+        uiCopy("severityThresholdSaved", {
+          severity: severities[button.dataset.notificationSeverity]?.label ?? uiCopy("severity")
+        })
       );
     });
   });
@@ -1666,11 +1981,12 @@ function renderChromeState() {
   els.filterRail.setAttribute("aria-hidden", String(!state.filtersOpen));
   els.filterRail.inert = !state.filtersOpen;
   els.filterToggle.setAttribute("aria-pressed", String(state.filtersOpen));
-  els.filterToggle.textContent = state.filtersOpen ? "Hide filters" : "Filters";
+  els.filterToggle.textContent = state.filtersOpen ? uiCopy("hideFilters") : uiCopy("filters");
   els.layerPanel.setAttribute("aria-hidden", String(!state.layersOpen));
   els.layerPanel.inert = !state.layersOpen;
   els.layersToggle.setAttribute("aria-pressed", String(state.layersOpen));
-  els.layersToggle.textContent = state.layersOpen ? "Hide layers" : "Layers";
+  els.layersToggle.textContent = state.layersOpen ? uiCopy("hideLayers") : uiCopy("layers");
+  els.pauseStreamButton.textContent = state.paused ? uiCopy("resume") : uiCopy("pause");
   els.topTabs.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.focusPanel === state.activePanel);
   });
@@ -1709,6 +2025,70 @@ function ensureKnownLanguage() {
   }
 }
 
+function uiCopy(key, replacements = {}) {
+  const catalog = UI_COPY[state.language] ?? UI_COPY.en;
+  const template = catalog[key] ?? UI_COPY.en[key] ?? key;
+  return template.replace(/\{(\w+)\}/g, (match, replacementKey) =>
+    Object.prototype.hasOwnProperty.call(replacements, replacementKey) ? replacements[replacementKey] : match
+  );
+}
+
+function renderLocalizedShellCopy() {
+  setText(".brand-copy small", uiCopy("brandTagline"));
+  setText(".region-select span", uiCopy("region"));
+  setText(".global-search span", uiCopy("search"));
+  els.globalSearch.placeholder = uiCopy("searchPlaceholder");
+  els.topTabs.forEach((button) => {
+    const key = {
+      alerts: "tabAlerts",
+      feed: "tabFeed",
+      key: "tabKey",
+      map: "tabMap",
+      review: "tabReview",
+      time: "tabTime"
+    }[button.dataset.focusPanel];
+    if (key) {
+      button.textContent = uiCopy(key);
+    }
+  });
+
+  setText(".top-meta-link", uiCopy("reviewDesk"));
+  setText(".filter-rail .rail-heading h2", uiCopy("filters"));
+  setText("#resetFilters", uiCopy("reset"));
+  setText("#closeFilters", uiCopy("close"));
+  const filterSections = els.filterRail.querySelectorAll(".filter-section");
+  setNodeText(filterSections[0]?.querySelector("h3"), uiCopy("verification"));
+  setNodeText(filterSections[1]?.querySelector("h3"), uiCopy("sourceType"));
+  setNodeText(filterSections[2]?.querySelector("h3"), uiCopy("severity"));
+  setNodeText(filterSections[3]?.querySelector("h3"), uiCopy("category"));
+  setNodeText(filterSections[4]?.querySelector("h3"), uiCopy("dateRange"));
+  setInputLabelText(els.viewportOnlyToggle, uiCopy("viewportOnly"));
+  setText("#locateRegion", uiCopy("aim"));
+  setText("#fitEvents", uiCopy("fit"));
+  setText(".layer-heading h2", uiCopy("layers"));
+  setText("#closeLayers", uiCopy("close"));
+  setText(".layer-section h3", uiCopy("premiumOverlays"));
+  setText("#newEventsButton", uiCopy("newEvents"));
+  renderChromeState();
+}
+
+function setText(selector, text) {
+  setNodeText(document.querySelector(selector), text);
+}
+
+function setNodeText(node, text) {
+  if (node) {
+    node.textContent = text;
+  }
+}
+
+function setInputLabelText(input, text) {
+  const textNode = [...(input?.closest("label")?.childNodes ?? [])].find((node) => node.nodeType === 3 && node.textContent.trim());
+  if (textNode) {
+    textNode.textContent = ` ${text}`;
+  }
+}
+
 function renderPlatformChrome() {
   const language = activeLanguage();
   document.documentElement.lang = language.locale ?? language.id;
@@ -1719,6 +2099,7 @@ function renderPlatformChrome() {
   const timeMode = activeTimeZoneMode();
   els.timeButton.textContent = timeMode.label;
   els.timeButton.title = `Time display: ${timeMode.label}`;
+  renderLocalizedShellCopy();
 }
 
 function renderPremiumLayers() {
@@ -1759,10 +2140,10 @@ function setLanguage(languageId) {
   writeStoredValue("warmap.language", language.id);
   state.platformMessage =
     language.status === "active"
-      ? `${language.label} selected`
-      : `${language.label} selected locally; full translation catalog is planned`;
+      ? uiCopy("languageSelected", { language: language.label })
+      : uiCopy("languageSelectedPartial", { language: language.label });
   renderPlatformChrome();
-  renderIntelPanel(filteredEvents(true));
+  render();
 }
 
 function activeTimeZoneMode() {
@@ -1789,12 +2170,12 @@ function updateNotificationPrefs(patch, message) {
   }
   if (patch.browser === true && !("Notification" in window)) {
     nextPrefs.browser = false;
-    nextMessage = "Browser notifications are not supported in this browser";
+    nextMessage = uiCopy("alertPermissionUnsupported");
   } else if (patch.browser === true && window.Notification.permission === "denied") {
     nextPrefs.browser = false;
-    nextMessage = "Browser permission is denied; alerts remain off";
+    nextMessage = uiCopy("alertPermissionDenied");
   } else if (patch.browser === true && window.Notification.permission !== "granted") {
-    nextMessage = "Alert preference saved; request browser permission to deliver alerts";
+    nextMessage = uiCopy("alertPermissionNeeded");
   }
 
   state.notificationPrefs = nextPrefs;
@@ -1805,14 +2186,14 @@ function updateNotificationPrefs(patch, message) {
 
 async function requestNotificationPermission() {
   if (!("Notification" in window)) {
-    state.platformMessage = "Browser notifications are not supported in this browser";
+    state.platformMessage = uiCopy("alertPermissionUnsupported");
     renderIntelPanel(filteredEvents(true));
     return;
   }
 
   try {
     const permission = await window.Notification.requestPermission();
-    state.platformMessage = `Browser notification permission: ${permission}`;
+    state.platformMessage = uiCopy("browserPermission", { permission });
     if (permission !== "granted") {
       state.notificationPrefs.browser = false;
       writeStoredValue("warmap.notificationPrefs", JSON.stringify(state.notificationPrefs));
@@ -1826,9 +2207,9 @@ async function requestNotificationPermission() {
 
 function notificationPermissionLabel() {
   if (!("Notification" in window)) {
-    return "Browser permission unsupported";
+    return uiCopy("browserPermissionUnsupported");
   }
-  return `Browser permission ${window.Notification.permission}`;
+  return uiCopy("browserPermission", { permission: window.Notification.permission });
 }
 
 function maybeNotifyForEvents(events, previousEventIds) {
@@ -1863,7 +2244,7 @@ function maybeNotifyForEvents(events, previousEventIds) {
 
   persistNotifiedEventIds();
   if (sentCount > 0) {
-    state.platformMessage = `${sentCount} browser alert${sentCount === 1 ? "" : "s"} sent for new severe leads`;
+    state.platformMessage = uiCopy("sentAlerts", { count: sentCount, plural: sentCount === 1 ? "" : "s" });
     if (state.activePanel === "alerts") {
       renderIntelPanel(filteredEvents(true));
     }

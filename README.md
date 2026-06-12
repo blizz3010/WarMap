@@ -102,12 +102,12 @@ For the browser review panel or standalone review page, editors can provide the 
 
 `/api/platform-config` returns the non-event product surfaces used by the shell:
 
-- language options, active/default locale, and planned RTL languages
+- language options, active/default locale, planned RTL languages, and local shell-copy switching
 - local browser-alert preference capability plus planned email and webhook delivery
 - included and planned-paid map layers
 - explicit boundaries for missing push delivery, translation catalogs, billing, entitlements, and licensed layer datasets
 
-The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. It does not send server-side notifications or unlock paid layers.
+The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. Language selection updates core shell copy and document direction locally, while event articles and source text remain in their source language. It does not send server-side notifications or unlock paid layers.
 
 ## Collector configuration
 

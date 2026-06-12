@@ -87,6 +87,10 @@ if (
   throw new Error("Expected local browser notifications for new stream/refreshed event leads");
 }
 
+if (!appSource.includes("const UI_COPY") || !appSource.includes("languageSelectedPartial") || !appSource.includes("document.documentElement.dir")) {
+  throw new Error("Expected local shell-copy localization catalog and RTL-aware document chrome");
+}
+
 if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes("archive-sources")) {
   throw new Error("Expected public archive page to render approved archive records with sources");
 }
