@@ -11,7 +11,7 @@ import {
   eventsFromEditorialSnapshots,
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
-import { buildGdeltUrl, normalizeArticlesToEvents } from "../api/news-normalizer.js";
+import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
 import {
@@ -258,6 +258,77 @@ if (
 ) {
   throw new Error("Live news normalizer failed source provenance metadata");
 }
+
+await withTemporaryAiExtractionEnv(async () => {
+  process.env.AI_EXTRACTION_PROVIDER = "llm-http";
+  process.env.AI_EXTRACTION_ENDPOINT = "https://extractor.example/api";
+  process.env.AI_EXTRACTION_MODEL = "fixture-model-v1";
+  process.env.AI_EXTRACTION_MAX_ARTICLES = "1";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    const request = JSON.parse(options.body);
+    if (url !== process.env.AI_EXTRACTION_ENDPOINT || request.task !== "extract-war-map-candidate") {
+      throw new Error("Unexpected AI extraction provider request");
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          extraction: {
+            eventType: "infrastructure",
+            severity: "medium",
+            actorSide: "civilian",
+            summary: "External extractor identified infrastructure disruption near Odesa.",
+            location: {
+              place: "Odesa",
+              province: "Odesa Oblast",
+              country: "Ukraine",
+              precision: "city",
+              lat: 46.4825,
+              lon: 30.7233
+            },
+            duplicateKey: "ukraine-odesa-infrastructure-fixture",
+            confidence: 0.81,
+            fieldConfidence: {
+              eventType: 0.8,
+              location: 0.85,
+              summary: 0.76,
+              duplicate: 0.82
+            },
+            signals: ["odesa", "infrastructure", "extractor"]
+          }
+        };
+      }
+    };
+  };
+
+  try {
+    const aiEvents = await normalizeArticlesToEventsAsync(
+      [
+        {
+          title: "Port disruption reported after overnight attack near Odesa",
+          url: "https://example.com/world/ukraine-odesa-port",
+          domain: "example.com",
+          sourcecountry: "United States",
+          seendate: "20260528T020203Z"
+        }
+      ],
+      { now: new Date("2026-05-28T03:02:03Z"), region: "ukraine-south" }
+    );
+    if (
+      aiEvents[0]?.extraction?.provider !== "llm-http" ||
+      aiEvents[0]?.category !== "infrastructure" ||
+      aiEvents[0]?.place !== "Odesa" ||
+      aiEvents[0]?.summary !== "External extractor identified infrastructure disruption near Odesa." ||
+      aiEvents[0]?.review?.duplicateKey !== "ukraine-odesa-infrastructure-fixture"
+    ) {
+      throw new Error("LLM HTTP extraction provider did not enhance normalized event fields");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 const sampleUkraineEvents = normalizeArticlesToEvents(
   [
@@ -576,6 +647,30 @@ function withTemporaryEditorialEnv(callback) {
 
   try {
     callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+async function withTemporaryAiExtractionEnv(callback) {
+  const keys = [
+    "AI_EXTRACTION_PROVIDER",
+    "AI_EXTRACTION_ENDPOINT",
+    "AI_EXTRACTION_TOKEN",
+    "AI_EXTRACTION_MODEL",
+    "AI_EXTRACTION_TIMEOUT_MS",
+    "AI_EXTRACTION_MAX_ARTICLES"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    await callback();
   } finally {
     keys.forEach((key) => {
       if (previous.get(key) === undefined) {

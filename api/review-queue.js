@@ -1,7 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
-import { DEFAULT_REGION_ID, normalizeArticlesToEvents } from "./news-normalizer.js";
+import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { registrySummary } from "./source-registry.js";
 import { reviewQueueFromEvents } from "./editorial-workflow.js";
@@ -23,7 +23,7 @@ export default async function handler(request, response) {
       maxRecords,
       lookback: request.query?.lookback ?? "30d"
     });
-    const events = normalizeArticlesToEvents(collection.articles, {
+    const events = await normalizeArticlesToEventsAsync(collection.articles, {
       now: generatedAt,
       region,
       limit: 75

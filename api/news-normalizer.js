@@ -1,4 +1,4 @@
-import { buildCandidateExtraction, mergeDuplicateExtraction } from "./ai-extractor.js";
+import { buildCandidateExtraction, enhanceCandidateExtraction, mergeDuplicateExtraction } from "./ai-extractor.js";
 import { enrichEditorialEvent } from "./editorial-workflow.js";
 
 export const DEFAULT_REGION_ID = "iran";
@@ -129,6 +129,23 @@ export function normalizeArticlesToEvents(articles, options = {}) {
   return mergeDuplicateEvents(candidates)
     .map((event) => enrichEditorialEvent(event))
     .slice(0, options.limit ?? 50);
+}
+
+export async function normalizeArticlesToEventsAsync(articles, options = {}) {
+  const events = normalizeArticlesToEvents(articles, options);
+  const limit = Math.min(events.length, externalExtractionLimit());
+  return Promise.all(
+    events.map(async (event, index) => {
+      if (index >= limit) {
+        return event;
+      }
+      const extraction = await enhanceCandidateExtraction(event.extraction, {
+        event,
+        region: options.region ?? DEFAULT_REGION_ID
+      });
+      return applyExtractionToEvent(event, extraction);
+    })
+  );
 }
 
 function normalizeArticle(article, now, seenUrls, region) {
@@ -269,6 +286,51 @@ function mergeDuplicateEvents(candidates) {
   }
 
   return merged;
+}
+
+function applyExtractionToEvent(event, extraction) {
+  if (!extraction) {
+    return event;
+  }
+
+  const location = extraction.location ?? {};
+  const lat = Number(location.lat);
+  const lon = Number(location.lon);
+  const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon);
+
+  return {
+    ...event,
+    ...(extraction.eventType ? { category: extraction.eventType } : {}),
+    ...(extraction.severity ? { severity: extraction.severity } : {}),
+    ...(extraction.actorSide ? { side: extraction.actorSide } : {}),
+    ...(extraction.summary ? { summary: extraction.summary } : {}),
+    ...(Number.isFinite(Number(extraction.confidence)) ? { confidence: extraction.confidence } : {}),
+    ...(location.place ? { place: location.place } : {}),
+    ...(location.province ? { province: location.province } : {}),
+    ...(location.country ? { country: location.country } : {}),
+    ...(hasCoordinates
+      ? {
+          location: {
+            lat,
+            lon,
+            precision: location.precision || event.location.precision
+          }
+        }
+      : {}),
+    extraction,
+    review: {
+      ...event.review,
+      duplicateKey: extraction.duplicateKey || event.review?.duplicateKey
+    }
+  };
+}
+
+function externalExtractionLimit() {
+  const configured = Number(process.env.AI_EXTRACTION_MAX_ARTICLES);
+  if (!Number.isFinite(configured)) {
+    return 12;
+  }
+  return Math.min(Math.max(configured, 0), 50);
 }
 
 function isLikelyDuplicate(left, right) {
