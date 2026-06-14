@@ -288,6 +288,9 @@ if (
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("function renderSourceHealthSummary()") ||
+  !appSource.includes("function renderSourceHealthDiagnostics(health)") ||
+  !appSource.includes("sourceHealthAttentionRows(health)") ||
+  !appSource.includes("source.diagnostic?.retryable") ||
   !appSource.includes("function renderSourceActivationBacklog(sourceCuration)") ||
   !appSource.includes("sourceCuration.activationBacklog?.summary") ||
   !appSource.includes("function sourceHealthStatusClass(health)") ||
@@ -302,7 +305,11 @@ if (
   throw new Error("Expected inline review panel to expose static decision exports when writes are blocked");
 }
 
-if (!stylesSource.includes(".source-activation-backlog") || !stylesSource.includes("overflow-wrap: anywhere")) {
+if (
+  !stylesSource.includes(".source-activation-backlog") ||
+  !stylesSource.includes(".source-health-diagnostics") ||
+  !stylesSource.includes("overflow-wrap: anywhere")
+) {
   throw new Error("Expected inline review readiness panel to style the source activation backlog");
 }
 
@@ -324,6 +331,8 @@ if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("
 
 if (
   !reviewPageSource.includes("function renderSourceHealthStatus()") ||
+  !reviewPageSource.includes("function renderSourceHealthDiagnostics(health)") ||
+  !reviewPageSource.includes("sourceHealthAttentionRows(health)") ||
   !reviewPageSource.includes("health?.operational") ||
   !stylesSource.includes(".status-summary.is-warning") ||
   !stylesSource.includes(".source-health-facts")

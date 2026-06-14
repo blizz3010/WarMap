@@ -241,7 +241,82 @@ function renderSourceHealthStatus() {
       <div><dt>Hard</dt><dd>${Number(health.summary?.hardFailures ?? 0)}</dd></div>
       <div><dt>Missing config</dt><dd>${Number(health.summary?.missingConfiguration ?? 0)}</dd></div>
     </dl>
+    ${renderSourceHealthDiagnostics(health)}
   `;
+}
+
+function renderSourceHealthDiagnostics(health) {
+  const rows = sourceHealthAttentionRows(health);
+  if (!rows.length) {
+    return "";
+  }
+
+  const attentionCount = sourceHealthAttentionCount(health);
+  const countLabel = attentionCount > rows.length
+    ? `Top ${rows.length} of ${attentionCount}`
+    : `${rows.length} source${rows.length === 1 ? "" : "s"}`;
+  return `
+    <div class="source-health-diagnostics">
+      <div>
+        <strong>Collector diagnostics</strong>
+        <span>${escapeHtml(countLabel)}</span>
+      </div>
+      <ul class="status-list">
+        ${rows.map(renderSourceHealthDiagnosticRow).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderSourceHealthDiagnosticRow(source) {
+  const diagnostic = source.diagnostic ?? {};
+  const status = source.status || (source.ok ? "reachable" : "attention");
+  const code = diagnostic.code || "probe.not-run";
+  const category = diagnostic.category || "unknown";
+  const retryState = diagnostic.retryable ? "retryable" : "not retryable";
+  const collector = titleCase(source.collector || source.sourceType || "source");
+  return `
+    <li>
+      <span>${escapeHtml(source.name || source.id || "Source")}</span>
+      <strong>${escapeHtml(titleCase(status))}</strong>
+      <small>${escapeHtml(`${collector} - ${code} - ${category} - ${retryState}`)}</small>
+      <small>${escapeHtml(source.message || source.url || "No source diagnostic message.")}</small>
+    </li>
+  `;
+}
+
+function sourceHealthAttentionRows(health, limit = 4) {
+  return (Array.isArray(health?.sources) ? health.sources : [])
+    .filter((source) => !source.ok || source.status === "planned" || source.diagnostic?.retryable)
+    .sort(sourceHealthAttentionSort)
+    .slice(0, limit);
+}
+
+function sourceHealthAttentionCount(health) {
+  return (Array.isArray(health?.sources) ? health.sources : [])
+    .filter((source) => !source.ok || source.status === "planned" || source.diagnostic?.retryable)
+    .length;
+}
+
+function sourceHealthAttentionSort(left, right) {
+  return sourceHealthAttentionPriority(left) - sourceHealthAttentionPriority(right)
+    || String(left.id ?? left.name ?? "").localeCompare(String(right.id ?? right.name ?? ""));
+}
+
+function sourceHealthAttentionPriority(source) {
+  if (source.status === "missing-config") {
+    return 0;
+  }
+  if (source.status === "error" || source.diagnostic?.category === "http") {
+    return 1;
+  }
+  if (source.diagnostic?.retryable || source.status === "empty") {
+    return 2;
+  }
+  if (source.status === "planned") {
+    return 3;
+  }
+  return source.ok ? 5 : 4;
 }
 
 function sourceHealthStatusClass(health) {
