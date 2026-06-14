@@ -289,6 +289,7 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
       feeds: {
         rss: collection.rssFeeds ?? [],
         official: collection.officialFeeds ?? [],
+        officialSite: collection.officialSiteSources ?? [],
         socialApi: collection.socialApiSources ?? []
       },
       persistence,
@@ -314,6 +315,7 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
       feeds: {
         rss: [],
         official: [],
+        officialSite: [],
         socialApi: []
       },
       persistence: {

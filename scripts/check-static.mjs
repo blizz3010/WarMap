@@ -739,6 +739,9 @@ if (
       article.url === "https://mod.example.test/en/news/kharkiv-drone-attack" &&
       article.title.includes("Kharkiv")
   ) ||
+  !officialSiteFixture.collection.officialSiteSources.some(
+    (source) => source.name === "Ukraine MOD Fixture" && source.url === "https://mod.example.test/en/news"
+  ) ||
   officialSiteFixture.health.summary.configuredOfficialSites !== 1 ||
   !officialSiteFixture.health.sources.some((source) => source.id === "ukraine-mod-news" && source.ok && source.diagnostic?.code === "official-site.links") ||
   !officialSiteFixture.health.families.some((family) => family.collector === "official-site" && family.ok >= 1) ||
@@ -1422,6 +1425,13 @@ const ingestionRun = await withTemporaryIngestionEnvAsync(async () => {
       upstreamErrors: [],
       rssFeeds: ["https://example.com/rss"],
       officialFeeds: ["https://example.com/official.rss"],
+      officialSiteSources: [
+        {
+          name: "Ukraine MOD Fixture",
+          url: "https://mod.example.test/en/news",
+          regions: ["ukraine-east"]
+        }
+      ],
       socialApiSources: []
     })
   });
@@ -1440,6 +1450,7 @@ if (
   ingestionRun.persistence.eventStore.stored ||
   ingestionRun.persistence.eventStore.mode !== "disabled" ||
   ingestionRun.regions[0].eventStorePersistence.stored ||
+  ingestionRun.regions[0].feeds.officialSite[0]?.url !== "https://mod.example.test/en/news" ||
   JSON.stringify(ingestionRun).includes("topsecret123")
 ) {
   throw new Error("Ingestion heartbeat failed fixture run, source-link, or secret-redaction checks");
@@ -1477,6 +1488,7 @@ try {
         upstreamErrors: [],
         rssFeeds: ["https://example.com/rss"],
         officialFeeds: [],
+        officialSiteSources: [],
         socialApiSources: []
       })
     });

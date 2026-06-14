@@ -14,7 +14,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
 - Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/intake-store-health`, `/api/storage-readiness`, `/api/event-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, review actions, static decision exports, setup readiness, durable store checks, storage schema readiness, event-store DB checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
-- source registry scaffold for RSS, official feeds, and compliant social API collectors
+- source registry scaffold for RSS, official feeds, terms-reviewed official-site adapters, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
 - compact dashboard embed view at `/embed?region=ukraine-east&publication=all`
 
@@ -45,6 +45,7 @@ The check validates the static app files and the event, region, category, severi
 - primary source attempt: GDELT DOC 2.0 article search
 - media RSS sources: region-matched feeds from the source registry
 - official feeds: active government/multilateral RSS-compatible feeds plus optional `OFFICIAL_FEED_SOURCES` entries for terms-reviewed RSS, Atom, or CAP XML feeds
+- official sites: optional `OFFICIAL_SITE_SOURCES` entries for terms-reviewed pages where article links can be collected without scraping prohibited content
 - compliant social APIs: opt-in JSON API sources configured only through `COMPLIANT_SOCIAL_API_SOURCES`
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
 - theater scoping: normalized events are filtered through the selected region bounds before list, detail, review, archive, and publication responses are returned
@@ -97,7 +98,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/storage-readiness` exposes the PostgreSQL/PostGIS event-store schema contract, required env names, table plan, migration SQL, and non-secret readiness checks for durable event storage.
 - `/api/event-store-health` performs the live read-only PostgreSQL/PostGIS connection, extension, and expected-table checks when database env is configured.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, source-attribution families, granular legend/event-type taxonomy, per-source activation requirements, grouped activation backlog, and collector readiness flags.
-- `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, distinguishes strict `ready` from degraded-but-`operational` retryable failures, and redacts tokens.
+- `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds, configured official-site adapters, and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, distinguishes strict `ready` from degraded-but-`operational` retryable failures, and redacts tokens.
 - `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
 - `/api/publication-status?region=ukraine-east` audits approved records across the map, feed, detail, archive, and public API surfaces, including source-link and coordinate checks for every published event.
 - `/api/notification-status?region=ukraine-east` returns webhook/browser notification readiness plus a source-linked preview of publishable alerts; `POST /api/notification-status` can dispatch a signed webhook batch only when notification secrets are configured.
