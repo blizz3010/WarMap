@@ -29,7 +29,7 @@ Active sources are defined in `api/source-registry.js` and exposed through `/api
 - Activation profiles: `/api/source-curation` now returns per-source requirements before activation, including licensed-API terms, official-site adapter requirements, social/API token redaction, and review policy labels.
 - Health checks: active GDELT/RSS/official-feed sources, configured official XML feeds, and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched. `/api/source-health` keeps `ready` strict while adding `operational`, `degraded`, and `resilience.state` so retryable source timeouts are visible without being confused with missing configuration or hard parser failures.
 - Intake storage checks: `/api/intake-store-health` verifies optional cron candidate snapshot storage without writing, and treats a missing GitHub snapshot file as acceptable because the first configured cron run can create it.
-- Event storage checks: `/api/storage-readiness` exposes the PostgreSQL/PostGIS schema contract for durable documents, extracted claims, events, source evidence, editorial decisions, and ingestion runs without returning database secrets.
+- Event storage checks: `/api/storage-readiness` exposes the PostgreSQL/PostGIS schema contract, and `/api/event-store-health` verifies a configured database, PostGIS extension, and expected tables without returning database secrets.
 - Social/API sources remain opt-in through `COMPLIANT_SOCIAL_API_SOURCES`; only add endpoints whose terms permit automated use.
 
 ## Activation checklist
@@ -43,5 +43,5 @@ Before moving a planned source to `active`:
 - Use status, assignee, and priority filters to separate open-source intake, desk-owned review, split review, and urgent verification work.
 - Make sure source URLs survive into `/api/events`, `/api/review-queue`, `/api/event`, `/api/archive`, and `/v1/events`.
 - If using scheduled ingestion, verify the optional intake snapshot store keeps source-linked candidates available after the live feed window changes.
-- Before replacing the snapshot bridge, apply the `/api/storage-readiness` migration and confirm `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1` in production.
+- Before replacing the snapshot bridge, apply the `/api/storage-readiness` migration, confirm `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, verify `/api/event-store-health`, then set `EVENT_STORE_WRITE_MODE=candidates`.
 - If the source is a conflict-party official claim, require an explicit claim label or high-scrutiny review path before publication.

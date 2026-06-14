@@ -17,6 +17,13 @@ import {
 } from "../api/editorial-store.js";
 import { buildEditorialSetupPayload } from "../api/editorial-setup.js";
 import {
+  buildCandidateEventStoreOperations,
+  eventStoreCapabilities,
+  eventStoreHealth,
+  saveCandidateEventsToEventStore,
+  serializeEventForStore
+} from "../api/event-store.js";
+import {
   authorizeIngestionCronRequest,
   buildIngestionStatusPayload,
   runIngestionHeartbeat
@@ -79,6 +86,8 @@ const requiredFiles = [
   "api/editorial-store.js",
   "api/editorial-workflow.js",
   "api/event.js",
+  "api/event-store.js",
+  "api/event-store-health.js",
   "api/events.js",
   "api/cron/ingest.js",
   "api/review-action.js",
@@ -593,6 +602,7 @@ if (
   productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||
   productionReadiness.sections.ingestion.cron !== "/api/cron/ingest" ||
   productionReadiness.sections.storage.endpoint !== "/api/storage-readiness" ||
+  productionReadiness.sections.storage.eventStoreHealth !== "/api/event-store-health" ||
   productionReadiness.sections.storage.ready ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "postgres-event-store" && blocker.status === "missing") ||
   productionReadiness.sections.publication.status !== "/api/publication-status" ||
@@ -624,6 +634,8 @@ if (
   !missingStorageReadiness.blockers.some((blocker) => blocker.id === "postgres-event-store" && blocker.status === "missing") ||
   configuredStorageReadiness.kind !== "StorageReadiness" ||
   !configuredStorageReadiness.ready ||
+  configuredStorageReadiness.eventStoreHealth !== "/api/event-store-health" ||
+  configuredStorageReadiness.runtime.driverBundled !== true ||
   configuredStorageReadiness.migration.schemaVersion !== STORAGE_SCHEMA_VERSION ||
   !configuredStorageReadiness.migration.sql.includes("create extension if not exists postgis") ||
   !configuredStorageReadiness.migration.sql.includes("create table if not exists warmap_events") ||
@@ -802,6 +814,65 @@ if (sampleUkraineEvents.length !== 1 || sampleUkraineEvents[0].place !== "Kharki
   throw new Error("Live news normalizer failed Ukraine theater mapping");
 }
 
+const eventStoreEnv = {
+  DATABASE_URL: "postgres://warmap:postgres-secret@db.example.test:5432/warmap",
+  WARMAP_STORAGE_SCHEMA_VERSION: STORAGE_SCHEMA_VERSION,
+  EVENT_STORE_WRITE_MODE: "candidates",
+  PGSSLMODE: "require"
+};
+const eventStoreQueryLog = [];
+const mockEventStoreQuery = async (text, values = []) => {
+  eventStoreQueryLog.push({ text, values });
+  if (text.includes("postgis_full_version")) {
+    return { rows: [{ version: "POSTGIS fixture 3.5" }] };
+  }
+  if (text.includes("information_schema.tables")) {
+    return { rows: values[1].map((table_name) => ({ table_name })) };
+  }
+  return { rows: [{ ok: 1 }] };
+};
+const eventStoreStatus = await eventStoreHealth({
+  env: eventStoreEnv,
+  now: new Date("2026-05-28T02:03:30Z"),
+  queryImpl: mockEventStoreQuery
+});
+const serializedEvent = serializeEventForStore(sampleUkraineEvents[0]);
+const eventStoreOperations = buildCandidateEventStoreOperations([serializedEvent]);
+const eventStoreWriteLog = [];
+const eventStoreSave = await saveCandidateEventsToEventStore(sampleUkraineEvents, {
+  env: eventStoreEnv,
+  now: new Date("2026-05-28T02:03:31Z"),
+  queryImpl: async (text, values = []) => {
+    eventStoreWriteLog.push({ text, values });
+    return { rows: [] };
+  }
+});
+const disabledEventStoreSave = await saveCandidateEventsToEventStore(sampleUkraineEvents, {
+  env: {},
+  now: new Date("2026-05-28T02:03:32Z"),
+  queryImpl: async () => ({ rows: [] })
+});
+if (
+  eventStoreStatus.kind !== "EventStoreHealth" ||
+  !eventStoreStatus.ready ||
+  !eventStoreStatus.checks.some((check) => check.id === "postgis" && check.ok) ||
+  !eventStoreStatus.checks.some((check) => check.id === "tables" && check.ok && check.found?.includes("warmap_events")) ||
+  eventStoreCapabilities({ env: eventStoreEnv }).writeMode !== "candidates" ||
+  !serializedEvent?.documents[0]?.url.includes("ukraine-kharkiv-drone") ||
+  !eventStoreOperations.some((operation) => operation.name === "upsert-event" && operation.text.includes("ST_MakePoint")) ||
+  !eventStoreOperations.some((operation) => operation.name === "upsert-document") ||
+  !eventStoreSave.stored ||
+  eventStoreSave.events !== 1 ||
+  eventStoreSave.documents !== 1 ||
+  eventStoreWriteLog[0]?.text !== "begin" ||
+  eventStoreWriteLog.at(-1)?.text !== "commit" ||
+  disabledEventStoreSave.stored ||
+  JSON.stringify(eventStoreStatus).includes("postgres-secret") ||
+  JSON.stringify(eventStoreSave).includes("postgres-secret")
+) {
+  throw new Error("Event-store adapter failed health, write-plan, persistence, or secret-redaction checks");
+}
+
 const notificationStatus = withTemporaryNotificationEnv(() =>
   buildNotificationStatusPayload({
     collection: {
@@ -847,10 +918,13 @@ if (
   ingestionStatus.runtime.cronPath !== "/api/cron/ingest" ||
   ingestionStatus.runtime.schedule !== "17 2 * * *" ||
   ingestionStatus.runtime.intakeStore.mode !== "disabled" ||
+  ingestionStatus.runtime.eventStore.writeMode !== "disabled" ||
   !ingestionStatus.plan.regions.some((region) => region.id === "ukraine-east") ||
   ingestionStatus.endpoints.intakeStoreHealth !== "/api/intake-store-health" ||
+  ingestionStatus.endpoints.eventStoreHealth !== "/api/event-store-health" ||
   !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-cron-secret") ||
   !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-snapshot-store" && blocker.status === "disabled") ||
+  !ingestionStatus.blockers.some((blocker) => blocker.id === "event-store-candidate-writes" && blocker.status === "disabled") ||
   JSON.stringify(ingestionStatus).includes("topsecret123")
 ) {
   throw new Error("Ingestion status payload failed cron-readiness or secret-redaction checks");
@@ -921,9 +995,13 @@ if (
   ingestionRun.summary.upstreamArticles !== 1 ||
   ingestionRun.summary.candidates !== 1 ||
   ingestionRun.summary.persistedCandidates !== 0 ||
+  ingestionRun.summary.eventStoreCandidates !== 0 ||
   !ingestionRun.regions[0].sourceSamples[0]?.sourceUrl ||
   ingestionRun.persistence.stored ||
   ingestionRun.persistence.mode !== "disabled" ||
+  ingestionRun.persistence.eventStore.stored ||
+  ingestionRun.persistence.eventStore.mode !== "disabled" ||
+  ingestionRun.regions[0].eventStorePersistence.stored ||
   JSON.stringify(ingestionRun).includes("topsecret123")
 ) {
   throw new Error("Ingestion heartbeat failed fixture run, source-link, or secret-redaction checks");
@@ -1889,7 +1967,15 @@ function withTemporaryIngestionEnv(callback) {
     "INGESTION_SNAPSHOT_RETENTION_DAYS",
     "INGESTION_SNAPSHOT_LIMIT",
     "EDITORIAL_GITHUB_TOKEN",
-    "GITHUB_TOKEN"
+    "GITHUB_TOKEN",
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "WARMAP_STORAGE_PROVIDER",
+    "WARMAP_STORAGE_SCHEMA",
+    "WARMAP_STORAGE_SCHEMA_VERSION",
+    "EVENT_STORE_WRITE_MODE",
+    "PGSSLMODE",
+    "POSTGRES_SSL_MODE"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 
@@ -1922,7 +2008,15 @@ async function withTemporaryIngestionEnvAsync(callback) {
     "INGESTION_SNAPSHOT_RETENTION_DAYS",
     "INGESTION_SNAPSHOT_LIMIT",
     "EDITORIAL_GITHUB_TOKEN",
-    "GITHUB_TOKEN"
+    "GITHUB_TOKEN",
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "WARMAP_STORAGE_PROVIDER",
+    "WARMAP_STORAGE_SCHEMA",
+    "WARMAP_STORAGE_SCHEMA_VERSION",
+    "EVENT_STORE_WRITE_MODE",
+    "PGSSLMODE",
+    "POSTGRES_SSL_MODE"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 

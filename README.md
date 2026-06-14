@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/intake-store-health`, `/api/storage-readiness`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, review actions, static decision exports, setup readiness, durable store checks, storage schema readiness, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/intake-store-health`, `/api/storage-readiness`, `/api/event-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, review actions, static decision exports, setup readiness, durable store checks, storage schema readiness, event-store DB checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -94,6 +94,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
 - `/api/intake-store-health` runs a read-only GitHub Contents or local-file health check for optional cron candidate snapshots, including repo, branch, path, snapshot-file readability, and secret redaction.
 - `/api/storage-readiness` exposes the PostgreSQL/PostGIS event-store schema contract, required env names, table plan, migration SQL, and non-secret readiness checks for durable event storage.
+- `/api/event-store-health` performs the live read-only PostgreSQL/PostGIS connection, extension, and expected-table checks when database env is configured.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, per-source activation requirements, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, distinguishes strict `ready` from degraded-but-`operational` retryable failures, and redacts tokens.
 - `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
@@ -177,7 +178,15 @@ WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1
 PGSSLMODE=require
 ```
 
-The endpoint intentionally does not return the database URL or open a connection; it reports only whether `DATABASE_URL`/`POSTGRES_URL` exists, whether the expected schema version has been acknowledged, the table contract, and the migration SQL. `/api/production-readiness` now includes a non-required `postgres-event-store` blocker until those values are configured.
+The readiness endpoint intentionally does not return the database URL or open a connection; it reports only whether `DATABASE_URL`/`POSTGRES_URL` exists, whether the expected schema version has been acknowledged, the table contract, and the migration SQL. Use `/api/event-store-health` after the database is configured to run read-only connection, PostGIS, and table checks.
+
+Candidate writes from the scheduled ingestion heartbeat are opt-in:
+
+```bash
+EVENT_STORE_WRITE_MODE=candidates
+```
+
+When enabled with a ready database, cron stores source-linked review candidates in `warmap_sources`, `warmap_documents`, `warmap_events`, and `warmap_event_sources`. `/api/production-readiness` includes a non-required `postgres-event-store` blocker until database readiness is configured, and `/api/ingestion-status` includes an `event-store-candidate-writes` blocker until candidate writes are explicitly enabled.
 
 ## Platform capability registry
 
