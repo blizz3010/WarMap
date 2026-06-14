@@ -192,7 +192,10 @@ if (
   !appSource.includes("/api/review-export") ||
   !appSource.includes("/api/production-readiness?") ||
   !appSource.includes("/api/editorial-setup?") ||
+  !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
+  !appSource.includes("inline-review-source-strip") ||
+  !appSource.includes("function renderReviewSourceLink(source)") ||
   !appSource.includes("renderInlineReviewExportBundle") ||
   !appSource.includes("data-copy-review-export") ||
   !appSource.includes("inline-review-export") ||

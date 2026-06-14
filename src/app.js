@@ -1556,6 +1556,16 @@ function renderReviewPanel(visible) {
                     <strong>${escapeHtml(item.title)}</strong>
                     <span>${escapeHtml(review.statusLabel)} - ${escapeHtml(review.priority)} - ${escapeHtml(item.place)}</span>
                   </button>
+                  <div class="review-source-strip inline-review-source-strip">
+                    <span>Sources</span>
+                    ${(item.sources ?? []).slice(0, 3).map(renderReviewSourceLink).join("") || "<small>No public source link</small>"}
+                  </div>
+                  <div class="review-candidate-links inline-review-links">
+                    <a href="${escapeAttr(eventHashLink(item))}">Map</a>
+                    <a href="${escapeAttr(eventPageLink(item))}">Detail</a>
+                    <a href="${escapeAttr(reviewDossierLink(item))}" target="_blank" rel="noreferrer noopener">Dossier</a>
+                    <a href="${escapeAttr(eventApiLink(item))}" target="_blank" rel="noreferrer noopener">API</a>
+                  </div>
                   <div class="review-actions">
                     <button type="button" data-review-action="approve" data-review-event-id="${escapeAttr(item.id)}">Approve</button>
                     <button type="button" data-review-action="needs-review" data-review-event-id="${escapeAttr(item.id)}">Hold</button>
@@ -1676,6 +1686,14 @@ function renderInlineReviewExportBundle() {
       <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")}</small>
     </section>
   `;
+}
+
+function renderReviewSourceLink(source) {
+  const url = safeUrl(source.url);
+  const label = escapeHtml(source.name);
+  return url
+    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}<small>${escapeHtml(sourceProvenanceLabel(source))}</small></a>`
+    : `<small>${label}</small>`;
 }
 
 function clearInlineReviewExport() {
@@ -2816,6 +2834,15 @@ function editorialSetupLink() {
 function publicationStatusLink() {
   const params = new URLSearchParams({ region: state.regionId });
   return `/api/publication-status?${params.toString()}`;
+}
+
+function reviewDossierLink(item) {
+  const params = new URLSearchParams({
+    id: item.id,
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/api/review-dossier?${params.toString()}`;
 }
 
 function archivePageLink() {

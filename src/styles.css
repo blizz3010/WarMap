@@ -1571,6 +1571,33 @@ dd {
   text-align: center;
 }
 
+.inline-review-source-strip,
+.inline-review-links {
+  gap: 5px;
+}
+
+.inline-review-source-strip > span {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.inline-review-source-strip a,
+.inline-review-source-strip small,
+.inline-review-links a {
+  max-width: 150px;
+  min-height: 26px;
+  padding: 4px 6px;
+  font-size: 10px;
+}
+
+.inline-review-source-strip a small {
+  font-size: 8px;
+}
+
+.inline-review-links a {
+  color: #bfdbfe;
+}
+
 .review-queue-list strong,
 .review-queue-list span,
 .review-queue-list small {
