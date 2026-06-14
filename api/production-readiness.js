@@ -43,6 +43,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
       sourceCuration: {
         activeSources: curation.sourceRegistry.active,
         plannedSources: curation.sourceRegistry.planned,
+        activationBacklog: curation.sourceRegistry.activationBacklog,
         readiness: curation.readiness,
         sourceHealth: curation.endpoints?.sourceHealth ?? null
       },
@@ -120,30 +121,47 @@ function aiExtractionBlockers(extraction) {
 function curationBlockers(curation) {
   const blockers = [];
   if (curation.readiness.needsOfficialSiteAdapters) {
+    const sourceIds = activationSourceIds(curation, (source) => source.collector === "official-site");
     blockers.push({
       id: "official-site-adapters",
       required: false,
       status: "planned",
+      sourceCount: sourceIds.length,
+      sourceIds,
+      nextAction: "Confirm automated-use terms and add official RSS/API/CAP adapters.",
       message: "Planned official-site sources need terms review and adapters before activation."
     });
   }
   if (curation.readiness.needsCompliantSocialConfig) {
+    const sourceIds = activationSourceIds(curation, (source) => source.collector === "social-api");
     blockers.push({
       id: "social-api-config",
       required: false,
       status: "planned",
+      sourceCount: sourceIds.length,
+      sourceIds,
+      nextAction: "Configure approved API endpoint metadata through COMPLIANT_SOCIAL_API_SOURCES.",
       message: "Compliant social API sources require approved endpoints and tokens before activation."
     });
   }
   if (curation.readiness.needsLicensedLiveuamapApi) {
+    const sourceIds = activationSourceIds(curation, (source) => source.id === "liveuamap-api" || source.collector === "licensed-api");
     blockers.push({
       id: "liveuamap-license",
       required: false,
       status: "planned",
+      sourceCount: sourceIds.length,
+      sourceIds,
+      nextAction: "Use Liveuamap data only through a paid or written API/license relationship.",
       message: "Liveuamap-derived data requires a licensed API relationship; public pages are not collector inputs."
     });
   }
   return blockers;
+}
+
+function activationSourceIds(curation, predicate) {
+  const sources = curation.sourceRegistry?.activationBacklog?.sources ?? [];
+  return sources.filter(predicate).map((source) => source.id);
 }
 
 function platformReadinessSummary({ notifications = notificationRuntimeSummary() } = {}) {
