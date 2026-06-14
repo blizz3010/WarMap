@@ -64,7 +64,7 @@ The browser map also opens `/v1/stream/events` with `EventSource` when available
 
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
 
-- `/v1/config` returns theater presets, category icon taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, notification channels, and paid-layer capability records.
+- `/v1/config` returns theater presets, category icon taxonomy, granular event-type taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, notification channels, and paid-layer capability records.
 - `/v1/events?region=ukraine-east&publication=published` returns event resources with location, review state, extraction metadata, visible original source links, collector provenance, and map/detail/API links.
 - `/v1/feed?region=ukraine-east` returns feed-optimized event cards.
 - `/v1/timeline?region=ukraine-east` groups event cards by day.
@@ -95,7 +95,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/intake-store-health` runs a read-only GitHub Contents or local-file health check for optional cron candidate snapshots, including repo, branch, path, snapshot-file readability, and secret redaction.
 - `/api/storage-readiness` exposes the PostgreSQL/PostGIS event-store schema contract, required env names, table plan, migration SQL, and non-secret readiness checks for durable event storage.
 - `/api/event-store-health` performs the live read-only PostgreSQL/PostGIS connection, extension, and expected-table checks when database env is configured.
-- `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, per-source activation requirements, and collector readiness flags.
+- `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, source-attribution families, granular legend/event-type taxonomy, per-source activation requirements, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, distinguishes strict `ready` from degraded-but-`operational` retryable failures, and redacts tokens.
 - `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
 - `/api/publication-status?region=ukraine-east` audits approved records across the map, feed, detail, archive, and public API surfaces, including source-link and coordinate checks for every published event.
@@ -249,7 +249,7 @@ COMPLIANT_SOCIAL_API_SOURCES='[
 
 Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`, `link`, `permalink`, `publishedAt`, `createdAt`, `image`, and `mediaUrl`. Every social API item still enters the review queue as an unverified candidate.
 
-See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, and the activation checklist for planned official-site, licensed API, and social/API sources. `/api/source-curation` exposes those activation requirements directly so planned sources stay inspectable without being fetched.
+See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, the event-type legend contract, and the activation checklist for planned official-site, licensed API, and social/API sources. `/api/source-curation` exposes those activation requirements directly so planned sources stay inspectable without being fetched.
 
 Use `/api/source-health?region=ukraine-east` to verify the active collector pipeline. Planned official-site and licensed Liveuamap entries are listed but not fetched until an adapter or licensed API contract exists. Configured official XML sources are read from `OFFICIAL_FEED_SOURCES` and can provide RSS, Atom, or CAP-style alert XML after terms review. Configured social API sources are read from `COMPLIANT_SOCIAL_API_SOURCES`; any `tokenEnv` values are checked as booleans and never returned. Each source row includes a non-secret `diagnostic` code/category so failed feeds can be triaged without exposing tokens. The top-level `ready` flag remains strict; `operational`, `degraded`, and `resilience.state` separate temporary retryable collector failures from configuration or parser blockers.
 

@@ -1,4 +1,4 @@
-import { actorSides, categories, regions, severities, sourceTypes } from "../../src/data.js";
+import { actorSides, categories, eventTypes, regions, severities, sourceTypes } from "../../src/data.js";
 import { PLATFORM_CONFIG } from "../platform-config.js";
 import { SOURCE_REGISTRY } from "../source-registry.js";
 import { rejectNonGet, sendJson } from "./adapter.js";
@@ -12,6 +12,7 @@ export default function handler(request, response) {
   const payload = buildV1ConfigPayload({
     actorSides,
     categories,
+    eventTypes,
     platformConfig: PLATFORM_CONFIG,
     regions,
     severities,

@@ -121,6 +121,20 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
         icon: category.icon,
         color: category.color
       })),
+      eventTypes: taxonomyEntries(payload.eventTypes, (eventType) => {
+        const category = payload.categories?.[eventType.category] ?? {};
+        return {
+          label: eventType.label,
+          short: eventType.short,
+          icon: eventType.icon,
+          category: eventType.category,
+          categoryLabel: category.label ?? "",
+          color: category.color ?? "",
+          legendGroup: eventType.legendGroup,
+          extractionHints: eventType.extractionHints ?? [],
+          reviewCue: eventType.reviewCue
+        };
+      }),
       severities: taxonomyEntries(payload.severities, (severity) => ({
         label: severity.label,
         color: severity.color,

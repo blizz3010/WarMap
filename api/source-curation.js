@@ -1,5 +1,6 @@
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
 import { plannedSourcesForRegion, sourcesForRegion } from "./source-registry.js";
+import { categories, eventTypes } from "../src/data.js";
 
 const LIVEUAMAP_REFERENCES = [
   {
@@ -93,6 +94,49 @@ const ACTIVATION_CHECKS = [
   }
 ];
 
+const LIVEUAMAP_COMPATIBLE_MODEL = {
+  dataBoundary:
+    "Use Liveuamap as a product and workflow reference. Use Liveuamap data only through a paid or written API/license, and otherwise collect original public sources directly.",
+  sourceAttributionFamilies: [
+    {
+      id: "official-military",
+      label: "Official military and defense statements",
+      examples: ["general staff updates", "air force alerts", "defense ministry statements"],
+      reviewPolicy: "claim-label-required"
+    },
+    {
+      id: "regional-authorities",
+      label: "Regional authorities and emergency services",
+      examples: ["regional administration updates", "emergency service incident notices", "municipal alerts"],
+      reviewPolicy: "primary-source-review"
+    },
+    {
+      id: "media-open-web",
+      label: "Media and open web reporting",
+      examples: ["known outlet RSS", "open web index leads", "local reporting"],
+      reviewPolicy: "standard-open-source-review"
+    },
+    {
+      id: "compliant-social",
+      label: "Compliant social and OSINT APIs",
+      examples: ["terms-reviewed social APIs", "analyst-owned OSINT feeds", "geolocated media leads"],
+      reviewPolicy: "analyst-review-required"
+    },
+    {
+      id: "licensed-aggregator",
+      label: "Licensed aggregator relationship",
+      examples: ["Liveuamap API with original source links"],
+      reviewPolicy: "license-and-attribution-review"
+    }
+  ],
+  publicationRules: [
+    "Map markers must stay synchronized with feed, detail, archive, and v1 API records.",
+    "Every public event must expose original source links and retain a source-linked approval snapshot.",
+    "Approximate geolocation must be labeled with precision and never presented as exact targeting.",
+    "Event type, side, severity, duplicate key, and review state must be editable before approval."
+  ]
+};
+
 export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = new Date() } = {}) {
   const normalizedRegion = String(region || DEFAULT_REGION_ID);
   const sources = sourcesForRegion(normalizedRegion);
@@ -108,6 +152,8 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
     workflowStages: WORKFLOW_STAGES,
     activationChecks: ACTIVATION_CHECKS,
     liveuamapReferences: LIVEUAMAP_REFERENCES,
+    liveuamapCompatibleModel: LIVEUAMAP_COMPATIBLE_MODEL,
+    legendModel: buildLegendModel(),
     endpoints: {
       sourceHealth: `/api/source-health?region=${encodeURIComponent(normalizedRegion)}`,
       events: `/api/events?region=${encodeURIComponent(normalizedRegion)}`,
@@ -247,4 +293,57 @@ function collectorFamilies(sources) {
       sourceTypes: [...family.sourceTypes].sort()
     }))
     .sort((left, right) => left.collector.localeCompare(right.collector));
+}
+
+function buildLegendModel() {
+  const types = Object.entries(eventTypes).map(([id, eventType]) => {
+    const category = categories[eventType.category] ?? categories.other;
+    return {
+      id,
+      label: eventType.label,
+      short: eventType.short,
+      icon: eventType.icon,
+      category: eventType.category,
+      categoryLabel: category.label,
+      color: category.color,
+      legendGroup: eventType.legendGroup,
+      extractionHints: eventType.extractionHints,
+      reviewCue: eventType.reviewCue
+    };
+  });
+
+  return {
+    schemaVersion: "warmap-legend.v1",
+    purpose:
+      "Granular event-type vocabulary for AI extraction, editor review, marker icon selection, feed filtering, and future paid layer segmentation.",
+    categories: Object.entries(categories).map(([id, category]) => ({
+      id,
+      label: category.label,
+      short: category.short,
+      icon: category.icon,
+      color: category.color
+    })),
+    eventTypes: types,
+    groups: legendGroups(types)
+  };
+}
+
+function legendGroups(types) {
+  return Object.values(
+    types.reduce((groups, eventType) => {
+      const key = eventType.legendGroup;
+      groups[key] ??= {
+        id: key.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        label: key,
+        eventTypeCount: 0,
+        categories: new Set()
+      };
+      groups[key].eventTypeCount += 1;
+      groups[key].categories.add(eventType.category);
+      return groups;
+    }, {})
+  ).map((group) => ({
+    ...group,
+    categories: [...group.categories].sort()
+  }));
 }

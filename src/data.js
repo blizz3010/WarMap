@@ -134,6 +134,225 @@ export const categories = {
   }
 };
 
+export const eventTypes = {
+  strike: {
+    label: "Explosions / strikes",
+    short: "EX",
+    icon: "blast",
+    category: "strike",
+    legendGroup: "Kinetic",
+    extractionHints: ["explosion", "strike", "blast", "impact"],
+    reviewCue: "Confirm target, weapon claim, source link, and location precision before publication."
+  },
+  missile: {
+    label: "Missile launch / impact",
+    short: "MSL",
+    icon: "missile",
+    category: "strike",
+    legendGroup: "Kinetic",
+    extractionHints: ["missile", "rocket", "ballistic", "cruise"],
+    reviewCue: "Separate launch, interception, and impact reports unless sources clearly tie them together."
+  },
+  drone: {
+    label: "Drone / UAV activity",
+    short: "UAV",
+    icon: "drone",
+    category: "air",
+    legendGroup: "Air",
+    extractionHints: ["drone", "uav", "shahed", "loitering munition"],
+    reviewCue: "Check whether the report is launch, overflight, interception, strike, or debris."
+  },
+  "air-defense": {
+    label: "Air defense activity",
+    short: "AD",
+    icon: "air-defense",
+    category: "air",
+    legendGroup: "Air",
+    extractionHints: ["air defense", "intercepted", "shootdown", "explosions in sky"],
+    reviewCue: "Mark as air-defense activity until an impact or target is independently confirmed."
+  },
+  "air-alert": {
+    label: "Air alert / warning",
+    short: "ALT",
+    icon: "alert",
+    category: "air",
+    legendGroup: "Air",
+    extractionHints: ["air alert", "sirens", "warning", "take shelter"],
+    reviewCue: "Use official alert feeds where possible and keep alert geometry separate from incident points."
+  },
+  "air-operations": {
+    label: "Air operations",
+    short: "AIR",
+    icon: "air",
+    category: "air",
+    legendGroup: "Air",
+    extractionHints: ["aircraft", "fighter jet", "helicopter", "sortie"],
+    reviewCue: "Avoid identifying aircraft type or side unless the source explicitly supports it."
+  },
+  "ground-clash": {
+    label: "Ground clashes",
+    short: "GND",
+    icon: "shield",
+    category: "military",
+    legendGroup: "Ground",
+    extractionHints: ["clashes", "assault", "fighting", "engagement"],
+    reviewCue: "Treat frontline claims as provisional and prefer confirmed settlement or district precision."
+  },
+  "troop-movement": {
+    label: "Troop movement",
+    short: "MOV",
+    icon: "route",
+    category: "military",
+    legendGroup: "Ground",
+    extractionHints: ["convoy", "troops", "reinforcements", "movement"],
+    reviewCue: "Check if the movement is current, historic footage, or an unverified social lead."
+  },
+  artillery: {
+    label: "Artillery / shelling",
+    short: "ART",
+    icon: "artillery",
+    category: "strike",
+    legendGroup: "Ground",
+    extractionHints: ["shelling", "artillery", "mortar", "mlrs"],
+    reviewCue: "Record affected location and civilian impact separately from fire-origin claims."
+  },
+  "map-control": {
+    label: "Map control change",
+    short: "MAP",
+    icon: "frontline",
+    category: "military",
+    legendGroup: "Ground",
+    extractionHints: ["captured", "liberated", "advanced", "control"],
+    reviewCue: "Require high scrutiny and source comparison before changing territory/control status."
+  },
+  naval: {
+    label: "Naval / maritime activity",
+    short: "SEA",
+    icon: "ship",
+    category: "military",
+    legendGroup: "Maritime",
+    extractionHints: ["ship", "naval", "port", "maritime", "black sea"],
+    reviewCue: "Keep vessel, port, and maritime-advisory reports distinct unless they describe one incident."
+  },
+  "security-deployment": {
+    label: "Security deployment",
+    short: "SEC",
+    icon: "police",
+    category: "security",
+    legendGroup: "Security",
+    extractionHints: ["security forces", "checkpoint", "deployment", "cordon"],
+    reviewCue: "Separate routine security posture from conflict-linked incident reports."
+  },
+  "border-incident": {
+    label: "Border incident",
+    short: "BDR",
+    icon: "border",
+    category: "security",
+    legendGroup: "Security",
+    extractionHints: ["border", "cross-border", "checkpoint", "incursion"],
+    reviewCue: "Capture both sides of official claims and mark unresolved attribution clearly."
+  },
+  "infrastructure-hit": {
+    label: "Infrastructure damage",
+    short: "INF",
+    icon: "facility",
+    category: "infrastructure",
+    legendGroup: "Civilian impact",
+    extractionHints: ["power plant", "substation", "bridge", "rail", "airport", "depot"],
+    reviewCue: "Preserve facility type, operational status, and safety impact separately from attack claims."
+  },
+  fire: {
+    label: "Fire / smoke",
+    short: "FIR",
+    icon: "fire",
+    category: "infrastructure",
+    legendGroup: "Civilian impact",
+    extractionHints: ["fire", "smoke", "burning", "plume"],
+    reviewCue: "Use visual reports as leads until cause, place, and timestamp are corroborated."
+  },
+  casualty: {
+    label: "Casualties / injuries",
+    short: "CAS",
+    icon: "medical",
+    category: "humanitarian",
+    legendGroup: "Civilian impact",
+    extractionHints: ["killed", "injured", "casualties", "wounded"],
+    reviewCue: "Avoid publishing numbers without source attribution and correction path."
+  },
+  displacement: {
+    label: "Displacement / evacuation",
+    short: "EVAC",
+    icon: "evacuation",
+    category: "humanitarian",
+    legendGroup: "Civilian impact",
+    extractionHints: ["evacuated", "displaced", "shelter", "humanitarian corridor"],
+    reviewCue: "Prefer official or humanitarian sources and keep affected-population estimates sourced."
+  },
+  aid: {
+    label: "Humanitarian aid",
+    short: "AID",
+    icon: "aid",
+    category: "humanitarian",
+    legendGroup: "Civilian impact",
+    extractionHints: ["aid", "relief", "red cross", "rescue", "humanitarian"],
+    reviewCue: "Track aid delivery, rescue operation, and damage assessment as separate event shapes."
+  },
+  protest: {
+    label: "Protest / unrest",
+    short: "PRO",
+    icon: "crowd",
+    category: "protest",
+    legendGroup: "Civil society",
+    extractionHints: ["protest", "rally", "demonstration", "unrest"],
+    reviewCue: "Check time, place, crowd-size claims, and whether media is current."
+  },
+  "official-statement": {
+    label: "Official statement",
+    short: "OF",
+    icon: "statement",
+    category: "politics",
+    legendGroup: "Information",
+    extractionHints: ["said", "announced", "statement", "briefing"],
+    reviewCue: "Label conflict-party statements as claims unless independently corroborated."
+  },
+  diplomacy: {
+    label: "Diplomacy / sanctions",
+    short: "DIP",
+    icon: "diplomacy",
+    category: "politics",
+    legendGroup: "Information",
+    extractionHints: ["diplomatic", "sanctions", "summit", "talks"],
+    reviewCue: "Keep policy moves separate from battlefield incident markers unless directly linked."
+  },
+  cyber: {
+    label: "Cyber / information operation",
+    short: "CYB",
+    icon: "cyber",
+    category: "security",
+    legendGroup: "Information",
+    extractionHints: ["cyber", "hack", "ddos", "information operation"],
+    reviewCue: "Require attribution caution and source confidence before mapping to a side."
+  },
+  claim: {
+    label: "Unverified claim",
+    short: "CLM",
+    icon: "claim",
+    category: "other",
+    legendGroup: "Information",
+    extractionHints: ["claims", "reportedly", "unconfirmed", "alleged"],
+    reviewCue: "Keep as review-only or publish with explicit claim labeling after editorial approval."
+  },
+  "media-evidence": {
+    label: "Photo / video evidence",
+    short: "VID",
+    icon: "media",
+    category: "other",
+    legendGroup: "Information",
+    extractionHints: ["video", "photo", "footage", "geolocated"],
+    reviewCue: "Check upload time, original source, geolocation, and reuse risk before publication."
+  }
+};
+
 export const actorSides = {
   ukraine: {
     label: "Ukraine / allied",

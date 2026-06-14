@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
+import { actorSides, categories, eventTypes, events, regions, severities, sourceTypes } from "../src/data.js";
 import { collectOpenWebArticles } from "../api/collectors.js";
 import { detailEventsForRegion } from "../api/event.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
@@ -370,6 +370,15 @@ if (!plannedSocialApiSourcesForRegion("ukraine").length) {
   throw new Error("Expected planned compliant social API collector family");
 }
 
+if (
+  Object.keys(eventTypes).length < 20 ||
+  !eventTypes["air-defense"] ||
+  !eventTypes["map-control"] ||
+  !Object.values(eventTypes).every((eventType) => categories[eventType.category] && eventType.reviewCue && eventType.extractionHints?.length)
+) {
+  throw new Error("Expected granular Liveuamap-style event type taxonomy with category bindings and review cues");
+}
+
 const ukraineCuration = buildSourceCurationPayload({
   region: "ukraine-east",
   now: new Date("2026-05-28T02:03:00Z")
@@ -385,7 +394,10 @@ if (
   !ukraineCuration.readiness.canPublishFromCollectors ||
   !ukraineCuration.endpoints.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
   !ukraineCuration.readiness.needsOfficialSiteAdapters ||
-  !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages"))
+  !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages")) ||
+  !ukraineCuration.liveuamapCompatibleModel?.sourceAttributionFamilies?.some((family) => family.id === "official-military" && family.reviewPolicy === "claim-label-required") ||
+  !ukraineCuration.legendModel?.eventTypes?.some((eventType) => eventType.id === "missile" && eventType.category === "strike") ||
+  !ukraineCuration.legendModel?.groups?.some((group) => group.id === "air" && group.eventTypeCount >= 3)
 ) {
   throw new Error("Source curation payload failed Liveuamap boundary or source backlog checks");
 }
@@ -1985,6 +1997,7 @@ const v1Events = buildV1EventsPayload(
 const v1Config = buildV1ConfigPayload({
   actorSides,
   categories,
+  eventTypes,
   platformConfig: PLATFORM_CONFIG,
   regions,
   severities,
@@ -2012,6 +2025,8 @@ if (
   v1Config.kind !== "Configuration" ||
   !v1Config.regions.some((region) => region.id === "ukraine-east") ||
   !v1Config.taxonomies.categories.some((category) => category.id === "strike" && category.color) ||
+  !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "drone" && eventType.category === "air" && eventType.color) ||
+  !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "claim" && eventType.reviewCue) ||
   !v1Config.taxonomies.actorSides.some((side) => side.id === "ukraine" && side.color) ||
   !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
