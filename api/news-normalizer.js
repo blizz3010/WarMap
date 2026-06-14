@@ -1,7 +1,7 @@
 import { buildCandidateExtraction, enhanceCandidateExtraction, mergeDuplicateExtraction } from "./ai-extractor.js";
 import { enrichEditorialEvent } from "./editorial-workflow.js";
 
-export const DEFAULT_REGION_ID = "iran";
+export const DEFAULT_REGION_ID = "ukraine-east";
 
 const REGION_QUERIES = {
   iran:

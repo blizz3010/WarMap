@@ -243,7 +243,7 @@ function currentRegion() {
 
 function initialRegionId() {
   const requested = params.get("region");
-  return regions.some((region) => region.id === requested) ? requested : "iran";
+  return regions.some((region) => region.id === requested) ? requested : "ukraine-east";
 }
 
 function v1EventsUrl() {

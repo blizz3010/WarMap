@@ -57,7 +57,7 @@ The check validates the static app files and the event, region, category, severi
 - verification state: `reported` by default, because these are source leads
 - lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
-The browser map fetches `/api/events?region=iran&publication=all` and keeps the static data as a safe fallback. Theater, publication, and non-default lookback selections stay in the URL so Liveuamap-style region switches can be shared directly, including event hash links. The embed view uses the public `/v1/events` contract so it can be dropped into dashboard surfaces without depending on legacy internal response shapes. `publication=published` returns only approved events when a persistent editorial store is added.
+The browser map defaults to the eastern Ukraine theater and fetches `/api/events?region=ukraine-east&publication=all`, while keeping the static data as a safe fallback. Theater, publication, and non-default lookback selections stay in the URL so Liveuamap-style region switches can be shared directly, including event hash links. Iran and Middle East presets remain selectable through explicit `?region=iran` or `?region=middle-east` links. The embed view uses the public `/v1/events` contract so it can be dropped into dashboard surfaces without depending on legacy internal response shapes. `publication=published` returns only approved events when a persistent editorial store is added.
 
 The browser map also opens `/v1/stream/events` with `EventSource` when available. Stream snapshots invalidate events and trigger a quiet refresh that preserves filters and the selected detail card; the Pause button closes the stream and Resume reconnects it.
 
@@ -78,7 +78,8 @@ The default v1 publication mode is `published`, matching the public-map contract
 
 `/embed` is the lightweight iframe surface for the future war dashboard. It uses `/v1/events` and supports the same theater and publication contract:
 
-- `/embed?region=iran&publication=all` shows live review candidates for an internal dashboard.
+- `/embed?publication=all` opens on the default eastern Ukraine dashboard.
+- `/embed?region=iran&publication=all` still opens the Iran theater when needed.
 - `/embed?region=ukraine-east&lookback=30d&publication=all` opens directly on an eastern Ukraine theater.
 - `/embed?region=ukraine&publication=published` limits the widget to editor-approved public records.
 
@@ -106,9 +107,9 @@ The embed header includes a theater selector, live/published count, source mode 
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
 - `POST /api/review-export` validates the same decision payload and returns a commit-ready static decision module for `api/editorial-decisions.js` when Vercel writes are not configured yet.
 - `/api/event?id=...&region=...` returns one event detail record by id or slug.
-- `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
+- `/api/archive?region=ukraine-east` returns approved events grouped by day, including approved live candidates when a review decision exists.
 - `/event?id=...&region=...` renders a public event record backed by `/api/event`.
-- `/archive?region=iran&lookback=90d` renders the public approved-event archive backed by `/api/archive`.
+- `/archive?region=ukraine-east&lookback=90d` renders the public approved-event archive backed by `/api/archive`.
 - `/review?region=ukraine-east&lookback=30d` renders the standalone editorial queue backed by `/api/review-queue` and `/api/review-action`, including status/assignee/priority filters and a persisted reviewer identity for decision ownership.
 
 Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured. Until those secrets exist, the standalone review page calls `/api/review-export` after a blocked approval/correction and shows a static module that can be committed to `api/editorial-decisions.js`; committed static decisions are loaded by the same map, feed, detail, archive, and API publication path. The preview links in the review surfaces are always dry-run only: they do not approve, store, or publish an event without a reviewer action/export.

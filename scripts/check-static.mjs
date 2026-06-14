@@ -35,7 +35,7 @@ import {
   runIngestionHeartbeat
 } from "../api/ingestion-service.js";
 import { intakeSnapshotStoreCapabilities, intakeSnapshotStoreHealth, loadIntakeSnapshots } from "../api/intake-store.js";
-import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
+import { DEFAULT_REGION_ID, buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import {
   buildNotificationStatusPayload,
   dispatchWebhookNotificationBatch,
@@ -528,6 +528,14 @@ if (regions.length < 3) {
 
 if (!regions.some((region) => region.id === "ukraine-east")) {
   throw new Error("Expected Ukraine theater presets");
+}
+
+if (
+  DEFAULT_REGION_ID !== "ukraine-east" ||
+  !appSource.includes('? requested : "ukraine-east"') ||
+  !embedSource.includes('? requested : "ukraine-east"')
+) {
+  throw new Error("Default theater should open on eastern Ukraine unless a region query is provided");
 }
 
 if (!activeRssFeedsForRegion("ukraine").length || SOURCE_REGISTRY.length < 6) {

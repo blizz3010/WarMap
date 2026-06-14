@@ -2969,7 +2969,7 @@ function currentRegion() {
 function initialRegionId() {
   const params = new URLSearchParams(window.location.search);
   const requested = params.get("region");
-  return regions.some((region) => region.id === requested) ? requested : "iran";
+  return regions.some((region) => region.id === requested) ? requested : "ukraine-east";
 }
 
 function initialPublicationMode() {
