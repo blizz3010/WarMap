@@ -39,10 +39,11 @@ const WATCH_TERMS = [
 
 export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRecords = 75, lookback = "30d" } = {}) {
   const normalizedLookback = normalizeLookback(lookback);
+  const officialFeeds = officialFeedsForRegion(region);
   const [gdeltResult, rssResult, officialResult, socialResult] = await Promise.allSettled([
     fetchGdeltArticles(region, maxRecords, normalizedLookback),
     fetchRssArticles(region, normalizedLookback),
-    fetchOfficialFeedArticles(region, normalizedLookback),
+    fetchOfficialFeedArticles(region, normalizedLookback, officialFeeds),
     fetchCompliantSocialApiArticles(region, normalizedLookback)
   ]);
 
@@ -72,7 +73,7 @@ export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRe
     },
     upstreamErrors,
     rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
-    officialFeeds: activeOfficialFeedsForRegion(region).map((feed) => feed.url),
+    officialFeeds: officialFeeds.map((feed) => feed.url),
     socialApiSources: configuredSocialApiSources(region).map((source) => ({
       name: source.name,
       url: source.url,
@@ -113,8 +114,7 @@ async function fetchRssArticles(region, lookback) {
   return fetchXmlFeedArticles(rssFeeds, region, lookback, "RSS");
 }
 
-async function fetchOfficialFeedArticles(region, lookback) {
-  const officialFeeds = activeOfficialFeedsForRegion(region);
+async function fetchOfficialFeedArticles(region, lookback, officialFeeds = officialFeedsForRegion(region)) {
   return fetchXmlFeedArticles(officialFeeds, region, lookback, "official feed");
 }
 
@@ -131,7 +131,7 @@ async function fetchXmlFeedArticles(feeds, region, lookback, label) {
       if (!upstream.ok) {
         throw new Error(`${label} ${feed.name} returned ${upstream.status}`);
       }
-      return extractRssItems(await upstream.text(), feed, region, lookback);
+      return extractXmlFeedItems(await upstream.text(), feed, region, lookback);
     })
   );
 
@@ -185,14 +185,39 @@ async function fetchWithTimeout(url, options) {
   }
 }
 
-function extractRssItems(xml, feed, region, lookback) {
+function extractXmlFeedItems(xml, feed, region, lookback) {
   const minTimestamp = Date.now() - lookbackDurationMs(lookback);
-  return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
-    .map((match) => rssItemToArticle(match[0], feed))
+  return xmlFeedBlocks(xml)
+    .map((block) => xmlFeedBlockToArticle(block, feed))
     .filter((article) => article.title && article.url)
     .filter((article) => !article.pubDate || Date.parse(article.pubDate) >= minTimestamp)
     .filter((article) => isRelevantArticle(article, region))
-    .slice(0, 30);
+    .slice(0, feed.limit ?? 30);
+}
+
+function xmlFeedBlocks(xml) {
+  const rssItems = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)];
+  if (rssItems.length) {
+    return rssItems.map((match) => ({ type: "rss", xml: match[0] }));
+  }
+
+  const atomEntries = [...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi)];
+  if (atomEntries.length) {
+    return atomEntries.map((match) => ({ type: "atom", xml: match[0] }));
+  }
+
+  const capAlerts = [...xml.matchAll(/<(?:[\w.-]+:)?alert\b[\s\S]*?<\/(?:[\w.-]+:)?alert>/gi)];
+  return capAlerts.map((match) => ({ type: "cap", xml: match[0] }));
+}
+
+function xmlFeedBlockToArticle(block, feed) {
+  if (block.type === "atom") {
+    return atomEntryToArticle(block.xml, feed);
+  }
+  if (block.type === "cap") {
+    return capAlertToArticle(block.xml, feed);
+  }
+  return rssItemToArticle(block.xml, feed);
 }
 
 function rssItemToArticle(itemXml, feed) {
@@ -212,6 +237,51 @@ function rssItemToArticle(itemXml, feed) {
     language: "English",
     pubDate: decodeXml(readTag(itemXml, "pubDate")),
     socialimage: decodeXml(readMediaUrl(itemXml))
+  };
+}
+
+function atomEntryToArticle(entryXml, feed) {
+  const href = readAttr(entryXml, "link", "href");
+  const url = safeUrl(decodeXml(href)) || safeUrl(decodeXml(readTag(entryXml, "id"))) || feed.url;
+  return {
+    title: decodeXml(readTag(entryXml, "title")),
+    description: stripTags(decodeXml(readTag(entryXml, "summary") || readTag(entryXml, "content"))),
+    url,
+    domain: domainFromUrl(url),
+    sourceName: feed.name,
+    sourceRegistryId: feed.id,
+    collector: feed.collector,
+    collectorUrl: feed.url,
+    sourceType: feed.sourceType,
+    trustTier: feed.trustTier,
+    sourcecountry: feed.country,
+    language: feed.language ?? "English",
+    pubDate: decodeXml(readTag(entryXml, "published") || readTag(entryXml, "updated")),
+    socialimage: decodeXml(readMediaUrl(entryXml))
+  };
+}
+
+function capAlertToArticle(alertXml, feed) {
+  const event = decodeXml(readTag(alertXml, "event"));
+  const headline = decodeXml(readTag(alertXml, "headline"));
+  const description = stripTags(decodeXml(readTag(alertXml, "description") || readTag(alertXml, "instruction")));
+  const area = decodeXml(readTag(alertXml, "areaDesc"));
+  const url = safeUrl(decodeXml(readTag(alertXml, "web"))) || feed.url;
+  return {
+    title: headline || event,
+    description: [description, area].filter(Boolean).join(" "),
+    url,
+    domain: domainFromUrl(url),
+    sourceName: feed.name,
+    sourceRegistryId: feed.id,
+    collector: feed.collector,
+    collectorUrl: feed.url,
+    sourceType: feed.sourceType,
+    trustTier: feed.trustTier,
+    sourcecountry: feed.country,
+    language: feed.language ?? "Unknown",
+    pubDate: decodeXml(readTag(alertXml, "sent") || readTag(alertXml, "effective") || readTag(alertXml, "onset")),
+    socialimage: ""
   };
 }
 
@@ -263,10 +333,55 @@ function socialItemToArticle(item, source) {
 
 export function configuredSocialApiSources(region) {
   const sources = parseSocialApiSources();
-  return sources.filter((source) => {
-    const regions = Array.isArray(source.regions) && source.regions.length ? source.regions : ["*"];
-    return regions.includes("*") || regions.includes(region);
-  });
+  return sources.filter((source) => appliesToRegion(source, region));
+}
+
+export function configuredOfficialFeedSources(region) {
+  return parseOfficialFeedSources().filter((source) => appliesToRegion(source, region));
+}
+
+function officialFeedsForRegion(region) {
+  return dedupeSources([
+    ...activeOfficialFeedsForRegion(region),
+    ...configuredOfficialFeedSources(region)
+  ]);
+}
+
+function parseOfficialFeedSources() {
+  const raw = process.env.OFFICIAL_FEED_SOURCES;
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed
+          .map(normalizeOfficialFeedSource)
+          .filter((source) => source.name && source.url)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeOfficialFeedSource(source) {
+  return {
+    name: cleanText(source.name),
+    id: cleanText(source.id) || slugify(source.name || source.url || "official-feed"),
+    url: safeUrl(source.url),
+    regions: Array.isArray(source.regions) ? source.regions.map(cleanText).filter(Boolean) : ["*"],
+    collector: "official-feed",
+    feedFormat: cleanText(source.feedFormat) || "xml",
+    sourceType: cleanText(source.sourceType) || "official",
+    trustTier: cleanText(source.trustTier) || "primary source",
+    country: cleanText(source.country),
+    language: cleanText(source.language) || "Unknown",
+    limit: Math.min(Number(source.limit ?? 30) || 30, 50),
+    timeoutMs: Math.min(Number(source.timeoutMs ?? 5000) || 5000, 12000),
+    status: "active",
+    access: "configured official XML feed"
+  };
 }
 
 function parseSocialApiSources() {
@@ -306,6 +421,22 @@ function normalizeSocialApiSource(source) {
   };
 }
 
+function dedupeSources(sources) {
+  const byKey = new Map();
+  sources.forEach((source) => {
+    const key = source.id || source.url;
+    if (key && !byKey.has(key)) {
+      byKey.set(key, source);
+    }
+  });
+  return [...byKey.values()];
+}
+
+function appliesToRegion(source, region) {
+  const regions = Array.isArray(source.regions) && source.regions.length ? source.regions : ["*"];
+  return regions.includes("*") || regions.includes(region);
+}
+
 function isRelevantArticle(article, region) {
   const text = `${article.title} ${article.description}`.toLowerCase();
   const regionTerms = REGION_TERMS[region] ?? REGION_TERMS[DEFAULT_REGION_ID];
@@ -313,8 +444,17 @@ function isRelevantArticle(article, region) {
 }
 
 function readTag(xml, tagName) {
-  const match = xml.match(new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+  const match = xml.match(new RegExp(`<(?:[\\w.-]+:)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?${tagName}>`, "i"));
   return match ? match[1].replace(/^<!\[CDATA\[|\]\]>$/g, "").trim() : "";
+}
+
+function readAttr(xml, tagName, attrName) {
+  const tagMatch = xml.match(new RegExp(`<(?:[\\w.-]+:)?${tagName}\\b[^>]*>`, "i"));
+  if (!tagMatch) {
+    return "";
+  }
+  const attrMatch = tagMatch[0].match(new RegExp(`${attrName}=["']([^"']+)["']`, "i"));
+  return attrMatch?.[1] ?? "";
 }
 
 function readMediaUrl(xml) {

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, events, regions, severities, sourceTypes } from "../src/data.js";
+import { collectOpenWebArticles } from "../api/collectors.js";
 import { detailEventsForRegion } from "../api/event.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
 import { buildEditorialStatusPayload } from "../api/editorial-status.js";
@@ -377,6 +378,7 @@ if (
   sourceHealth.health.degraded ||
   sourceHealth.health.resilience?.state !== "ready" ||
   sourceHealth.health.summary.checkedSources < 4 ||
+  sourceHealth.health.summary.configuredOfficialFeeds !== 0 ||
   sourceHealth.health.summary.configuredSocialApis !== 1 ||
   sourceHealth.health.summary.retryableFailures !== 0 ||
   sourceHealth.health.summary.hardFailures !== 0 ||
@@ -390,6 +392,76 @@ if (
 }
 if (JSON.stringify(sourceHealth.health).includes("social-secret")) {
   throw new Error("Source health payload leaked a configured social API secret");
+}
+
+const officialXmlFeed = await withTemporarySourceHealthEnv(async () => {
+  process.env.OFFICIAL_FEED_SOURCES = JSON.stringify([
+    {
+      id: "ukraine-cap-fixture",
+      name: "Ukraine CAP Fixture",
+      url: "https://alerts.example.test/cap.xml",
+      regions: ["ukraine-east"],
+      feedFormat: "cap",
+      country: "Ukraine",
+      language: "English"
+    }
+  ]);
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("api.gdeltproject.org")) {
+      return jsonResponse(200, { articles: [] });
+    }
+    if (String(url).includes("alerts.example.test")) {
+      return textResponse(
+        200,
+        `<alert>
+          <identifier>fixture-cap-1</identifier>
+          <sent>2026-06-13T12:00:00Z</sent>
+          <info>
+            <event>Missile attack</event>
+            <headline>Missile attack reported near Kharkiv, Ukraine</headline>
+            <description>Official alert reports attack impacts in Kharkiv.</description>
+            <area><areaDesc>Kharkiv</areaDesc></area>
+            <web>https://alerts.example.test/alerts/fixture-cap-1</web>
+          </info>
+        </alert>`
+      );
+    }
+    return textResponse(200, "<rss><channel></channel></rss>");
+  };
+
+  try {
+    const collection = await collectOpenWebArticles({
+      region: "ukraine-east",
+      lookback: "30d",
+      maxRecords: 5
+    });
+    const health = await buildSourceHealthPayload({
+      region: "ukraine-east",
+      now: new Date("2026-06-13T12:05:00Z"),
+      maxSources: 8,
+      fetchImpl: globalThis.fetch
+    });
+    return { collection, health };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+if (
+  !officialXmlFeed.collection.articles.some(
+    (article) =>
+      article.sourceRegistryId === "ukraine-cap-fixture" &&
+      article.collector === "official-feed" &&
+      article.url === "https://alerts.example.test/alerts/fixture-cap-1" &&
+      article.title.includes("Kharkiv")
+  ) ||
+  !officialXmlFeed.collection.officialFeeds.includes("https://alerts.example.test/cap.xml") ||
+  officialXmlFeed.health.summary.configuredOfficialFeeds !== 1 ||
+  !officialXmlFeed.health.sources.some((source) => source.id === "ukraine-cap-fixture" && source.ok && source.itemCount === 1) ||
+  !officialXmlFeed.health.families.some((family) => family.collector === "official-feed" && family.ok >= 1)
+) {
+  throw new Error("Configured official XML feed collector failed CAP parsing or source-health checks");
 }
 
 const missingSocialTokenHealth = await withTemporarySourceHealthEnv(async () => {
@@ -1530,6 +1602,7 @@ async function withTemporaryAiExtractionEnv(callback) {
 
 async function withTemporarySourceHealthEnv(callback) {
   const keys = [
+    "OFFICIAL_FEED_SOURCES",
     "COMPLIANT_SOCIAL_API_SOURCES",
     "ALLOWED_OSINT_TOKEN",
     "MISSING_ALLOWED_TOKEN"

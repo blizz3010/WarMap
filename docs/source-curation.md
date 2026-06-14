@@ -24,10 +24,10 @@ WarMap should imitate the useful public shape of Liveuamap, not copy its data. T
 
 Active sources are defined in `api/source-registry.js` and exposed through `/api/source-curation?region=ukraine-east`. Runtime reachability is exposed through `/api/source-health?region=ukraine-east`, including a non-secret diagnostic code/category on every source row.
 
-- Active collectors: GDELT DOC, region-matched media RSS, official RSS-compatible feeds, and opt-in compliant social APIs.
+- Active collectors: GDELT DOC, region-matched media RSS, official RSS-compatible feeds, optional terms-reviewed official RSS/Atom/CAP XML feeds from `OFFICIAL_FEED_SOURCES`, and opt-in compliant social APIs.
 - Planned collectors: official-site adapters for Ukraine Ministry of Defence, State Emergency Service of Ukraine, Russian Defence Ministry claim labeling, and a licensed Liveuamap API integration.
 - Activation profiles: `/api/source-curation` now returns per-source requirements before activation, including licensed-API terms, official-site adapter requirements, social/API token redaction, and review policy labels.
-- Health checks: active GDELT/RSS/official-feed sources and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched. `/api/source-health` keeps `ready` strict while adding `operational`, `degraded`, and `resilience.state` so retryable source timeouts are visible without being confused with missing configuration or hard parser failures.
+- Health checks: active GDELT/RSS/official-feed sources, configured official XML feeds, and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched. `/api/source-health` keeps `ready` strict while adding `operational`, `degraded`, and `resilience.state` so retryable source timeouts are visible without being confused with missing configuration or hard parser failures.
 - Social/API sources remain opt-in through `COMPLIANT_SOCIAL_API_SOURCES`; only add endpoints whose terms permit automated use.
 
 ## Activation checklist
