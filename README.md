@@ -233,7 +233,7 @@ With those variables configured, send `Authorization: Bearer <NOTIFICATION_ADMIN
 
 ## Editorial launch profiles
 
-`/setup?region=ukraine-east` includes copy-safe environment profiles and Vercel CLI commands for the two durable editorial-store paths. The recommended short path is `EDITORIAL_STORE_PROVIDER=github` with a fine-grained GitHub token, repo/branch/path settings, and `EDITORIAL_REVIEW_TOKEN`. The Postgres path uses `EDITORIAL_STORE_PROVIDER=postgres`, `DATABASE_URL` or `POSTGRES_URL`, `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, and the same reviewer token. Secret values are shown only as placeholders; verify the active production state with `/readiness?region=ukraine-east&lookback=30d` after setting Vercel environment variables and redeploying production.
+`/setup?region=ukraine-east` includes copy-safe environment profiles and Vercel CLI commands for the two durable editorial-store paths plus runtime profiles for AI extraction, scheduled ingestion, Postgres candidate writes, and signed server notifications. The recommended short path is `EDITORIAL_STORE_PROVIDER=github` with a fine-grained GitHub token, repo/branch/path settings, and `EDITORIAL_REVIEW_TOKEN`. The Postgres path uses `EDITORIAL_STORE_PROVIDER=postgres`, `DATABASE_URL` or `POSTGRES_URL`, `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, and the same reviewer token. Secret values are shown only as placeholders; verify the active production state with `/readiness?region=ukraine-east&lookback=30d` after setting Vercel environment variables and redeploying production.
 
 ## Collector configuration
 

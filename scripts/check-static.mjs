@@ -332,6 +332,10 @@ if (
   !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("data-setup-region") ||
+  !setupPageSource.includes("links.ingestionStatus") ||
+  !setupPageSource.includes("links.storageReadiness") ||
+  !setupPageSource.includes("links.eventStoreHealth") ||
+  !setupPageSource.includes("links.notificationStatus") ||
   !setupPageSource.includes("/sources?") ||
   !setupPageSource.includes("/readiness?") ||
   !setupPageSource.includes("environmentProfiles") ||
@@ -894,6 +898,7 @@ if (
   productionReadiness.sections.ingestion.ready ||
   productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||
   productionReadiness.sections.ingestion.cron !== "/api/cron/ingest" ||
+  productionReadiness.sections.ingestion.eventStore?.writeMode !== "disabled" ||
   productionReadiness.sections.storage.endpoint !== "/api/storage-readiness" ||
   productionReadiness.sections.storage.eventStoreHealth !== "/api/event-store-health" ||
   productionReadiness.sections.storage.ready ||
@@ -997,6 +1002,10 @@ if (
   !editorialSetup.setupTargets.some((target) => target.id === "github-editorial-store" && !target.ready && target.env.includes("EDITORIAL_GITHUB_TOKEN")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "github-contents-editorial" && profile.recommended && profile.variables.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-editorial" && profile.variables.some((item) => item.name === "DATABASE_URL or POSTGRES_URL" && item.secret)) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "ai-extraction-provider" && profile.variables.some((item) => item.name === "AI_EXTRACTION_ENDPOINT")) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "scheduled-ingestion" && profile.recommended && profile.variables.some((item) => item.name === "CRON_SECRET" && item.secret)) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-event-store-candidates" && profile.variables.some((item) => item.name === "EVENT_STORE_WRITE_MODE" && item.value === "candidates")) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "server-notifications" && profile.variables.some((item) => item.name === "NOTIFICATION_ADMIN_TOKEN" && item.secret)) ||
   editorialSetup.vercelEnvironment?.target !== "production" ||
   editorialSetup.vercelEnvironment?.cli?.pull !== "vercel pull --environment=production" ||
   editorialSetup.vercelEnvironment?.cli?.redeploy !== "vercel deploy --prod" ||
@@ -1009,6 +1018,22 @@ if (
     profile.commands.some((command) => command.name === "DATABASE_URL" && command.addCommand === "vercel env add DATABASE_URL production") &&
     profile.commands.some((command) => command.name === "POSTGRES_URL" && command.addCommand === "vercel env add POSTGRES_URL production")
   ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "ai-extraction-provider" &&
+    profile.commands.some((command) => command.name === "AI_EXTRACTION_ENDPOINT" && command.addCommand === "vercel env add AI_EXTRACTION_ENDPOINT production")
+  ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "scheduled-ingestion" &&
+    profile.commands.some((command) => command.name === "CRON_SECRET" && command.addCommand === "vercel env add CRON_SECRET production" && command.secret)
+  ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "postgres-event-store-candidates" &&
+    profile.commands.some((command) => command.name === "EVENT_STORE_WRITE_MODE" && command.valueHint === "candidates")
+  ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "server-notifications" &&
+    profile.commands.some((command) => command.name === "NOTIFICATION_WEBHOOK_SECRET" && command.addCommand === "vercel env add NOTIFICATION_WEBHOOK_SECRET production" && command.secret)
+  ) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_SITE_SOURCES")) ||
   !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||
@@ -1017,6 +1042,10 @@ if (
   !editorialSetup.links.productionReadiness.includes("/api/production-readiness?region=ukraine-east") ||
   !editorialSetup.links.sourceCuration.includes("/api/source-curation?region=ukraine-east") ||
   !editorialSetup.links.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
+  editorialSetup.links.ingestionStatus !== "/api/ingestion-status" ||
+  editorialSetup.links.storageReadiness !== "/api/storage-readiness" ||
+  editorialSetup.links.eventStoreHealth !== "/api/event-store-health" ||
+  !editorialSetup.links.notificationStatus.includes("/api/notification-status?region=ukraine-east") ||
   !editorialSetup.links.reviewDesk.includes("/review?region=ukraine-east")
 ) {
   throw new Error("Editorial setup payload failed missing-secret setup checks");
