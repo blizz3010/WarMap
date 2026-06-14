@@ -173,6 +173,17 @@ if (
   throw new Error("Expected first-screen theater strip controls for Ukraine area switching");
 }
 
+if (
+  !indexPageSource.includes('id="eventTypeFilters"') ||
+  !appSource.includes("eventTypes: new Set(Object.keys(eventTypes))") ||
+  !appSource.includes('filterLabel("event-type"') ||
+  !appSource.includes("eventTypeFilterMatch(eventType)") ||
+  !appSource.includes('if (kind === "event-type") return state.eventTypes') ||
+  !appSource.includes('countBy("eventType", key)')
+) {
+  throw new Error("Expected the main filter rail to support granular event-type filters");
+}
+
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
   throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
 }

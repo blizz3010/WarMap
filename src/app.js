@@ -38,6 +38,7 @@ const state = {
   streamLastRefreshAt: 0,
   timeRange: "30d",
   categories: new Set(Object.keys(categories)),
+  eventTypes: new Set(Object.keys(eventTypes)),
   severities: new Set(Object.keys(severities)),
   sourceTypes: new Set(Object.keys(sourceTypes)),
   events: fallbackEvents,
@@ -53,6 +54,7 @@ const state = {
 const els = {
   categoryFilters: document.querySelector("#categoryFilters"),
   detailDrawer: document.querySelector("#detailDrawer"),
+  eventTypeFilters: document.querySelector("#eventTypeFilters"),
   feedList: document.querySelector("#feedList"),
   closeFilters: document.querySelector("#closeFilters"),
   closeLayers: document.querySelector("#closeLayers"),
@@ -670,6 +672,13 @@ function renderFilterControls() {
   els.categoryFilters.innerHTML = Object.entries(categories)
     .map(([key, category]) => filterLabel("category", key, category.label, countBy("category", key), category.color))
     .join("");
+
+  els.eventTypeFilters.innerHTML = Object.entries(eventTypes)
+    .map(([key, eventType]) => {
+      const category = categories[eventType.category] ?? categories.other;
+      return filterLabel("event-type", key, `${eventType.short} ${eventType.label}`, countBy("eventType", key), category.color);
+    })
+    .join("");
 }
 
 function filterLabel(kind, key, label, count, color) {
@@ -1152,6 +1161,7 @@ function filteredEvents(applyViewport) {
     const viewportMatch = !bounds || bounds.contains([item.location.lon, item.location.lat]);
     const timeMatch = !minTimestamp || eventTimestamp(item) >= minTimestamp;
     const eventType = eventTypeDisplay(item);
+    const eventTypeMatch = eventTypeFilterMatch(eventType);
     const searchMatch =
       !state.search ||
       `${item.title} ${item.summary} ${eventType.label} ${eventType.short} ${item.place} ${item.province} ${item.sources.map((source) => source.name).join(" ")}`
@@ -1160,6 +1170,7 @@ function filteredEvents(applyViewport) {
 
     return (
       state.categories.has(item.category) &&
+      eventTypeMatch &&
       state.severities.has(item.severity) &&
       sourceTypeMatch &&
       officialMatch &&
@@ -2384,6 +2395,7 @@ function resetFilters() {
 
 function resetFilterSets() {
   state.categories = new Set(Object.keys(categories));
+  state.eventTypes = new Set(Object.keys(eventTypes));
   state.severities = new Set(Object.keys(severities));
   state.sourceTypes = new Set(Object.keys(sourceTypes));
 }
@@ -2496,7 +2508,8 @@ function renderLocalizedShellCopy() {
   setNodeText(filterSections[1]?.querySelector("h3"), uiCopy("sourceType"));
   setNodeText(filterSections[2]?.querySelector("h3"), uiCopy("severity"));
   setNodeText(filterSections[3]?.querySelector("h3"), uiCopy("category"));
-  setNodeText(filterSections[4]?.querySelector("h3"), uiCopy("dateRange"));
+  setNodeText(filterSections[4]?.querySelector("h3"), uiCopy("eventTypes"));
+  setNodeText(filterSections[5]?.querySelector("h3"), uiCopy("dateRange"));
   setInputLabelText(els.viewportOnlyToggle, uiCopy("viewportOnly"));
   setText("#locateRegion", uiCopy("aim"));
   setText("#fitEvents", uiCopy("fit"));
@@ -2806,6 +2819,7 @@ function updateRegionFocus() {
 
 function setForFilterKind(kind) {
   if (kind === "category") return state.categories;
+  if (kind === "event-type") return state.eventTypes;
   if (kind === "severity") return state.severities;
   return state.sourceTypes;
 }
@@ -2813,6 +2827,9 @@ function setForFilterKind(kind) {
 function countBy(field, key) {
   if (field === "sourceType") {
     return state.events.filter((item) => item.sources.some((source) => source.type === key)).length;
+  }
+  if (field === "eventType") {
+    return state.events.filter((item) => eventTypeDisplay(item).id === key).length;
   }
   return state.events.filter((item) => item[field] === key).length;
 }
@@ -2862,6 +2879,13 @@ function eventTypeDisplay(item) {
     color: eventTypeCategory.color,
     category: eventType.category
   };
+}
+
+function eventTypeFilterMatch(eventType) {
+  if (!eventTypes[eventType.id]) {
+    return true;
+  }
+  return state.eventTypes.has(eventType.id);
 }
 
 function sourceProvenanceLabel(source) {
