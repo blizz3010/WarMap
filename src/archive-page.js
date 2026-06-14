@@ -1,4 +1,4 @@
-import { actorSides, categories, regions, severities, sourceTypes, verificationStates } from "./data.js";
+import { actorSides, categories, eventTypes, regions, severities, sourceTypes, verificationStates } from "./data.js";
 
 const params = new URLSearchParams(window.location.search);
 const stateNode = document.querySelector("[data-archive-state]");
@@ -126,6 +126,7 @@ function renderArchiveDay(day) {
 
 function renderArchiveEvent(item) {
   const category = categories[item.category] ?? categories.other;
+  const eventType = eventTypeDisplay(item);
   const severity = severities[item.severity] ?? severities.low;
   const side = actorSides[item.side] ?? actorSides.unknown;
   const region = state.region === "all" ? regionForEvent(item) : state.region;
@@ -140,6 +141,7 @@ function renderArchiveEvent(item) {
       <p>${escapeHtml(item.summary)}</p>
       <dl class="archive-event-meta">
         <div><dt>Place</dt><dd>${escapeHtml(item.place)}, ${escapeHtml(item.province)}</dd></div>
+        <div><dt>Event type</dt><dd><span class="event-type-pill" style="--type-color:${eventType.color}">${escapeHtml(eventType.short)} ${escapeHtml(eventType.label)}</span></dd></div>
         <div><dt>Category</dt><dd style="color:${category.color}">${escapeHtml(category.label)}</dd></div>
         <div><dt>Severity</dt><dd style="color:${severity.color}">${escapeHtml(severity.label)}</dd></div>
         <div><dt>Side</dt><dd style="color:${side.color}">${escapeHtml(side.label)}</dd></div>
@@ -194,6 +196,25 @@ function renderEmptyArchive() {
       <p>No published events are available for this theater and history window yet.</p>
     </section>
   `;
+}
+
+function eventTypeDisplay(item) {
+  const eventTypeId = item.extraction?.eventType ?? item.eventType;
+  const eventType = eventTypes[eventTypeId];
+  const fallbackCategory = categories[item.category] ?? categories.other;
+  if (!eventType) {
+    return {
+      label: fallbackCategory.label,
+      short: fallbackCategory.short,
+      color: fallbackCategory.color
+    };
+  }
+  const eventTypeCategory = categories[eventType.category] ?? fallbackCategory;
+  return {
+    label: eventType.label,
+    short: eventType.short,
+    color: eventTypeCategory.color
+  };
 }
 
 function bindArchiveControls() {
