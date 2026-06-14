@@ -2404,6 +2404,171 @@ dd {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
+.readiness-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(160px, 220px) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.readiness-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.readiness-toolbar span {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.readiness-toolbar select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #0d1117;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.readiness-toolbar a,
+.readiness-check-list a,
+.readiness-link-list a {
+  display: inline-grid;
+  place-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.readiness-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 22px;
+  align-items: start;
+}
+
+.readiness-primary,
+.readiness-check-list,
+.readiness-blocker-list,
+.readiness-env-list,
+.readiness-source-list,
+.readiness-link-list {
+  display: grid;
+  gap: 12px;
+}
+
+.readiness-check-list,
+.readiness-blocker-list,
+.readiness-env-list,
+.readiness-source-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.readiness-check-list > li,
+.readiness-blocker-list > li,
+.readiness-env-list > li,
+.readiness-source-list > li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.readiness-check-list > li.is-ready,
+.readiness-blocker-list > li.is-ready,
+.readiness-env-list > li.is-ready,
+.readiness-source-list > li.is-ready {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.readiness-check-list > li.is-warning,
+.readiness-blocker-list > li.is-warning,
+.readiness-env-list > li.is-warning,
+.readiness-source-list > li.is-warning {
+  border-color: rgba(250, 204, 21, 0.25);
+  background: rgba(250, 204, 21, 0.07);
+}
+
+.readiness-check-list > li.is-blocked,
+.readiness-blocker-list > li.is-blocked,
+.readiness-env-list > li.is-blocked,
+.readiness-source-list > li.is-blocked {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.readiness-check-list header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.readiness-check-list strong,
+.readiness-blocker-list strong,
+.readiness-env-list strong,
+.readiness-source-list strong,
+.readiness-check-list span,
+.readiness-blocker-list span,
+.readiness-env-list span,
+.readiness-source-list span,
+.readiness-check-list small,
+.readiness-blocker-list small,
+.readiness-check-list p,
+.readiness-blocker-list p,
+.readiness-source-list p {
+  overflow-wrap: anywhere;
+}
+
+.readiness-check-list strong,
+.readiness-blocker-list strong,
+.readiness-env-list strong,
+.readiness-source-list strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.readiness-check-list span,
+.readiness-blocker-list span,
+.readiness-env-list span,
+.readiness-source-list span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.readiness-check-list small,
+.readiness-blocker-list small,
+.readiness-check-list p,
+.readiness-blocker-list p,
+.readiness-source-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.readiness-link-list {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
 .archive-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
@@ -3154,6 +3319,8 @@ dd {
   .setup-layout,
   .sources-toolbar,
   .sources-layout,
+  .readiness-toolbar,
+  .readiness-layout,
   .archive-event header,
   .archive-event-meta,
   .review-toolbar,
@@ -3169,7 +3336,8 @@ dd {
   }
 
   .source-registry-list header,
-  .source-health-list header {
+  .source-health-list header,
+  .readiness-check-list header {
     flex-direction: column;
   }
 
