@@ -4,6 +4,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import archiveHandler from "../api/archive.js";
 import eventHandler from "../api/event.js";
+import eventStoreHealthHandler from "../api/event-store-health.js";
 import eventsHandler from "../api/events.js";
 import cronIngestHandler from "../api/cron/ingest.js";
 import editorialStoreHealthHandler from "../api/editorial-store-health.js";
@@ -46,6 +47,7 @@ const apiHandlers = new Map([
   ["/api/archive", archiveHandler],
   ["/api/cron/ingest", cronIngestHandler],
   ["/api/event", eventHandler],
+  ["/api/event-store-health", eventStoreHealthHandler],
   ["/api/events", eventsHandler],
   ["/api/editorial-store-health", editorialStoreHealthHandler],
   ["/api/editorial-setup", editorialSetupHandler],

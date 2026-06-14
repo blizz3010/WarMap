@@ -56,6 +56,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
       storage: {
         ready: storage.ready,
         endpoint: storage.endpoint,
+        eventStoreHealth: storage.eventStoreHealth,
         mode: storage.runtime.mode,
         provider: storage.runtime.provider,
         databaseUrlConfigured: storage.runtime.databaseUrlConfigured,

@@ -6,6 +6,7 @@ import {
   loadEditorialDecisions
 } from "./editorial-store.js";
 import { publishedEventsFromEvents, reviewQueueFromEvents } from "./editorial-workflow.js";
+import { eventStoreCapabilities, saveCandidateEventsToEventStore } from "./event-store.js";
 import { intakeSnapshotStoreCapabilities, saveIntakeSnapshots } from "./intake-store.js";
 import { normalizeArticlesToEventsAsync, normalizeLookback } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
@@ -39,22 +40,27 @@ export function buildIngestionStatusPayload({ env = process.env, now = new Date(
       lookback: runtime.lookback,
       maxRecords: runtime.maxRecords,
       intakeStore: runtime.intakeStore,
+      eventStore: runtime.eventStore,
       outputs: [
         "collector reachability and article counts",
         "AI extraction candidate counts",
         "editorial queue depth",
         "optional intake snapshot persistence",
+        "optional PostgreSQL/PostGIS candidate event persistence",
         "published snapshot counts",
         "visible source-link samples"
       ],
-      persistence: runtime.intakeStore.enabled
-        ? "Configured intake snapshot storage preserves review candidates between live collector windows; PostgreSQL/PostGIS remains the long-term event store."
-        : "This heartbeat does not replace PostgreSQL/PostGIS event storage; set INGESTION_STORE_PROVIDER to preserve review candidates between live collector windows."
+      persistence: runtime.eventStore.canWriteCandidates
+        ? "Configured event-store writes preserve source-linked candidate events in PostgreSQL/PostGIS."
+        : runtime.intakeStore.enabled
+          ? "Configured intake snapshot storage preserves review candidates between live collector windows; PostgreSQL/PostGIS remains the long-term event store."
+          : "This heartbeat does not replace PostgreSQL/PostGIS event storage; set INGESTION_STORE_PROVIDER for snapshots or EVENT_STORE_WRITE_MODE=candidates for database persistence."
     },
     endpoints: {
       status: INGESTION_STATUS_PATH,
       cron: INGESTION_CRON_PATH,
       intakeStoreHealth: "/api/intake-store-health",
+      eventStoreHealth: "/api/event-store-health",
       reviewQueue: "/api/review-queue",
       events: "/api/events",
       sourceHealth: "/api/source-health"
@@ -69,6 +75,7 @@ export function ingestionRuntimeSummary({ env = process.env, now = new Date() } 
   const maxRecords = clampNumber(env.INGESTION_MAX_RECORDS ?? DEFAULT_INGESTION_MAX_RECORDS, 1, 100);
   const cronSecretConfigured = Boolean(cleanEnv(env.CRON_SECRET));
   const intakeStore = intakeSnapshotStoreCapabilities({ env, now });
+  const eventStore = eventStoreCapabilities({ env, now });
 
   return {
     schemaVersion: "ingestion-runtime.v1",
@@ -82,7 +89,8 @@ export function ingestionRuntimeSummary({ env = process.env, now = new Date() } 
     regions,
     lookback,
     maxRecords,
-    intakeStore
+    intakeStore,
+    eventStore
   };
 }
 
@@ -110,6 +118,16 @@ export function ingestionReadinessBlockers(runtime = ingestionRuntimeSummary()) 
       required: false,
       status: runtime.intakeStore?.mode ?? "unconfigured",
       message: "Intake snapshot storage is enabled but missing repository/path/token configuration."
+    });
+  }
+
+  if (!runtime.eventStore?.canWriteCandidates) {
+    blockers.push({
+      id: "event-store-candidate-writes",
+      required: false,
+      status: runtime.eventStore?.writeMode ?? "disabled",
+      message:
+        "Set DATABASE_URL, WARMAP_STORAGE_SCHEMA_VERSION, and EVENT_STORE_WRITE_MODE=candidates after database readiness passes to persist source-linked review candidates in PostgreSQL/PostGIS."
     });
   }
 
@@ -251,6 +269,7 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
     const queue = reviewQueueFromEvents(scopedEvents);
     const published = publishedEventsFromEvents(scopedEvents);
     const persistence = await saveIntakeSnapshots(queue.candidates, { region, env, now });
+    const eventStorePersistence = await saveCandidateEventsToEventStore(queue.candidates, { env, now });
 
     return {
       region,
@@ -273,6 +292,7 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
         socialApi: collection.socialApiSources ?? []
       },
       persistence,
+      eventStorePersistence,
       sourceSamples: sourceSamples(scopedEvents)
     };
   } catch (error) {
@@ -303,6 +323,13 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
         snapshots: 0,
         message: "Ingestion failed before intake snapshots could be stored."
       },
+      eventStorePersistence: {
+        stored: false,
+        mode: eventStoreCapabilities({ env, now }).writeMode,
+        events: 0,
+        documents: 0,
+        message: "Ingestion failed before event-store candidate persistence."
+      },
       sourceSamples: []
     };
   }
@@ -320,7 +347,9 @@ function summarizeRegionResults(results) {
       candidates: summary.candidates + result.counts.candidates,
       published: summary.published + result.counts.published,
       upstreamErrors: summary.upstreamErrors + result.upstreamErrors.length,
-      persistedCandidates: summary.persistedCandidates + (result.persistence?.stored ? result.persistence.candidates ?? 0 : 0)
+      persistedCandidates: summary.persistedCandidates + (result.persistence?.stored ? result.persistence.candidates ?? 0 : 0),
+      eventStoreCandidates:
+        summary.eventStoreCandidates + (result.eventStorePersistence?.stored ? result.eventStorePersistence.events ?? 0 : 0)
     }),
     {
       regions: 0,
@@ -332,7 +361,8 @@ function summarizeRegionResults(results) {
       candidates: 0,
       published: 0,
       upstreamErrors: 0,
-      persistedCandidates: 0
+      persistedCandidates: 0,
+      eventStoreCandidates: 0
     }
   );
 }
@@ -346,9 +376,25 @@ function summarizePersistence(results) {
     regionsStored: storedRegions.length,
     candidates: results.reduce((total, result) => total + (result.persistence?.candidates ?? 0), 0),
     snapshots: results.reduce((total, result) => Math.max(total, result.persistence?.snapshots ?? 0), 0),
+    eventStore: summarizeEventStorePersistence(results),
     message: storedRegions.length
       ? "Cron heartbeat stored review candidate snapshots for configured regions."
       : first?.message ?? "Cron heartbeat validated intake without durable candidate snapshot storage."
+  };
+}
+
+function summarizeEventStorePersistence(results) {
+  const storedRegions = results.filter((result) => result.eventStorePersistence?.stored);
+  const first = results.find((result) => result.eventStorePersistence)?.eventStorePersistence;
+  return {
+    stored: storedRegions.length > 0,
+    mode: first?.mode ?? "disabled",
+    regionsStored: storedRegions.length,
+    events: results.reduce((total, result) => total + (result.eventStorePersistence?.events ?? 0), 0),
+    documents: results.reduce((total, result) => total + (result.eventStorePersistence?.documents ?? 0), 0),
+    message: storedRegions.length
+      ? "Cron heartbeat stored source-linked candidate events in PostgreSQL/PostGIS."
+      : first?.message ?? "Event-store candidate persistence is disabled."
   };
 }
 

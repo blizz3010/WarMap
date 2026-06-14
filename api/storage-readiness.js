@@ -1,6 +1,7 @@
 export const STORAGE_READINESS_SCHEMA_VERSION = "storage-readiness.v1";
 export const STORAGE_SCHEMA_VERSION = "event-store-schema.v1";
 export const STORAGE_READINESS_PATH = "/api/storage-readiness";
+export const EVENT_STORE_HEALTH_PATH = "/api/event-store-health";
 
 export const STORAGE_TABLES = [
   {
@@ -235,6 +236,7 @@ export function buildStorageReadinessPayload({ env = process.env, now = new Date
     generatedAt: now.toISOString(),
     ready: checks.every((check) => check.ok),
     endpoint: STORAGE_READINESS_PATH,
+    eventStoreHealth: EVENT_STORE_HEALTH_PATH,
     runtime,
     requiredConfiguration: [
       configItem(
@@ -281,9 +283,9 @@ export function storageRuntimeSummary({ env = process.env, now = new Date() } = 
     schemaVersionConfirmed: configuredSchemaVersion === STORAGE_SCHEMA_VERSION,
     sslModeConfigured: Boolean(sslMode),
     postgisRequired: true,
-    driverBundled: false,
+    driverBundled: true,
     note:
-      "This readiness endpoint exposes the schema contract and non-secret configuration state only; it does not open a database connection."
+      "This readiness endpoint exposes the schema contract and non-secret configuration state only; use /api/event-store-health for a read-only database connection and table check."
   };
 }
 
