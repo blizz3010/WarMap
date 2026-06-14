@@ -1,6 +1,7 @@
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
-import { plannedSourcesForRegion, sourcesForRegion } from "./source-registry.js";
+import { sourcesForRegion } from "./source-registry.js";
 import { categories, eventTypes } from "../src/data.js";
+import { configuredOfficialSiteSources } from "./collectors.js";
 
 const LIVEUAMAP_REFERENCES = [
   {
@@ -139,9 +140,13 @@ const LIVEUAMAP_COMPATIBLE_MODEL = {
 
 export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = new Date() } = {}) {
   const normalizedRegion = String(region || DEFAULT_REGION_ID);
-  const sources = sourcesForRegion(normalizedRegion);
+  const configuredOfficialSites = configuredOfficialSiteSources(normalizedRegion);
+  const sources = dedupeSources([
+    ...configuredOfficialSites,
+    ...sourcesForRegion(normalizedRegion)
+  ]);
   const active = sources.filter((source) => source.status === "active");
-  const planned = plannedSourcesForRegion(normalizedRegion);
+  const planned = sources.filter((source) => source.status === "planned");
   const activationBacklog = sourceActivationBacklog(planned);
 
   return {
@@ -167,6 +172,7 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
       activeSources: active.map(sourceSummary),
       plannedBacklog: planned.map(sourceSummary),
       activationBacklog,
+      configuredOfficialSites: configuredOfficialSites.map(sourceSummary),
       collectorFamilies: collectorFamilies(sources)
     },
     readiness: {
@@ -277,7 +283,7 @@ function activationNextActionForSource(source) {
     return "Secure API license and implement a licensed-api adapter.";
   }
   if (source.collector === "official-site") {
-    return "Confirm automated-use terms and add an official RSS/API/CAP adapter.";
+    return "Confirm automated-use terms and configure OFFICIAL_SITE_SOURCES or a preferred RSS/API/CAP feed.";
   }
   if (source.collector === "social-api") {
     return "Configure approved API endpoint metadata and token environment names.";
@@ -306,6 +312,7 @@ function activationRequirementsForSource(source) {
     return [
       ...baseline,
       "Prefer RSS, JSON, CAP, or documented API endpoints over HTML extraction.",
+      "Use OFFICIAL_SITE_SOURCES only for terms-reviewed official pages and constrain extraction with include/exclude patterns.",
       "Add explicit claim labeling when the source is a conflict-party official channel."
     ];
   }
@@ -357,6 +364,17 @@ function collectorFamilies(sources) {
       sourceTypes: [...family.sourceTypes].sort()
     }))
     .sort((left, right) => left.collector.localeCompare(right.collector));
+}
+
+function dedupeSources(sources) {
+  const byKey = new Map();
+  sources.forEach((source) => {
+    const key = source.id || source.url;
+    if (key && !byKey.has(key)) {
+      byKey.set(key, source);
+    }
+  });
+  return [...byKey.values()];
 }
 
 function buildLegendModel() {

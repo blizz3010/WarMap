@@ -40,10 +40,12 @@ const WATCH_TERMS = [
 export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRecords = 75, lookback = "30d" } = {}) {
   const normalizedLookback = normalizeLookback(lookback);
   const officialFeeds = officialFeedsForRegion(region);
-  const [gdeltResult, rssResult, officialResult, socialResult] = await Promise.allSettled([
+  const officialSiteSources = configuredOfficialSiteSources(region);
+  const [gdeltResult, rssResult, officialResult, officialSiteResult, socialResult] = await Promise.allSettled([
     fetchGdeltArticles(region, maxRecords, normalizedLookback),
     fetchRssArticles(region, normalizedLookback),
     fetchOfficialFeedArticles(region, normalizedLookback, officialFeeds),
+    fetchOfficialSiteArticles(region, normalizedLookback, officialSiteSources),
     fetchCompliantSocialApiArticles(region, normalizedLookback)
   ]);
 
@@ -51,10 +53,11 @@ export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRe
     ...(gdeltResult.status === "fulfilled" ? gdeltResult.value : []),
     ...(rssResult.status === "fulfilled" ? rssResult.value : []),
     ...(officialResult.status === "fulfilled" ? officialResult.value : []),
+    ...(officialSiteResult.status === "fulfilled" ? officialSiteResult.value : []),
     ...(socialResult.status === "fulfilled" ? socialResult.value : [])
   ];
 
-  const upstreamErrors = [gdeltResult, rssResult, officialResult, socialResult]
+  const upstreamErrors = [gdeltResult, rssResult, officialResult, officialSiteResult, socialResult]
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason?.message ?? "unknown upstream error");
 
@@ -69,11 +72,17 @@ export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRe
       gdelt: gdeltResult.status,
       rss: rssResult.status,
       officialFeed: officialResult.status,
+      officialSite: officialSiteResult.status,
       socialApi: socialResult.status
     },
     upstreamErrors,
     rssFeeds: activeRssFeedsForRegion(region).map((feed) => feed.url),
     officialFeeds: officialFeeds.map((feed) => feed.url),
+    officialSiteSources: officialSiteSources.map((source) => ({
+      name: source.name,
+      url: source.url,
+      regions: source.regions
+    })),
     socialApiSources: configuredSocialApiSources(region).map((source) => ({
       name: source.name,
       url: source.url,
@@ -116,6 +125,30 @@ async function fetchRssArticles(region, lookback) {
 
 async function fetchOfficialFeedArticles(region, lookback, officialFeeds = officialFeedsForRegion(region)) {
   return fetchXmlFeedArticles(officialFeeds, region, lookback, "official feed");
+}
+
+async function fetchOfficialSiteArticles(region, lookback, officialSites = configuredOfficialSiteSources(region)) {
+  if (!officialSites.length) {
+    return [];
+  }
+
+  const siteResults = await Promise.allSettled(
+    officialSites.map(async (source) => {
+      const upstream = await fetchWithTimeout(source.url, {
+        headers: {
+          Accept: "text/html, application/xhtml+xml",
+          "User-Agent": "WarMapLive/0.1 official-site terms-reviewed"
+        },
+        timeoutMs: source.timeoutMs ?? 5000
+      });
+      if (!upstream.ok) {
+        throw new Error(`official site ${source.name} returned ${upstream.status}`);
+      }
+      return extractOfficialSiteItems(await upstream.text(), source, region, lookback);
+    })
+  );
+
+  return siteResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 }
 
 async function fetchXmlFeedArticles(feeds, region, lookback, label) {
@@ -295,6 +328,71 @@ function extractSocialApiItems(payload, source, region, lookback) {
     .slice(0, source.limit ?? 30);
 }
 
+export function extractOfficialSiteItems(html, source, region, lookback) {
+  const minTimestamp = Date.now() - lookbackDurationMs(lookback);
+  return htmlAnchorItems(html, source)
+    .map((item) => officialSiteAnchorToArticle(item, source))
+    .filter((article) => article.title && article.url)
+    .filter((article) => officialSitePatternMatch(article, source))
+    .filter((article) => !article.pubDate || Date.parse(article.pubDate) >= minTimestamp)
+    .filter((article) => isRelevantArticle(article, region))
+    .slice(0, source.limit ?? 30);
+}
+
+function htmlAnchorItems(html, source) {
+  const links = [...String(html ?? "").matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+  return links.map((match) => {
+    const attrs = match[1] ?? "";
+    const href = readHtmlAttr(attrs, "href");
+    return {
+      href,
+      title: stripTags(decodeHtml(match[2] ?? "")),
+      url: resolveUrl(href, source.url)
+    };
+  });
+}
+
+function officialSiteAnchorToArticle(item, source) {
+  const title = cleanText(item.title);
+  return {
+    title,
+    description: title,
+    url: item.url,
+    domain: domainFromUrl(item.url),
+    sourceName: source.name,
+    sourceRegistryId: source.id,
+    collector: source.collector,
+    collectorUrl: source.url,
+    sourceType: source.sourceType,
+    trustTier: source.trustTier,
+    sourcecountry: source.country,
+    language: source.language ?? "Unknown",
+    pubDate: "",
+    socialimage: ""
+  };
+}
+
+function officialSitePatternMatch(article, source) {
+  const text = `${article.title} ${article.description} ${article.url}`;
+  const includePatterns = source.includePatterns ?? [];
+  const excludePatterns = source.excludePatterns ?? [];
+  if (includePatterns.length && !includePatterns.some((pattern) => patternMatches(pattern, text))) {
+    return false;
+  }
+  if (excludePatterns.some((pattern) => patternMatches(pattern, text))) {
+    return false;
+  }
+  return true;
+}
+
+function patternMatches(pattern, text) {
+  try {
+    return new RegExp(String(pattern), "i").test(text);
+  } catch {
+    return String(text).toLowerCase().includes(String(pattern).toLowerCase());
+  }
+}
+
 function socialPayloadItems(payload, itemsPath) {
   if (itemsPath) {
     const value = String(itemsPath)
@@ -338,6 +436,10 @@ export function configuredSocialApiSources(region) {
 
 export function configuredOfficialFeedSources(region) {
   return parseOfficialFeedSources().filter((source) => appliesToRegion(source, region));
+}
+
+export function configuredOfficialSiteSources(region) {
+  return parseOfficialSiteSources().filter((source) => appliesToRegion(source, region));
 }
 
 function officialFeedsForRegion(region) {
@@ -400,6 +502,49 @@ function parseSocialApiSources() {
   } catch {
     return [];
   }
+}
+
+function parseOfficialSiteSources() {
+  const raw = process.env.OFFICIAL_SITE_SOURCES;
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed
+          .map(normalizeOfficialSiteSource)
+          .filter((source) => source.name && source.url)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeOfficialSiteSource(source) {
+  return {
+    name: cleanText(source.name),
+    id: cleanText(source.id) || slugify(source.name || source.url || "official-site"),
+    url: safeUrl(source.url),
+    regions: Array.isArray(source.regions) ? source.regions.map(cleanText).filter(Boolean) : ["*"],
+    collector: "official-site",
+    sourceType: cleanText(source.sourceType) || "official",
+    trustTier: cleanText(source.trustTier) || "primary source",
+    access: cleanText(source.access) || "terms-reviewed official site",
+    country: cleanText(source.country),
+    language: cleanText(source.language) || "Unknown",
+    includePatterns: normalizePatternList(source.includePatterns ?? source.includePattern),
+    excludePatterns: normalizePatternList(source.excludePatterns ?? source.excludePattern),
+    limit: Math.min(Number(source.limit ?? 30) || 30, 50),
+    timeoutMs: Math.min(Number(source.timeoutMs ?? 5000) || 5000, 12000),
+    status: "active"
+  };
+}
+
+function normalizePatternList(value) {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return values.map(cleanText).filter(Boolean).slice(0, 12);
 }
 
 function normalizeSocialApiSource(source) {
@@ -494,8 +639,29 @@ function safeUrl(value) {
   }
 }
 
+function resolveUrl(value, base) {
+  try {
+    const url = new URL(String(value), String(base));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function cleanText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function readHtmlAttr(attrs, attrName) {
+  const attrMatch = String(attrs ?? "").match(new RegExp(`${attrName}=["']([^"']+)["']`, "i"));
+  return attrMatch?.[1] ?? "";
+}
+
+function decodeHtml(value) {
+  return decodeXml(value)
+    .replaceAll("&nbsp;", " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
 }
 
 function slugify(value) {
