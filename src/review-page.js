@@ -237,7 +237,44 @@ function renderPublishingStatus() {
         )
         .join("")}
     </ul>
+    ${renderPublicationTargets(state.queue?.summary?.publicationCandidates)}
   `;
+}
+
+function renderPublicationTargets(publicationCandidates = {}) {
+  const topCandidates = publicationCandidates.topCandidates ?? [];
+  if (!topCandidates.length) {
+    return '<p class="status-summary">No first-publish candidates are available in this queue view.</p>';
+  }
+
+  return `
+    <div class="publication-targets">
+      <div>
+        <strong>First publish targets</strong>
+        <span>${Number(publicationCandidates.approvalReady ?? 0)} / ${Number(publicationCandidates.count ?? 0)} approval-ready</span>
+      </div>
+      <ul class="publication-target-list">
+        ${topCandidates.map(renderPublicationTarget).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderPublicationTarget(target) {
+  const missing = (target.blockingChecks ?? []).map((check) => titleCase(check)).join(", ");
+  const detail = target.approvalReady ? "ready for preview/export" : `needs ${missing || "review"}`;
+  return `
+    <li class="${target.approvalReady ? "is-ready" : "is-blocked"}">
+      <a href="${escapeAttr(publicationPreviewHrefById(target.id))}">${escapeHtml(target.title || target.id)}</a>
+      <strong>${Number(target.score ?? 0)}%</strong>
+      <small>${escapeHtml([target.place, target.province].filter(Boolean).join(", "))}</small>
+      <small>${escapeHtml(detail)}</small>
+    </li>
+  `;
+}
+
+function publicationPreviewHrefById(id) {
+  return `/api/publication-preview?${new URLSearchParams({ id, region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function renderSourceHealthStatus() {

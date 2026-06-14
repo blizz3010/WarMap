@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { actorSides, categories, eventTypes, events, regions, severities, sourceTypes } from "../src/data.js";
 import { collectOpenWebArticles, configuredOfficialSiteSources } from "../api/collectors.js";
 import { detailEventsForRegion } from "../api/event.js";
-import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
+import { archiveFromEvents, publicationCandidateSummary, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
 import { buildEditorialStatusPayload } from "../api/editorial-status.js";
 import {
   applyEditorialDecisions,
@@ -285,9 +285,13 @@ if (
   !reviewPageSource.includes("function reviewFilterHref(overrides") ||
   !reviewPageSource.includes("function renderDuplicateGroups(summary") ||
   !reviewPageSource.includes("function renderDuplicateDetail(review)") ||
+  !reviewPageSource.includes("function renderPublicationTargets(publicationCandidates") ||
+  !reviewPageSource.includes("function publicationPreviewHrefById(id)") ||
   !reviewQueueApiSource.includes("duplicateKey: request.query?.duplicateKey") ||
+  !reviewQueueApiSource.includes("summary: queue.summary") ||
   !stylesSource.includes(".review-duplicate-list") ||
-  !stylesSource.includes(".review-duplicate-list a")
+  !stylesSource.includes(".review-duplicate-list a") ||
+  !stylesSource.includes(".publication-target-list")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
 }
@@ -1949,9 +1953,35 @@ if (
   filteredSampleQueue.filters.status !== "candidate" ||
   filteredSampleQueue.summary.filteredQueueDepth !== 1 ||
   filteredSampleQueue.summary.unfilteredQueueDepth !== 1 ||
-  filteredSampleQueue.summary.candidateByAssignee["editorial-desk"] !== 1
+  filteredSampleQueue.summary.candidateByAssignee["editorial-desk"] !== 1 ||
+  filteredSampleQueue.summary.publicationCandidates?.approvalReady !== 1 ||
+  filteredSampleQueue.summary.publicationCandidates?.topCandidates?.[0]?.id !== sampleUkraineEvents[0].id ||
+  filteredSampleQueue.summary.publicationCandidates?.topCandidates?.[0]?.score !== 100
 ) {
-  throw new Error("Review queue filters failed status, assignee, or summary checks");
+  throw new Error("Review queue filters failed status, assignee, publication-candidate, or summary checks");
+}
+
+const sourceBlockedCandidate = {
+  ...sampleUkraineEvents[0],
+  id: "candidate_missing_source_url",
+  sources: [],
+  sourceCount: 0,
+  review: {
+    ...sampleUkraineEvents[0].review,
+    duplicateKey: "candidate-missing-source-url"
+  }
+};
+const publicationCandidateQueue = reviewQueueFromEvents([sourceBlockedCandidate, sampleUkraineEvents[0]]);
+const directPublicationCandidates = publicationCandidateSummary([sourceBlockedCandidate, sampleUkraineEvents[0]]);
+if (
+  publicationCandidateQueue.summary.publicationCandidates?.count !== 2 ||
+  publicationCandidateQueue.summary.publicationCandidates?.approvalReady !== 1 ||
+  publicationCandidateQueue.summary.publicationCandidates?.needsCorrection !== 1 ||
+  publicationCandidateQueue.summary.publicationCandidates?.topCandidates?.[0]?.id !== sampleUkraineEvents[0].id ||
+  !publicationCandidateQueue.summary.publicationCandidates?.topCandidates?.[1]?.blockingChecks?.includes("source-url") ||
+  directPublicationCandidates.topCandidates?.[0]?.approvalReady !== true
+) {
+  throw new Error("Review queue publication candidate scoring failed approval-readiness checks");
 }
 
 const emptyFilteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {

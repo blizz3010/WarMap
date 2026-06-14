@@ -79,6 +79,8 @@ export function reviewQueueFromEvents(events, filters = {}) {
       ...editorialSummary(events),
       unfilteredQueueDepth: allCandidates.length,
       filteredQueueDepth: candidates.length,
+      publicationCandidates: publicationCandidateSummary(candidates),
+      unfilteredPublicationCandidates: publicationCandidateSummary(allCandidates),
       candidateByStatus: countBy(allCandidates, (event) => event.review.status),
       candidateByAssignee: countBy(allCandidates, (event) => normalizeAssignee(event.review.assignee)),
       candidateByPriority: countBy(allCandidates, (event) => event.review.priority),
@@ -92,6 +94,110 @@ export function reviewQueueFromEvents(events, filters = {}) {
     },
     filters: normalizedFilters
   };
+}
+
+export function publicationCandidateSummary(candidates = [], { limit = 5 } = {}) {
+  const profiles = candidates
+    .map((event) => publicationCandidateProfile(event))
+    .sort((left, right) => {
+      const readyCompare = Number(right.approvalReady) - Number(left.approvalReady);
+      if (readyCompare) return readyCompare;
+      const scoreCompare = right.score - left.score;
+      if (scoreCompare) return scoreCompare;
+      const priorityCompare = priorityRank(right.priority) - priorityRank(left.priority);
+      if (priorityCompare) return priorityCompare;
+      return timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt);
+    });
+
+  return {
+    count: profiles.length,
+    approvalReady: profiles.filter((profile) => profile.approvalReady).length,
+    needsCorrection: profiles.filter((profile) => !profile.approvalReady).length,
+    topCandidates: profiles.slice(0, limit)
+  };
+}
+
+export function publicationCandidateProfile(event) {
+  const checks = publicationGateChecks(event);
+  const requiredChecks = checks.filter((check) => check.required);
+  const optionalChecks = checks.filter((check) => !check.required);
+  const requiredReady = requiredChecks.filter((check) => check.done).length;
+  const optionalReady = optionalChecks.filter((check) => check.done).length;
+  const requiredScore = requiredChecks.length ? requiredReady / requiredChecks.length : 1;
+  const optionalScore = optionalChecks.length ? optionalReady / optionalChecks.length : 1;
+  const blockingChecks = requiredChecks.filter((check) => !check.done);
+
+  return {
+    id: event.id,
+    title: event.title,
+    place: event.place,
+    province: event.province,
+    country: event.country,
+    category: event.category,
+    severity: event.severity,
+    priority: event.review?.priority ?? priorityForEvent(event),
+    duplicateKey: event.review?.duplicateKey ?? duplicateKeyForEvent(event),
+    firstSeenAt: event.firstSeenAt,
+    sourceCount: event.sources?.filter((source) => hasSourceUrl(source)).length ?? 0,
+    score: Math.round(requiredScore * 80 + optionalScore * 20),
+    approvalReady: blockingChecks.length === 0,
+    blockingChecks: blockingChecks.map((check) => check.key),
+    checks
+  };
+}
+
+function publicationGateChecks(event) {
+  const sources = event.sources ?? [];
+  const extraction = event.extraction ?? {};
+  const lat = Number(event.location?.lat);
+  const lon = Number(event.location?.lon);
+  const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon);
+  const hasVisibleSourceUrl = sources.some((source) => hasSourceUrl(source));
+  const duplicateKey = event.review?.duplicateKey ?? extraction.duplicateKey ?? duplicateKeyForEvent(event);
+  const extractionComplete = Boolean(
+    (extraction.eventType || event.category) &&
+      (extraction.location?.place || event.place) &&
+      (extraction.summary || event.summary) &&
+      duplicateKey
+  );
+
+  return [
+    {
+      key: "source-url",
+      label: "Source URL",
+      detail: hasVisibleSourceUrl ? `${sources.filter((source) => hasSourceUrl(source)).length} visible` : "missing original link",
+      done: hasVisibleSourceUrl,
+      required: true
+    },
+    {
+      key: "map-point",
+      label: "Map point",
+      detail: hasCoordinates ? event.location?.precision || "coordinates set" : "missing coordinates",
+      done: hasCoordinates,
+      required: true
+    },
+    {
+      key: "approval-snapshot",
+      label: "Approval snapshot",
+      detail: event.id && event.title && hasVisibleSourceUrl && hasCoordinates ? "export ready" : "source or map point needed",
+      done: Boolean(event.id && event.title && hasVisibleSourceUrl && hasCoordinates),
+      required: true
+    },
+    {
+      key: "extraction",
+      label: "Extraction",
+      detail: extractionComplete ? extraction.eventType || event.category : "needs manual fields",
+      done: extractionComplete,
+      required: false
+    },
+    {
+      key: "duplicate-key",
+      label: "Duplicate key",
+      detail: duplicateKey || "not generated",
+      done: Boolean(duplicateKey),
+      required: false
+    }
+  ];
 }
 
 export function publishedEventsFromEvents(events) {
@@ -372,6 +478,10 @@ function maxIsoDate(left, right) {
   if (!leftTime) return right || left;
   if (!rightTime) return left || right;
   return leftTime >= rightTime ? left : right;
+}
+
+function hasSourceUrl(source) {
+  return /^https?:\/\//i.test(String(source?.url ?? ""));
 }
 
 function titleCase(value) {
