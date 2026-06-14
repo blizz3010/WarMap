@@ -6,7 +6,7 @@ const LIVEUAMAP_REFERENCES = [
     label: "Liveuamap about and terms",
     url: "https://liveuamap.com/about",
     takeaway:
-      "Liveuamap describes map/API/email/app services, user-visible source links, approximate geolocation, and third-party content governed by original-source terms."
+      "Liveuamap publicly describes AI crawler discovery, expert analyst fact-checking, editor selection, map/API/email/app services, visible source links, and original-source terms for third-party content."
   },
   {
     label: "Liveuamap public Iran map",
@@ -65,6 +65,34 @@ const WORKFLOW_STAGES = [
   }
 ];
 
+const ACTIVATION_CHECKS = [
+  {
+    id: "permission",
+    label: "Permission",
+    description: "Confirm RSS, JSON, CAP, API, license, or written permission before automated collection."
+  },
+  {
+    id: "adapter",
+    label: "Adapter",
+    description: "Add a parser or API adapter that preserves canonical source URLs and publish timestamps."
+  },
+  {
+    id: "review-policy",
+    label: "Review policy",
+    description: "Route claims, low-confidence extraction, and conflict-party statements through stricter review."
+  },
+  {
+    id: "fixture",
+    label: "Fixture",
+    description: "Add static verification for parser output, source provenance, and review-queue routing."
+  },
+  {
+    id: "publication-surface",
+    label: "Publication surface",
+    description: "Verify approved snapshots retain source links on map, feed, detail, archive, and API responses."
+  }
+];
+
 export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = new Date() } = {}) {
   const normalizedRegion = String(region || DEFAULT_REGION_ID);
   const sources = sourcesForRegion(normalizedRegion);
@@ -78,6 +106,7 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
     region: normalizedRegion,
     principles: CURATION_PRINCIPLES,
     workflowStages: WORKFLOW_STAGES,
+    activationChecks: ACTIVATION_CHECKS,
     liveuamapReferences: LIVEUAMAP_REFERENCES,
     endpoints: {
       sourceHealth: `/api/source-health?region=${encodeURIComponent(normalizedRegion)}`,
@@ -123,8 +152,77 @@ function sourceSummary(source) {
     access: source.access ?? null,
     country: source.country ?? null,
     url: source.url ?? null,
-    regions: source.regions ?? ["*"]
+    regions: source.regions ?? ["*"],
+    activation: activationProfile(source)
   };
+}
+
+function activationProfile(source) {
+  if (source.status === "active") {
+    return {
+      state: "active",
+      requiredBeforeActivation: [],
+      reviewPolicy: reviewPolicyForSource(source),
+      notes: "Active source remains review-only until an editorial decision approves a candidate."
+    };
+  }
+
+  return {
+    state: "planned",
+    requiredBeforeActivation: activationRequirementsForSource(source),
+    reviewPolicy: reviewPolicyForSource(source),
+    notes: "Planned sources stay visible in readiness output but are not fetched until these requirements are met."
+  };
+}
+
+function activationRequirementsForSource(source) {
+  const baseline = [
+    "Confirm automated-use permission or an explicit licensed API contract.",
+    "Preserve a visible original source URL on every normalized candidate.",
+    "Add parser or adapter coverage to static verification.",
+    "Route all normalized items through AI extraction and editorial review before publication."
+  ];
+
+  if (source.collector === "licensed-api") {
+    return [
+      "Execute a paid or written Liveuamap API/data agreement.",
+      "Implement a licensed-api adapter instead of scraping public map pages.",
+      "Retain original source links supplied by the licensed response.",
+      "Document rate limits, attribution, retention, and redistribution constraints."
+    ];
+  }
+
+  if (source.collector === "official-site") {
+    return [
+      ...baseline,
+      "Prefer RSS, JSON, CAP, or documented API endpoints over HTML extraction.",
+      "Add explicit claim labeling when the source is a conflict-party official channel."
+    ];
+  }
+
+  if (source.collector === "social-api") {
+    return [
+      "Use only compliant official APIs whose terms allow automated use.",
+      "Configure endpoints and token environment names through COMPLIANT_SOCIAL_API_SOURCES.",
+      "Redact token values from all health/readiness payloads.",
+      "Require analyst review for every social/API candidate before publication."
+    ];
+  }
+
+  return baseline;
+}
+
+function reviewPolicyForSource(source) {
+  if (source.trustTier?.includes("claim") || source.country === "Russia") {
+    return "claim-label-required";
+  }
+  if (source.collector === "social-api" || source.sourceType === "osint") {
+    return "analyst-review-required";
+  }
+  if (source.sourceType === "official") {
+    return "primary-source-review";
+  }
+  return "standard-open-source-review";
 }
 
 function collectorFamilies(sources) {

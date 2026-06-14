@@ -5,6 +5,7 @@ WarMap should imitate the useful public shape of Liveuamap, not copy its data. T
 ## Liveuamap observations
 
 - Liveuamap presents region-scoped maps with synchronized news feeds, approximate geolocation, source links, and region switching: https://iran.liveuamap.com/
+- Its about page describes AI-crawler discovery, analyst fact-checking, and editor selection before map publication: https://liveuamap.com/about
 - Its terms page says third-party social/network content is governed by the original resource terms and is accessible through the visible source link: https://liveuamap.com/about
 - It has a commercial API product, which is the correct route for any Liveuamap-derived data relationship: https://liveuamap.com/promo/api
 - Its app privacy page describes region/language preferences, geolocation-based alerts, and notification delivery: https://liveuamap.com/about/appsprivacy
@@ -25,6 +26,7 @@ Active sources are defined in `api/source-registry.js` and exposed through `/api
 
 - Active collectors: GDELT DOC, region-matched media RSS, official RSS-compatible feeds, and opt-in compliant social APIs.
 - Planned collectors: official-site adapters for Ukraine Ministry of Defence, State Emergency Service of Ukraine, Russian Defence Ministry claim labeling, and a licensed Liveuamap API integration.
+- Activation profiles: `/api/source-curation` now returns per-source requirements before activation, including licensed-API terms, official-site adapter requirements, social/API token redaction, and review policy labels.
 - Health checks: active GDELT/RSS/official-feed sources and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched.
 - Social/API sources remain opt-in through `COMPLIANT_SOCIAL_API_SOURCES`; only add endpoints whose terms permit automated use.
 
