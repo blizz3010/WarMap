@@ -14,6 +14,7 @@ import {
   eventsFromEditorialSnapshots,
   normalizeDecisionPayload
 } from "../api/editorial-store.js";
+import { buildEditorialSetupPayload } from "../api/editorial-setup.js";
 import {
   authorizeIngestionCronRequest,
   buildIngestionStatusPayload,
@@ -68,6 +69,7 @@ const requiredFiles = [
   "api/archive.js",
   "api/collectors.js",
   "api/editorial-decisions.js",
+  "api/editorial-setup.js",
   "api/editorial-store-health.js",
   "api/editorial-status.js",
   "api/editorial-store.js",
@@ -188,6 +190,9 @@ if (
 
 if (
   !appSource.includes("/api/review-export") ||
+  !appSource.includes("/api/production-readiness?") ||
+  !appSource.includes("/api/editorial-setup?") ||
+  !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("renderInlineReviewExportBundle") ||
   !appSource.includes("data-copy-review-export") ||
   !appSource.includes("inline-review-export") ||
@@ -432,6 +437,33 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned")
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
+}
+
+const editorialSetup = await withTemporaryEditorialEnvAsync(async () => {
+  process.env.VERCEL = "1";
+  process.env.EDITORIAL_STORE_PROVIDER = "";
+  delete process.env.EDITORIAL_GITHUB_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.EDITORIAL_REVIEW_TOKEN;
+  return buildEditorialSetupPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:04:00Z")
+  });
+});
+if (
+  editorialSetup.kind !== "EditorialSetup" ||
+  editorialSetup.schemaVersion !== "editorial-setup.v1" ||
+  editorialSetup.ready ||
+  editorialSetup.current.storeMode !== "static-readonly" ||
+  editorialSetup.current.requiredBlockers < 2 ||
+  !editorialSetup.requiredConfiguration.some((item) => item.name === "EDITORIAL_STORE_PROVIDER=github" && !item.configured) ||
+  !editorialSetup.requiredConfiguration.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && !item.configured) ||
+  !editorialSetup.setupTargets.some((target) => target.id === "github-editorial-store" && !target.ready && target.env.includes("EDITORIAL_GITHUB_TOKEN")) ||
+  editorialSetup.fallbackBridge.targetFile !== "api/editorial-decisions.js" ||
+  !editorialSetup.links.productionReadiness.includes("/api/production-readiness?region=ukraine-east") ||
+  !editorialSetup.links.reviewDesk.includes("/review?region=ukraine-east")
+) {
+  throw new Error("Editorial setup payload failed missing-secret setup checks");
 }
 
 if (!PLATFORM_CONFIG.languages.some((language) => language.id === "en" && language.status === "active")) {
@@ -1264,6 +1296,7 @@ if (
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
   v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
   v1Config.links.publicationStatus !== "/api/publication-status" ||
+  v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
   v1Config.links.notificationStatus !== "/api/notification-status"
 ) {
