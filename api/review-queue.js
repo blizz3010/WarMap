@@ -67,6 +67,7 @@ export default async function handler(request, response) {
         collectorStatus: collection.collectorStatus,
         rssFeeds: collection.rssFeeds,
         officialFeeds: collection.officialFeeds,
+        officialSiteSources: collection.officialSiteSources,
         socialApiSources: collection.socialApiSources,
         upstreamErrors: collection.upstreamErrors,
         filters: queue.filters,
