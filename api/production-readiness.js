@@ -259,7 +259,9 @@ function setupProfileIdForBlocker(blocker) {
     "server-notifications": "server-notifications",
     "notification-webhook-url": "server-notifications",
     "notification-webhook-secret": "server-notifications",
-    "notification-admin-token": "server-notifications"
+    "notification-admin-token": "server-notifications",
+    "language-catalogs": "language-catalog-roadmap",
+    "paid-layer-entitlements": "paid-layer-entitlements"
   };
   return profileByBlockerId[blocker.id] ?? "";
 }
