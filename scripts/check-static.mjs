@@ -28,6 +28,7 @@ import {
 } from "../api/notification-service.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { buildProductionReadinessPayload } from "../api/production-readiness.js";
+import { buildPublicationPreviewPayload } from "../api/publication-preview.js";
 import { buildPublicationStatusFromDecisions } from "../api/publication-service.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
 import { buildReviewDossierFromCandidates } from "../api/review-dossier-service.js";
@@ -85,6 +86,7 @@ const requiredFiles = [
   "api/notification-status.js",
   "api/platform-config.js",
   "api/production-readiness.js",
+  "api/publication-preview.js",
   "api/publication-service.js",
   "api/publication-status.js",
   "api/region-scope.js",
@@ -177,7 +179,8 @@ if (
   !reviewPageSource.includes("/api/review-action") ||
   !reviewPageSource.includes("/api/review-export") ||
   !reviewPageSource.includes("/api/editorial-status") ||
-  !reviewPageSource.includes("/api/source-health?")
+  !reviewPageSource.includes("/api/source-health?") ||
+  !reviewPageSource.includes("/api/publication-preview?")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
 }
@@ -194,6 +197,7 @@ if (
   !appSource.includes("/api/review-export") ||
   !appSource.includes("/api/production-readiness?") ||
   !appSource.includes("/api/source-health?") ||
+  !appSource.includes("/api/publication-preview?") ||
   !appSource.includes("/api/editorial-setup?") ||
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
@@ -1148,6 +1152,34 @@ if (
   !Object.values(publishedRecord.surfaces).every(Boolean)
 ) {
   throw new Error("Publication status failed approved-event surface and source-link checks");
+}
+
+const publicationPreview = await buildPublicationPreviewPayload({
+  candidateId: sampleUkraineEvents[0].id,
+  candidates: sampleUkraineEvents,
+  region: "ukraine-east",
+  lookback: "30d",
+  now: new Date("2026-05-28T02:03:20Z"),
+  meta: {
+    upstreamArticles: 1,
+    editorialDecisions: 0
+  }
+});
+if (
+  publicationPreview?.kind !== "PublicationPreview" ||
+  !publicationPreview.dryRun ||
+  publicationPreview.persisted ||
+  publicationPreview.editorial.action !== "approve" ||
+  !publicationPreview.editorial.humanApprovalRequired ||
+  publicationPreview.publication.summary.published !== 1 ||
+  !publicationPreview.publication.ready ||
+  !publicationPreview.publication.record?.sources?.[0]?.url ||
+  !publicationPreview.publication.record?.links?.detail?.startsWith("/event?") ||
+  !publicationPreview.publication.record?.links?.api?.startsWith("/v1/events?") ||
+  !publicationPreview.publication.wouldPublishTo.includes("map") ||
+  publicationPreview.publication.wouldPublishTo.length !== 5
+) {
+  throw new Error("Publication preview failed dry-run approval surface and source-link checks");
 }
 
 if (applyEditorialDecisions(sampleUkraineEvents, [correctedSampleDecision])[0].review.status !== "corrected") {
