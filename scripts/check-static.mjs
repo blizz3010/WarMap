@@ -226,7 +226,10 @@ if (
   !embedSource.includes("return `/v1/events?${query.toString()}`") ||
   !embedSource.includes("data-embed-event") ||
   !embedSource.includes("fitToRegion(true)") ||
-  !embedPageSource.includes("embedRegionSelect")
+  !embedPageSource.includes("embedRegionSelect") ||
+  !embedSource.includes("els.mapLink.href = fullMapLink()") ||
+  !embedSource.includes("function normalizeEmbedLookback(value)") ||
+  !embedSource.includes("function normalizeEmbedPublication(value)")
 ) {
   throw new Error("Expected dashboard embed to use v1 events, theater switching, and synchronized feed controls");
 }
