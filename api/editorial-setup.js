@@ -36,6 +36,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
     requiredConfiguration: editorial.requiredConfiguration,
     environmentProfiles,
     vercelEnvironment: buildVercelEnvironmentRunbook({ environmentProfiles, regionQuery }),
+    launchPlan: readiness.launchPlan,
     setupTargets: [
       {
         id: "github-editorial-store",
