@@ -11,6 +11,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
   const requiredBlockers = readiness.blockers.filter((blocker) => blocker.required);
   const optionalBlockers = readiness.blockers.filter((blocker) => !blocker.required);
   const regionQuery = `region=${encodeURIComponent(region)}`;
+  const environmentProfiles = buildEnvironmentProfiles({ editorial, regionQuery });
 
   return {
     kind: "EditorialSetup",
@@ -29,7 +30,8 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       optionalBlockers: optionalBlockers.length
     },
     requiredConfiguration: editorial.requiredConfiguration,
-    environmentProfiles: buildEnvironmentProfiles({ editorial, regionQuery }),
+    environmentProfiles,
+    vercelEnvironment: buildVercelEnvironmentRunbook({ environmentProfiles, regionQuery }),
     setupTargets: [
       {
         id: "github-editorial-store",
@@ -171,6 +173,56 @@ function buildEnvironmentProfiles({ editorial, regionQuery }) {
       ]
     }
   ];
+}
+
+function buildVercelEnvironmentRunbook({ environmentProfiles, regionQuery }) {
+  const target = "production";
+  return {
+    target,
+    cli: {
+      list: `vercel env ls ${target}`,
+      pull: `vercel pull --environment=${target}`,
+      redeploy: "vercel deploy --prod"
+    },
+    verification: [
+      "/api/editorial-store-health",
+      "/api/editorial-status",
+      `/api/production-readiness?${regionQuery}`,
+      `/readiness?${regionQuery}&lookback=30d`
+    ],
+    profiles: environmentProfiles.map((profile) => ({
+      id: profile.id,
+      label: profile.label,
+      provider: profile.provider,
+      recommended: profile.recommended,
+      ready: profile.ready,
+      commands: buildVercelEnvCommands(profile.variables, target),
+      verification: profile.verification
+    }))
+  };
+}
+
+function buildVercelEnvCommands(variables = [], target) {
+  return variables.flatMap((variable) =>
+    envCommandNames(variable.name).map((name) => ({
+      name,
+      sourceName: variable.name,
+      target,
+      configured: variable.configured,
+      secret: variable.secret,
+      valueHint: variable.value,
+      addCommand: `vercel env add ${name} ${target}`,
+      updateCommand: `vercel env update ${name} ${target}`,
+      description: variable.description
+    }))
+  );
+}
+
+function envCommandNames(name) {
+  return String(name ?? "")
+    .split(/\s+or\s+/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function envItem(name, value, configured, secret, description) {
