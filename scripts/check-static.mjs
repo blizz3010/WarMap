@@ -331,6 +331,10 @@ if (
   !setupPageSource.includes("data-copy-text") ||
   !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
+  !setupPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !setupPageSource.includes("function setupProfileAnchor(profileId)") ||
+  !setupPageSource.includes("function setupCommandProfileAnchor(profileId)") ||
+  !setupPageSource.includes("setup-source-activation") ||
   !setupPageSource.includes("data-setup-region") ||
   !setupPageSource.includes("links.ingestionStatus") ||
   !setupPageSource.includes("links.storageReadiness") ||
@@ -383,6 +387,8 @@ if (
   !readinessPageSource.includes("/api/notification-status?") ||
   !readinessPageSource.includes("function renderReadinessPage()") ||
   !readinessPageSource.includes("function renderCheckRow(check)") ||
+  !readinessPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !readinessPageSource.includes("setupCommandHref") ||
   !readinessPageSource.includes("data-readiness-region") ||
   !stylesSource.includes(".readiness-check-list") ||
   !stylesSource.includes(".readiness-blocker-list") ||
@@ -881,7 +887,17 @@ if (
   !productionReadiness.requiredBlockers?.some((blocker) => blocker.id === "editorial-store") ||
   !productionReadiness.optionalBlockers?.some((blocker) => blocker.id === "ai-provider") ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
+  !productionReadiness.blockers.some(
+    (blocker) =>
+      blocker.id === "editorial-store" &&
+      blocker.setupProfileId === "github-contents-editorial" &&
+      blocker.setupHref?.includes("/setup?region=ukraine-east#setup-profile-github-contents-editorial") &&
+      blocker.setupCommandHref?.includes("#setup-command-profile-github-contents-editorial")
+  ) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
+  !productionReadiness.blockers.some(
+    (blocker) => blocker.id === "ai-provider" && blocker.setupProfileId === "ai-extraction-provider" && blocker.setupCommandHref?.includes("#setup-command-profile-ai-extraction-provider")
+  ) ||
   productionReadiness.sections.sourceCuration.activeSources < 1 ||
   !productionReadiness.sections.sourceCuration.activationBacklog?.summary?.sourceIds?.includes("ukraine-mod-news") ||
   !productionReadiness.optionalBlockers?.some(
@@ -889,7 +905,9 @@ if (
       blocker.id === "official-site-adapters" &&
       blocker.sourceIds?.includes("ukraine-mod-news") &&
       blocker.sourceCount >= 1 &&
-      blocker.nextAction?.includes("OFFICIAL_SITE_SOURCES")
+      blocker.nextAction?.includes("OFFICIAL_SITE_SOURCES") &&
+      blocker.setupHref?.includes("#setup-source-activation") &&
+      blocker.sourcesHref?.includes("/sources?region=ukraine-east")
   ) ||
   !productionReadiness.optionalBlockers?.some(
     (blocker) => blocker.id === "liveuamap-license" && blocker.sourceIds?.includes("liveuamap-api")
@@ -903,13 +921,22 @@ if (
   productionReadiness.sections.storage.eventStoreHealth !== "/api/event-store-health" ||
   productionReadiness.sections.storage.ready ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "postgres-event-store" && blocker.status === "missing") ||
+  !productionReadiness.blockers.some(
+    (blocker) => blocker.id === "postgres-event-store" && blocker.setupProfileId === "postgres-event-store-candidates" && blocker.setupHref?.includes("#setup-profile-postgres-event-store-candidates")
+  ) ||
   productionReadiness.sections.publication.status !== "/api/publication-status" ||
   !Array.isArray(productionReadiness.sections.publication.surfaces) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ingestion-cron-secret" && blocker.status === "missing") ||
+  !productionReadiness.blockers.some(
+    (blocker) => blocker.id === "ingestion-cron-secret" && blocker.setupProfileId === "scheduled-ingestion" && blocker.setupCommandHref?.includes("#setup-command-profile-scheduled-ingestion")
+  ) ||
   !productionReadiness.sections.platform.browserNotifications ||
   productionReadiness.sections.platform.serverNotificationsReady ||
   productionReadiness.sections.platform.notificationStatus !== "/api/notification-status" ||
-  !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned")
+  !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned") ||
+  !productionReadiness.blockers.some(
+    (blocker) => blocker.id === "server-notifications" && blocker.setupProfileId === "server-notifications" && blocker.setupHref?.includes("#setup-profile-server-notifications")
+  )
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
 }
@@ -1046,7 +1073,13 @@ if (
   editorialSetup.links.storageReadiness !== "/api/storage-readiness" ||
   editorialSetup.links.eventStoreHealth !== "/api/event-store-health" ||
   !editorialSetup.links.notificationStatus.includes("/api/notification-status?region=ukraine-east") ||
-  !editorialSetup.links.reviewDesk.includes("/review?region=ukraine-east")
+  !editorialSetup.links.reviewDesk.includes("/review?region=ukraine-east") ||
+  !editorialSetup.blockers?.some(
+    (blocker) => blocker.id === "editorial-store" && blocker.setupHref?.includes("#setup-profile-github-contents-editorial")
+  ) ||
+  !editorialSetup.blockers?.some(
+    (blocker) => blocker.id === "official-site-adapters" && blocker.sourcesHref?.includes("/sources?region=ukraine-east")
+  )
 ) {
   throw new Error("Editorial setup payload failed missing-secret setup checks");
 }
