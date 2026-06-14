@@ -7,7 +7,7 @@ The previous prototype was too close to a strike dashboard. This rebuild follows
 ## Product model implemented
 
 - Persistent top navigation: region selector, one-click theater strip, news/map/time/review/alerts/key controls, language/time selectors, pause, and search.
-- Theater switching: Iran, Middle East, Gulf, Ukraine, East Ukraine, South Ukraine, North Ukraine, and Black Sea/Crimea presets.
+- Theater switching: Iran, Middle East, Gulf, Ukraine, East Ukraine, South Ukraine, North Ukraine, and Black Sea/Crimea presets. The main map keeps region, publication mode, and non-default lookback in the query string while preserving valid event hashes, so a selected theater/feed state is shareable.
 - Left filter rail: verification, publication mode, source type, severity, category, granular event type, media-only, and time range.
 - Central MapLibre map canvas: dark raster base map, custom clustered incident markers, region focus overlays, selected marker state, fit/zoom controls, layer popout, and viewport-only filtering.
 - Right news feed: reverse-chronological event cards with time, place, title, summary, category, severity, verification, source count, source links, side color, and media thumbnail placeholders.

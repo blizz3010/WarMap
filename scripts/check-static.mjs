@@ -195,6 +195,17 @@ if (
   throw new Error("Expected the main map/feed to support all/review/published publication modes");
 }
 
+if (
+  !appSource.includes("timeRange: initialTimeRange()") ||
+  !appSource.includes("function initialTimeRange()") ||
+  !appSource.includes("function normalizeTimeRange(value)") ||
+  !appSource.includes("function syncMapQueryState(options = {})") ||
+  !appSource.includes("syncMapQueryState({ preserveHash: false })") ||
+  !appSource.includes("appendLookbackParam(params)")
+) {
+  throw new Error("Expected map theater, publication, and lookback controls to stay synchronized with the URL");
+}
+
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
   throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
 }

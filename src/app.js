@@ -15,6 +15,7 @@ const PUBLICATION_MODE_LABELS = {
   review: "Review queue",
   published: "Published only"
 };
+const TIME_RANGES = new Set(["1h", "6h", "24h", "7d", "30d", "90d", "all"]);
 
 const state = {
   regionId: initialRegionId(),
@@ -44,7 +45,7 @@ const state = {
   streamMessage: "Realtime stream idle",
   streamSnapshotId: "",
   streamLastRefreshAt: 0,
-  timeRange: "30d",
+  timeRange: initialTimeRange(),
   categories: new Set(Object.keys(categories)),
   eventTypes: new Set(Object.keys(eventTypes)),
   severities: new Set(Object.keys(severities)),
@@ -521,6 +522,7 @@ init();
 function init() {
   state.platformConfig = PLATFORM_CONFIG_FALLBACK;
   els.publicationMode.value = state.publicationMode;
+  els.timeRange.value = state.timeRange;
   renderFilterControls();
   renderRegionOptions();
   renderPlatformChrome();
@@ -733,6 +735,7 @@ function bindControls() {
 
   els.publicationMode.addEventListener("change", () => {
     state.publicationMode = normalizePublicationMode(els.publicationMode.value);
+    syncMapQueryState();
     clearInlineReviewExport();
     render();
     loadLiveEvents();
@@ -765,7 +768,8 @@ function bindControls() {
 
   els.resetFilters.addEventListener("click", resetFilters);
   els.timeRange.addEventListener("change", () => {
-    state.timeRange = els.timeRange.value;
+    state.timeRange = normalizeTimeRange(els.timeRange.value);
+    syncMapQueryState();
     clearInlineReviewExport();
     render();
     loadLiveEvents();
@@ -824,6 +828,7 @@ function changeRegion(regionId) {
   els.regionSelect.value = nextRegion.id;
   state.selectedEventId = null;
   state.detailOpen = false;
+  syncMapQueryState({ preserveHash: false });
   clearInlineReviewExport();
   updateRegionFocus();
   fitToRegion(true);
@@ -2412,6 +2417,7 @@ function resetFilters() {
   els.viewportOnlyToggle.checked = false;
   els.timeRange.value = state.timeRange;
   els.publicationMode.value = state.publicationMode;
+  syncMapQueryState();
   document.querySelectorAll("[data-filter-kind]").forEach((input) => {
     input.checked = true;
   });
@@ -2832,6 +2838,11 @@ function initialPublicationMode() {
   return normalizePublicationMode(params.get("publication"));
 }
 
+function initialTimeRange() {
+  const params = new URLSearchParams(window.location.search);
+  return normalizeTimeRange(params.get("lookback"));
+}
+
 function focusGeoJsonForRegion(regionId) {
   if (String(regionId).startsWith("ukraine") || regionId === "black-sea") {
     return FOCUS_GEOJSON_BY_FAMILY.ukraine;
@@ -2999,6 +3010,14 @@ function lookbackForApi(range) {
   return ["1h", "6h", "24h", "7d", "30d", "90d"].includes(range) ? range : "30d";
 }
 
+function normalizeTimeRange(value) {
+  const range = String(value ?? "30d").toLowerCase();
+  if (range === "180d") {
+    return "all";
+  }
+  return TIME_RANGES.has(range) ? range : "30d";
+}
+
 function normalizePublicationMode(value) {
   const mode = String(value ?? "all").toLowerCase();
   return PUBLICATION_MODES.has(mode) ? mode : "all";
@@ -3064,6 +3083,7 @@ function escapeAttr(value) {
 
 function eventHashLink(item) {
   const params = new URLSearchParams({ region: state.regionId });
+  appendLookbackParam(params);
   appendPublicationParam(params);
   return `/?${params.toString()}#event=${encodeURIComponent(item.id)}`;
 }
@@ -3140,6 +3160,36 @@ function archivePageLink() {
 function appendPublicationParam(params) {
   if (state.publicationMode !== "all") {
     params.set("publication", state.publicationMode);
+  }
+}
+
+function appendLookbackParam(params) {
+  if (state.timeRange !== "30d") {
+    params.set("lookback", state.timeRange);
+  }
+}
+
+function syncMapQueryState(options = {}) {
+  const { preserveHash = true } = options;
+  const params = new URLSearchParams(window.location.search);
+  params.set("region", state.regionId);
+  if (state.publicationMode === "all") {
+    params.delete("publication");
+  } else {
+    params.set("publication", state.publicationMode);
+  }
+  if (state.timeRange === "30d") {
+    params.delete("lookback");
+  } else {
+    params.set("lookback", state.timeRange);
+  }
+
+  const query = params.toString();
+  const hash = preserveHash ? window.location.hash : "";
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl !== currentUrl) {
+    history.replaceState(null, "", nextUrl);
   }
 }
 
