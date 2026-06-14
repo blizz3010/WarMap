@@ -1640,7 +1640,8 @@ dd {
   overflow-wrap: anywhere;
 }
 
-.source-activation-backlog {
+.source-activation-backlog,
+.inline-launch-actions {
   display: grid;
   gap: 7px;
   margin: 0 0 8px;
@@ -1650,7 +1651,8 @@ dd {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.source-activation-backlog > div {
+.source-activation-backlog > div,
+.inline-launch-actions > div {
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -1660,25 +1662,41 @@ dd {
   text-transform: uppercase;
 }
 
-.source-activation-backlog strong {
+.source-activation-backlog strong,
+.inline-launch-actions strong {
   color: var(--text);
 }
 
-.source-activation-backlog .status-list {
+.source-activation-backlog .status-list,
+.inline-launch-actions .status-list {
   gap: 5px;
 }
 
-.source-activation-backlog .status-list li {
+.source-activation-backlog .status-list li,
+.inline-launch-actions .status-list li {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 5px 8px;
   min-height: 0;
 }
 
-.source-activation-backlog .status-list small {
+.source-activation-backlog .status-list small,
+.inline-launch-actions .status-list small,
+.inline-launch-actions .status-list a {
   grid-column: 1 / -1;
   color: var(--dim);
   font-size: 10px;
   overflow-wrap: anywhere;
+}
+
+.inline-launch-actions .status-list a {
+  justify-self: start;
+  color: var(--accent);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.inline-launch-actions .status-list a:hover {
+  color: #ffffff;
 }
 
 .inline-review-source-strip,

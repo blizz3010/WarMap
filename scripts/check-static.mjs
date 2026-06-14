@@ -319,6 +319,10 @@ if (
   !appSource.includes("sourceHealthAttentionRows(health)") ||
   !appSource.includes("source.diagnostic?.retryable") ||
   !appSource.includes("function renderSourceActivationBacklog(sourceCuration)") ||
+  !appSource.includes("function renderInlineLaunchActions(actions") ||
+  !appSource.includes("primaryLaunchActionLink(action)") ||
+  !appSource.includes("readiness.launchPlan?.actions") ||
+  !stylesSource.includes(".inline-launch-actions") ||
   !appSource.includes("sourceCuration.activationBacklog?.summary") ||
   !appSource.includes("function sourceHealthStatusClass(health)") ||
   !appSource.includes("inline-review-source-strip") ||

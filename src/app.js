@@ -1732,6 +1732,7 @@ function renderReviewReadinessPanel() {
   const publication = readiness.sections?.publication ?? {};
   const sourceCuration = readiness.sections?.sourceCuration ?? {};
   const sourceBacklog = sourceCuration.activationBacklog?.summary ?? sourceCuration.readiness?.activationBacklogSummary ?? {};
+  const launchActions = readiness.launchPlan?.actions ?? [];
   return `
     <section class="intel-section readiness-card">
       <header>
@@ -1750,6 +1751,7 @@ function renderReviewReadinessPanel() {
       </dl>
       ${renderSourceHealthSummary()}
       ${renderSourceActivationBacklog(sourceCuration)}
+      ${renderInlineLaunchActions(launchActions)}
       <ul class="status-list readiness-blockers">
         ${
           requiredBlockers
@@ -1770,6 +1772,49 @@ function renderReviewReadinessPanel() {
       </nav>
     </section>
   `;
+}
+
+function renderInlineLaunchActions(actions = []) {
+  if (!actions.length) {
+    return "";
+  }
+
+  return `
+    <div class="inline-launch-actions">
+      <div>
+        <strong>Next launch actions</strong>
+        <span>${Number(actions.length)} open</span>
+      </div>
+      <ul class="status-list">
+        ${actions.slice(0, 4).map(renderInlineLaunchAction).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderInlineLaunchAction(action) {
+  const link = primaryLaunchActionLink(action);
+  return `
+    <li>
+      <span>${Number(action.rank ?? 0)}. ${escapeHtml(action.label ?? action.blockerId)}</span>
+      <strong>${escapeHtml(action.required ? "required" : action.category ?? "optional")}</strong>
+      <small>${escapeHtml(action.action || action.message || "Review this launch action.")}</small>
+      ${link ? `<a href="${escapeAttr(link.href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(link.label)}</a>` : ""}
+    </li>
+  `;
+}
+
+function primaryLaunchActionLink(action) {
+  const links = action.links ?? {};
+  return [
+    ["Setup", links.setup],
+    ["Commands", links.commands],
+    ["Review", links.review],
+    ["Publication", links.publication],
+    ["Sources", links.sources]
+  ]
+    .filter(([, href]) => href)
+    .map(([label, href]) => ({ label, href }))[0];
 }
 
 function renderSourceActivationBacklog(sourceCuration) {
