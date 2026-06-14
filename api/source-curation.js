@@ -147,7 +147,7 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
   ]);
   const active = sources.filter((source) => source.status === "active");
   const planned = sources.filter((source) => source.status === "planned");
-  const activationBacklog = sourceActivationBacklog(planned);
+  const activationBacklog = sourceActivationBacklog(planned, normalizedRegion);
 
   return {
     kind: "SourceCuration",
@@ -230,7 +230,7 @@ function activationProfile(source) {
   };
 }
 
-function sourceActivationBacklog(plannedSources) {
+function sourceActivationBacklog(plannedSources, region) {
   const sources = plannedSources.map((source) => ({
     id: source.id,
     name: source.name,
@@ -243,6 +243,7 @@ function sourceActivationBacklog(plannedSources) {
     nextAction: activationNextActionForSource(source),
     requirements: activationRequirementsForSource(source)
   }));
+  const templates = sourceActivationTemplates(plannedSources, region);
   const byCollector = Object.values(
     sources.reduce((groups, source) => {
       groups[source.collector] ??= {
@@ -274,8 +275,158 @@ function sourceActivationBacklog(plannedSources) {
       }, {})
     },
     byCollector,
+    templates,
     sources
   };
+}
+
+function sourceActivationTemplates(plannedSources, region) {
+  return plannedSources
+    .map((source) => activationTemplateForSource(source, region))
+    .filter(Boolean)
+    .sort((left, right) => left.collector.localeCompare(right.collector) || left.sourceId.localeCompare(right.sourceId));
+}
+
+function activationTemplateForSource(source, region) {
+  if (source.collector === "official-site" && source.url) {
+    const value = {
+      id: source.id,
+      name: source.name,
+      url: source.url,
+      regions: source.regions?.includes("*") ? [region] : source.regions,
+      includePatterns: [activationIncludePattern(source.url)],
+      excludePatterns: ["#", "?", "/tag/", "/author/"],
+      sourceType: source.sourceType,
+      trustTier: source.trustTier,
+      country: source.country ?? null
+    };
+    return activationTemplate({
+      id: `${source.id}-official-site`,
+      source,
+      label: `${source.name} official-site adapter`,
+      collector: source.collector,
+      env: "OFFICIAL_SITE_SOURCES",
+      command: "vercel env add OFFICIAL_SITE_SOURCES production",
+      value,
+      requirements: [
+        "Confirm automated-use terms before adding this JSON to Vercel.",
+        "Replace include/exclude patterns with the narrowest terms-reviewed scope.",
+        "Keep this source routed to editorial review before publication."
+      ],
+      note: "No secrets in this template. Use it as one JSON-array entry after terms review."
+    });
+  }
+
+  if (source.id === "official-sites" || source.collector === "official-feed") {
+    const value = {
+      id: "example-official-feed",
+      name: "Terms-reviewed official RSS or CAP feed",
+      url: "https://example.gov/alerts/feed.xml",
+      regions: [region],
+      feedFormat: "rss",
+      sourceType: "official",
+      trustTier: "primary source",
+      country: "Source country"
+    };
+    return activationTemplate({
+      id: `${source.id}-official-feed`,
+      source,
+      label: "Official XML feed template",
+      collector: source.collector,
+      env: "OFFICIAL_FEED_SOURCES",
+      command: "vercel env add OFFICIAL_FEED_SOURCES production",
+      value,
+      requirements: [
+        "Use RSS, Atom, CAP, or documented XML feeds whose terms permit automated collection.",
+        "Set feedFormat to rss, atom, or cap when the endpoint format is known.",
+        "Keep original item links visible on every candidate and published event."
+      ],
+      note: "Template uses a placeholder URL; replace it with a permitted official feed."
+    });
+  }
+
+  if (source.collector === "social-api") {
+    const value = {
+      id: "allowed-osint-api",
+      name: "Allowed OSINT API",
+      url: "https://example.com/api/posts",
+      regions: [region],
+      tokenEnv: "ALLOWED_OSINT_API_TOKEN",
+      itemsPath: "data",
+      sourceType: "osint",
+      trustTier: "requires analyst review"
+    };
+    return activationTemplate({
+      id: `${source.id}-social-api`,
+      source,
+      label: "Compliant social/API template",
+      collector: source.collector,
+      env: "COMPLIANT_SOCIAL_API_SOURCES",
+      command: "vercel env add COMPLIANT_SOCIAL_API_SOURCES production",
+      tokenCommand: "vercel env add ALLOWED_OSINT_API_TOKEN production",
+      value,
+      requirements: [
+        "Use only official APIs whose terms allow automated use for this dashboard.",
+        "Store token values in the named tokenEnv variable, never inside JSON config.",
+        "Require analyst review for every social/API candidate."
+      ],
+      note: "Token names are visible for health checks, but token values are redacted."
+    });
+  }
+
+  if (source.collector === "licensed-api") {
+    return {
+      id: `${source.id}-license`,
+      sourceId: source.id,
+      sourceName: source.name,
+      collector: source.collector,
+      label: `${source.name} licensed API boundary`,
+      env: null,
+      command: null,
+      tokenCommand: null,
+      value: null,
+      json: "",
+      status: "license-required",
+      reviewPolicy: reviewPolicyForSource(source),
+      licenseRequired: true,
+      adapterStatus: "planned",
+      requirements: activationRequirementsForSource(source),
+      note: "Secure a paid or written API/data agreement before implementing an adapter. Do not scrape public map pages."
+    };
+  }
+
+  return null;
+}
+
+function activationTemplate({ id, source, label, collector, env, command, tokenCommand = null, value, requirements, note }) {
+  return {
+    id,
+    sourceId: source.id,
+    sourceName: source.name,
+    collector,
+    label,
+    env,
+    command,
+    tokenCommand,
+    value,
+    json: JSON.stringify([value], null, 2),
+    status: "permission-required",
+    reviewPolicy: reviewPolicyForSource(source),
+    licenseRequired: false,
+    adapterStatus: "configuration-template",
+    requirements,
+    note
+  };
+}
+
+function activationIncludePattern(url) {
+  try {
+    const parsed = new URL(String(url));
+    const normalized = parsed.pathname.replace(/\/+$/g, "");
+    return normalized || "/";
+  } catch {
+    return "/";
+  }
 }
 
 function activationNextActionForSource(source) {
@@ -330,6 +481,9 @@ function activationRequirementsForSource(source) {
 }
 
 function reviewPolicyForSource(source) {
+  if (source.collector === "licensed-api") {
+    return "license-and-attribution-review";
+  }
   if (source.trustTier?.includes("claim") || source.country === "Russia") {
     return "claim-label-required";
   }

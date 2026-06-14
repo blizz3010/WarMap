@@ -144,6 +144,11 @@ function renderSourcesPage() {
           </section>
 
           <section class="event-page-section">
+            <h2>Activation Templates</h2>
+            ${renderActivationTemplates(backlog.templates ?? [])}
+          </section>
+
+          <section class="event-page-section">
             <h2>Health Diagnostics</h2>
             ${renderHealthDiagnostics(health)}
           </section>
@@ -249,6 +254,41 @@ function renderBacklogSource(source) {
   `;
 }
 
+function renderActivationTemplates(templates) {
+  return `
+    <ul class="source-template-list">
+      ${templates.map(renderActivationTemplate).join("") || "<li><strong>No activation templates available</strong></li>"}
+    </ul>
+  `;
+}
+
+function renderActivationTemplate(template) {
+  const hasJson = Boolean(template.json);
+  const command = template.command || "";
+  const tokenCommand = template.tokenCommand || "";
+  return `
+    <li class="${template.licenseRequired ? "is-blocked" : "is-planned"}">
+      <header>
+        <div>
+          <strong>${escapeHtml(template.label ?? template.sourceName ?? template.sourceId)}</strong>
+          <small>${escapeHtml(template.sourceId ?? "")} - ${escapeHtml(template.reviewPolicy ?? "analyst review")}</small>
+        </div>
+        <span>${escapeHtml(template.env ?? template.status ?? "planned")}</span>
+      </header>
+      <p>${escapeHtml(template.note ?? "Confirm permission before activation.")}</p>
+      ${hasJson ? `<pre class="source-template-json"><code>${escapeHtml(template.json)}</code></pre>` : ""}
+      <div class="source-template-actions">
+        ${hasJson ? `<button type="button" data-copy-source-template="${escapeAttr(template.json)}">Copy JSON</button>` : ""}
+        ${command ? `<button type="button" data-copy-source-command="${escapeAttr(command)}">Copy env command</button>` : ""}
+        ${tokenCommand ? `<button type="button" data-copy-source-command="${escapeAttr(tokenCommand)}">Copy token command</button>` : ""}
+      </div>
+      <ul class="source-requirement-list">
+        ${(template.requirements ?? []).slice(0, 4).map((requirement) => `<li>${escapeHtml(requirement)}</li>`).join("")}
+      </ul>
+    </li>
+  `;
+}
+
 function renderHealthDiagnostics(health) {
   if (!health) {
     return `<p class="status-summary is-blocked">${escapeHtml(state.healthMessage || "Source health unavailable.")}</p>`;
@@ -329,6 +369,25 @@ function bindSourcesControls() {
   document.querySelector("[data-sources-lookback]")?.addEventListener("change", (event) => {
     state.lookback = event.target.value;
     updateSourcesUrl();
+  });
+  document.querySelectorAll("[data-copy-source-template], [data-copy-source-command]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const text =
+        button.getAttribute("data-copy-source-template") ?? button.getAttribute("data-copy-source-command") ?? "";
+      const originalLabel = button.textContent ?? "Copy";
+      try {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error("Clipboard unavailable");
+        }
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied";
+        setTimeout(() => {
+          button.textContent = originalLabel;
+        }, 1200);
+      } catch {
+        button.textContent = originalLabel;
+      }
+    });
   });
 }
 
