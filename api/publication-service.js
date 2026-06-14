@@ -1,5 +1,6 @@
 import { publishedEventsFromEvents, PUBLICATION_TARGETS } from "./editorial-workflow.js";
 import { applyEditorialDecisions, editorialStoreCapabilities, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
+import { loadEventsFromEventStore } from "./event-store.js";
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
@@ -18,11 +19,13 @@ export async function buildPublicationStatusPayload({ region = DEFAULT_REGION_ID
   const normalizedRegion = String(region || DEFAULT_REGION_ID);
   const normalizedLookback = String(lookback || "30d");
   const decisions = await loadEditorialDecisions();
+  const storedEvents = await loadEventsFromEventStore({ now });
   return buildPublicationStatusFromDecisions({
     decisions,
     region: normalizedRegion,
     lookback: normalizedLookback,
-    now
+    now,
+    storedEvents
   });
 }
 
@@ -31,15 +34,17 @@ export function buildPublicationStatusFromDecisions({
   region = DEFAULT_REGION_ID,
   lookback = "30d",
   now = new Date(),
-  sourceEvents = seedEvents
+  sourceEvents = seedEvents,
+  storedEvents = []
 } = {}) {
   const normalizedRegion = String(region || DEFAULT_REGION_ID);
   const normalizedLookback = String(lookback || "30d");
   const store = editorialStoreCapabilities();
   const seedPublished = eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(sourceEvents, decisions)), normalizedRegion);
+  const storedPublished = eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(storedEvents, decisions)), normalizedRegion);
   const snapshotEvents = eventsFromEditorialSnapshots(decisions);
   const snapshotPublished = eventsForRegionScope(publishedEventsFromEvents(snapshotEvents), normalizedRegion);
-  const published = dedupeEvents([...seedPublished, ...snapshotPublished]);
+  const published = dedupeEvents([...seedPublished, ...storedPublished, ...snapshotPublished]);
   const records = published.map((event) => publicationRecord(event, { region: normalizedRegion, lookback: normalizedLookback }));
   const blockers = publicationReadinessBlockers(records);
 
@@ -54,7 +59,8 @@ export function buildPublicationStatusFromDecisions({
       mode: store.mode,
       canWrite: store.canWrite,
       tokenConfigured: store.tokenConfigured,
-      github: store.github ?? null
+      github: store.github ?? null,
+      postgres: store.postgres ?? null
     },
     surfaces: PUBLICATION_TARGETS.map((id) => surfaceSummary(id, normalizedRegion, normalizedLookback)),
     summary: {
@@ -64,7 +70,8 @@ export function buildPublicationStatusFromDecisions({
       editorialDecisions: decisions.length,
       editorialSnapshots: snapshotEvents.length,
       publishedSnapshots: snapshotPublished.length,
-      seedPublished: seedPublished.length
+      seedPublished: seedPublished.length,
+      eventStorePublished: storedPublished.length
     },
     records,
     blockers

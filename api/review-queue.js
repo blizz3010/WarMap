@@ -1,6 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { applyEditorialDecisions, loadEditorialDecisions } from "./editorial-store.js";
+import { eventStoreCapabilities, loadEventsFromEventStore } from "./event-store.js";
 import { intakeSnapshotStoreCapabilities, loadIntakeSnapshots } from "./intake-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
@@ -31,10 +32,11 @@ export default async function handler(request, response) {
     });
     const decisions = await loadEditorialDecisions();
     const intakeEvents = eventsForRegionScope(applyEditorialDecisions(await loadIntakeSnapshots({ now: generatedAt }), decisions), region);
+    const eventStoreEvents = eventsForRegionScope(applyEditorialDecisions(await loadEventsFromEventStore({ now: generatedAt }), decisions), region);
     const liveEvents = eventsForRegionScope(applyEditorialDecisions(events, decisions), region);
-    const scopedEvents = dedupeEvents([...intakeEvents, ...liveEvents]);
+    const scopedEvents = dedupeEvents([...intakeEvents, ...eventStoreEvents, ...liveEvents]);
 
-    if (!events.length && !intakeEvents.length && collection.upstreamErrors.length >= 2) {
+    if (!events.length && !intakeEvents.length && !eventStoreEvents.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
     }
 
@@ -57,6 +59,8 @@ export default async function handler(request, response) {
         upstreamArticles: collection.articles.length,
         intakeSnapshots: intakeEvents.length,
         intakeStore: intakeSnapshotStoreCapabilities({ now: generatedAt }),
+        eventStore: eventStoreCapabilities({ now: generatedAt }),
+        eventStoreEvents: eventStoreEvents.length,
         scopedEvents: scopedEvents.length,
         editorialDecisions: decisions.length,
         extraction: extractionRuntimeSummary(),

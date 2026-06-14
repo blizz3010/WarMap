@@ -187,6 +187,25 @@ export async function saveCandidateEventsToEventStore(events = [], { env = proce
   };
 }
 
+export async function loadEventsFromEventStore({ env = process.env, now = new Date(), limit = 200, queryImpl } = {}) {
+  const capabilities = eventStoreCapabilities({ env, now });
+  if (!capabilities.configured) {
+    return [];
+  }
+
+  const runQuery = queryImpl ?? (await postgresQueryForEnv(env, []));
+  if (!runQuery) {
+    return [];
+  }
+
+  try {
+    const result = await runQuery(storedEventsQuery(), [Math.min(Math.max(Number(limit) || 200, 1), 500)]);
+    return rowsFor(result).map((row) => deserializeStoredEvent(row, { now })).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export function buildCandidateEventStoreOperations(events = []) {
   return events.flatMap((event) => {
     const sourceOps = event.sources.map((source) => upsertSourceOperation(source));
@@ -195,6 +214,129 @@ export function buildCandidateEventStoreOperations(events = []) {
     const linkOps = event.documents.map((document) => upsertEventSourceOperation(event, document));
     return [...sourceOps, ...documentOps, eventOp, ...linkOps];
   });
+}
+
+export function deserializeStoredEvent(row, { now = new Date() } = {}) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+
+  const id = clean(row.id);
+  const title = clean(row.title);
+  const lat = Number(row.lat);
+  const lon = Number(row.lon);
+  if (!id || !title || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+
+  const metadata = jsonValue(row.metadata);
+  const extraction = jsonValue(row.extraction);
+  const storedReview = jsonValue(row.review);
+  const sources = normalizeStoredSources(row.sources);
+  const firstSeenAt = isoOrNow(row.first_seen_at ?? row.firstSeenAt);
+  const lastUpdatedAt = isoOrNow(row.last_updated_at ?? row.lastUpdatedAt ?? firstSeenAt);
+  const publicationStatus = clean(row.publication_status ?? storedReview.publicationStatus) || "review_only";
+  const status = clean(row.status ?? storedReview.status) || (publicationStatus === "published" ? "approved" : "candidate");
+
+  return {
+    id,
+    slug: clean(metadata.slug) || slugify(title).slice(0, 80) || `event-${hash(id).slice(0, 8)}`,
+    timeLabel: formatStoredTime(firstSeenAt),
+    relativeTime: relativeMinutes(firstSeenAt, now),
+    firstSeenAt,
+    lastUpdatedAt,
+    place: clean(row.place) || clean(extraction.location?.place) || "Unknown",
+    province: clean(metadata.province) || clean(extraction.location?.province),
+    country: clean(row.country) || clean(extraction.location?.country),
+    location: {
+      lat,
+      lon,
+      precision: clean(row.location_precision ?? extraction.location?.precision) || "approximate"
+    },
+    category: clean(row.category) || clean(extraction.eventType) || "other",
+    severity: clean(row.severity) || "low",
+    verification: clean(metadata.verification) || (publicationStatus === "published" ? "verified" : "reported"),
+    confidence: clampNumber(row.confidence, 0, 1, 0.5),
+    sourceCount: Number(metadata.sourceCount) || sources.length,
+    side: clean(row.actor_side) || clean(extraction.actorSide) || "regional",
+    extraction,
+    sources,
+    media: metadata.media ?? null,
+    title,
+    summary: clean(row.summary) || title,
+    updates: Array.isArray(metadata.updates) ? metadata.updates.slice(0, 10) : ["Loaded from durable event store"],
+    region: clean(row.region),
+    review: {
+      ...storedReview,
+      status,
+      queue: clean(storedReview.queue) || (publicationStatus === "published" ? "published map" : "open-source intake"),
+      publicationStatus,
+      duplicateKey: clean(row.duplicate_key ?? storedReview.duplicateKey) || id,
+      visibleOn:
+        Array.isArray(storedReview.visibleOn) && storedReview.visibleOn.length
+          ? storedReview.visibleOn
+          : publicationStatus === "published"
+            ? ["map", "feed", "detail", "archive", "api"]
+            : ["review queue", "api"],
+      assignee: clean(row.assignee ?? storedReview.assignee) || "editorial desk",
+      priority: clean(row.priority ?? storedReview.priority) || "normal",
+      decidedAt: clean(storedReview.decidedAt) || isoOrNull(row.approved_at)
+    }
+  };
+}
+
+function storedEventsQuery() {
+  return `select
+  e.id,
+  e.duplicate_key,
+  e.region,
+  e.category,
+  e.severity,
+  e.actor_side,
+  e.status,
+  e.publication_status,
+  e.title,
+  e.summary,
+  e.place,
+  e.country,
+  ST_Y(e.location::geometry) as lat,
+  ST_X(e.location::geometry) as lon,
+  e.location_precision,
+  e.confidence,
+  e.first_seen_at,
+  e.last_updated_at,
+  e.approved_at,
+  e.assignee,
+  e.priority,
+  e.extraction,
+  e.review,
+  e.metadata,
+  coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', coalesce(s.id, d.source_id, ''),
+        'registryId', coalesce(s.registry_id, ''),
+        'name', coalesce(s.name, d.raw->>'sourceName', 'Source'),
+        'type', coalesce(s.source_type, 'unknown'),
+        'collector', coalesce(s.collector, d.raw->>'collector', 'event-store'),
+        'trustTier', coalesce(s.trust_tier, 'stored source'),
+        'url', d.url,
+        'collectorUrl', coalesce(s.url, ''),
+        'originalTitle', d.title,
+        'publishedAt', d.published_at,
+        'capturedAt', d.captured_at
+      )
+      order by d.published_at desc nulls last, d.captured_at desc
+    ) filter (where d.id is not null),
+    '[]'::jsonb
+  ) as sources
+from warmap_events e
+left join warmap_event_sources es on es.event_id = e.id
+left join warmap_documents d on d.id = es.document_id
+left join warmap_sources s on s.id = d.source_id
+group by e.id
+order by e.first_seen_at desc
+limit $1`;
 }
 
 export function serializeEventForStore(event) {
@@ -241,6 +383,7 @@ export function serializeEventForStore(event) {
     review: jsonObject(review),
     metadata: jsonObject({
       slug: event.slug,
+      province: event.province,
       sourceCount: event.sourceCount ?? sources.length,
       verification: event.verification,
       updates: Array.isArray(event.updates) ? event.updates.slice(0, 10) : [],
@@ -572,6 +715,88 @@ function isoOrNow(value) {
 function isoOrNull(value) {
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+function normalizeStoredSources(value) {
+  const sources = Array.isArray(value) ? value : typeof value === "string" ? safeJsonArray(value) : [];
+  return sources
+    .map((source) => {
+      const url = safeUrl(source?.url);
+      if (!url) {
+        return null;
+      }
+      return {
+        id: clean(source.id),
+        registryId: clean(source.registryId),
+        name: clean(source.name) || "Source",
+        type: clean(source.type) || "unknown",
+        collector: clean(source.collector) || "event-store",
+        trustTier: clean(source.trustTier) || "stored source",
+        url,
+        collectorUrl: safeUrl(source.collectorUrl),
+        originalTitle: clean(source.originalTitle),
+        publishedAt: isoOrNull(source.publishedAt),
+        capturedAt: isoOrNull(source.capturedAt)
+      };
+    })
+    .filter(Boolean);
+}
+
+function jsonValue(value) {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === "object") {
+    return jsonObject(value);
+  }
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function safeJsonArray(value) {
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatStoredTime(value) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return "Stored";
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short"
+  }).format(date);
+}
+
+function relativeMinutes(value, now = new Date()) {
+  const timestamp = new Date(value).getTime();
+  const current = new Date(now).getTime();
+  if (!Number.isFinite(timestamp) || !Number.isFinite(current)) {
+    return "stored";
+  }
+  const minutes = Math.max(0, Math.round((current - timestamp) / 60000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function slugify(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function safeUrl(value) {

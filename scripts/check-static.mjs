@@ -22,8 +22,10 @@ import {
 import { buildEditorialSetupPayload } from "../api/editorial-setup.js";
 import {
   buildCandidateEventStoreOperations,
+  deserializeStoredEvent,
   eventStoreCapabilities,
   eventStoreHealth,
+  loadEventsFromEventStore,
   saveCandidateEventsToEventStore,
   serializeEventForStore
 } from "../api/event-store.js";
@@ -139,6 +141,11 @@ const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${roo
 const indexPageSource = readFileSync(new URL("index.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const archiveApiSource = readFileSync(new URL("api/archive.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const eventsApiSource = readFileSync(new URL("api/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const publicationServiceSource = readFileSync(new URL("api/publication-service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const reviewQueueApiSource = readFileSync(new URL("api/review-queue.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 
 if (!vercelConfig.crons?.some((job) => job.path === "/api/cron/ingest" && job.schedule === "17 2 * * *")) {
@@ -231,6 +238,18 @@ if (
   !appSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected inline review panel to expose static decision exports when writes are blocked");
+}
+
+if (
+  !eventsApiSource.includes("loadEventsFromEventStore") ||
+  !reviewQueueApiSource.includes("loadEventsFromEventStore") ||
+  !eventApiSource.includes("loadEventsFromEventStore") ||
+  !archiveApiSource.includes("loadEventsFromEventStore") ||
+  !publicationServiceSource.includes("loadEventsFromEventStore") ||
+  !eventsApiSource.includes("eventStoreEvents") ||
+  !reviewQueueApiSource.includes("eventStoreEvents")
+) {
+  throw new Error("Expected durable event-store records to feed map, queue, detail, archive, and publication surfaces");
 }
 
 if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("publishReady")) {
@@ -841,6 +860,59 @@ const eventStoreStatus = await eventStoreHealth({
   queryImpl: mockEventStoreQuery
 });
 const serializedEvent = serializeEventForStore(sampleUkraineEvents[0]);
+const storedEventRow = {
+  id: serializedEvent.id,
+  duplicate_key: serializedEvent.duplicateKey,
+  region: serializedEvent.region,
+  category: serializedEvent.category,
+  severity: serializedEvent.severity,
+  actor_side: serializedEvent.actorSide,
+  status: serializedEvent.status,
+  publication_status: serializedEvent.publicationStatus,
+  title: serializedEvent.title,
+  summary: serializedEvent.summary,
+  place: serializedEvent.place,
+  country: serializedEvent.country,
+  lat: serializedEvent.lat,
+  lon: serializedEvent.lon,
+  location_precision: serializedEvent.locationPrecision,
+  confidence: serializedEvent.confidence,
+  first_seen_at: serializedEvent.firstSeenAt,
+  last_updated_at: serializedEvent.lastUpdatedAt,
+  approved_at: serializedEvent.approvedAt,
+  assignee: serializedEvent.assignee,
+  priority: serializedEvent.priority,
+  extraction: serializedEvent.extraction,
+  review: serializedEvent.review,
+  metadata: {
+    ...serializedEvent.metadata,
+    province: sampleUkraineEvents[0].province
+  },
+  sources: serializedEvent.documents.map((document) => ({
+    id: document.sourceId,
+    registryId: serializedEvent.sources[0]?.registryId,
+    name: serializedEvent.sources[0]?.name,
+    type: serializedEvent.sources[0]?.sourceType,
+    collector: serializedEvent.sources[0]?.collector,
+    trustTier: serializedEvent.sources[0]?.trustTier,
+    url: document.url,
+    collectorUrl: serializedEvent.sources[0]?.url,
+    originalTitle: document.title,
+    publishedAt: document.publishedAt,
+    capturedAt: document.capturedAt
+  }))
+};
+const deserializedEvent = deserializeStoredEvent(storedEventRow, { now: new Date("2026-05-28T02:33:30Z") });
+const loadedEventStoreEvents = await loadEventsFromEventStore({
+  env: eventStoreEnv,
+  now: new Date("2026-05-28T02:33:30Z"),
+  queryImpl: async (text, values = []) => {
+    if (!String(text).includes("warmap_events") || values[0] !== 200) {
+      throw new Error("Unexpected event-store read query");
+    }
+    return { rows: [storedEventRow] };
+  }
+});
 const eventStoreOperations = buildCandidateEventStoreOperations([serializedEvent]);
 const eventStoreWriteLog = [];
 const eventStoreSave = await saveCandidateEventsToEventStore(sampleUkraineEvents, {
@@ -863,6 +935,11 @@ if (
   !eventStoreStatus.checks.some((check) => check.id === "tables" && check.ok && check.found?.includes("warmap_events")) ||
   eventStoreCapabilities({ env: eventStoreEnv }).writeMode !== "candidates" ||
   !serializedEvent?.documents[0]?.url.includes("ukraine-kharkiv-drone") ||
+  deserializedEvent?.sources[0]?.url !== sampleUkraineEvents[0].sources[0].url ||
+  deserializedEvent?.review?.duplicateKey !== sampleUkraineEvents[0].review.duplicateKey ||
+  deserializedEvent?.province !== sampleUkraineEvents[0].province ||
+  loadedEventStoreEvents[0]?.id !== sampleUkraineEvents[0].id ||
+  loadedEventStoreEvents[0]?.sources[0]?.url !== sampleUkraineEvents[0].sources[0].url ||
   !eventStoreOperations.some((operation) => operation.name === "upsert-event" && operation.text.includes("ST_MakePoint")) ||
   !eventStoreOperations.some((operation) => operation.name === "upsert-document") ||
   !eventStoreSave.stored ||
@@ -1532,6 +1609,22 @@ if (
   !Object.values(publishedRecord.surfaces).every(Boolean)
 ) {
   throw new Error("Publication status failed approved-event surface and source-link checks");
+}
+
+const publicationStatusFromStore = buildPublicationStatusFromDecisions({
+  decisions: [],
+  sourceEvents: [],
+  storedEvents: approvedSnapshotEvents,
+  region: "ukraine-east",
+  lookback: "30d",
+  now: new Date("2026-05-28T02:09:30Z")
+});
+if (
+  publicationStatusFromStore.summary.published !== 1 ||
+  publicationStatusFromStore.summary.eventStorePublished !== 1 ||
+  !publicationStatusFromStore.records[0]?.links?.api?.startsWith("/v1/events?")
+) {
+  throw new Error("Publication status failed durable event-store published-record checks");
 }
 
 const publicationPreview = await buildPublicationPreviewPayload({
