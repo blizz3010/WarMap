@@ -6,6 +6,7 @@ import { notificationRuntimeSummary } from "./notification-service.js";
 import { PLATFORM_CONFIG } from "./platform-config.js";
 import { buildPublicationStatusPayload, publicationReadinessBlockers } from "./publication-service.js";
 import { buildSourceCurationPayload } from "./source-curation.js";
+import { buildStorageReadinessPayload, storageReadinessBlockers } from "./storage-readiness.js";
 
 export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_ID, now = new Date() } = {}) {
   const decisions = await loadEditorialStatusDecisions();
@@ -13,6 +14,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
   const extraction = extractionRuntimeSummary();
   const curation = buildSourceCurationPayload({ region, now });
   const ingestion = buildIngestionStatusPayload({ now });
+  const storage = buildStorageReadinessPayload({ now });
   const publication = await buildPublicationStatusPayload({ region, now });
   const notifications = notificationRuntimeSummary({ now });
   const platform = platformReadinessSummary({ notifications });
@@ -21,6 +23,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
     ...aiExtractionBlockers(extraction),
     ...curationBlockers(curation),
     ...ingestionReadinessBlockers(ingestion.runtime),
+    ...storageReadinessBlockers(storage.runtime),
     ...publicationReadinessBlockers(publication.records),
     ...platformBlockers(platform)
   ];
@@ -49,6 +52,20 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
         lookback: ingestion.runtime.lookback,
         maxRecords: ingestion.runtime.maxRecords,
         intakeStore: ingestion.runtime.intakeStore
+      },
+      storage: {
+        ready: storage.ready,
+        endpoint: storage.endpoint,
+        mode: storage.runtime.mode,
+        provider: storage.runtime.provider,
+        databaseUrlConfigured: storage.runtime.databaseUrlConfigured,
+        schemaVersion: storage.migration.schemaVersion,
+        schemaVersionConfirmed: storage.runtime.schemaVersionConfirmed,
+        postgisRequired: storage.runtime.postgisRequired,
+        tables: storage.tables.map((table) => ({
+          name: table.name,
+          purpose: table.purpose
+        }))
       },
       publication: {
         ready: publication.ready,
