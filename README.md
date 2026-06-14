@@ -65,13 +65,13 @@ The browser map also opens `/v1/stream/events` with `EventSource` when available
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
 
 - `/v1/config` returns theater presets, category icon taxonomy, granular event-type taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, notification channels, and paid-layer capability records.
-- `/v1/events?region=ukraine-east&publication=published` returns event resources with location, review state, extraction metadata, visible original source links, collector provenance, and map/detail/API links.
-- `/v1/feed?region=ukraine-east` returns feed-optimized event cards.
-- `/v1/timeline?region=ukraine-east` groups event cards by day.
-- `/v1/search?region=ukraine-east&q=Kharkiv` searches title, summary, place, category, severity, and source names.
+- `/v1/events?region=ukraine-east&publication=published` returns event resources with location, granular `eventType`, review state, extraction metadata, visible original source links, collector provenance, and map/detail/API links.
+- `/v1/feed?region=ukraine-east` returns feed-optimized event cards with the same granular `eventType`.
+- `/v1/timeline?region=ukraine-east` groups event cards by day and preserves their granular `eventType`.
+- `/v1/search?region=ukraine-east&q=Kharkiv` searches title, summary, place, event type, category, severity, and source names.
 - `/v1/stream/events?region=ukraine-east` returns a server-sent-event snapshot with invalidation metadata and a suggested poll interval.
 
-The default v1 publication mode is `published`, matching the public-map contract. Use `publication=all` only for internal dashboards or review tooling that intentionally needs candidates.
+The default v1 publication mode is `published`, matching the public-map contract. Use `publication=all` only for internal dashboards or review tooling that intentionally needs candidates. Collection routes accept exact-match `category`, `eventType`, `severity`, and `sourceType` filters; for example, `/v1/events?region=ukraine-east&publication=all&eventType=drone`.
 
 ## Dashboard embed
 

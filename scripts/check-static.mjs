@@ -2153,6 +2153,34 @@ const v1LiveEvent = buildV1EventsPayload(
     }
   }
 ).events[0];
+const v1DroneContext = {
+  query: {
+    region: "ukraine-east",
+    lookback: "30d",
+    publication: "all",
+    eventType: "drone"
+  }
+};
+const v1DronePayload = {
+  events: sampleUkraineEvents,
+  meta: {
+    generatedAt: "2026-05-28T00:00:00.000Z",
+    region: "ukraine-east",
+    lookback: "30d",
+    publication: "all"
+  }
+};
+const v1DroneEvents = buildV1EventsPayload(v1DronePayload, v1DroneContext);
+const v1DroneFeed = buildV1FeedPayload(v1DronePayload, v1DroneContext);
+const v1DroneTimeline = buildV1TimelinePayload(v1DronePayload, v1DroneContext);
+const v1DroneSearch = buildV1SearchPayload(v1DronePayload, v1DroneContext);
+const v1DroneStreamSnapshot = buildV1StreamSnapshot(v1DronePayload, v1DroneContext);
+const v1NonMatchingEventType = buildV1EventsPayload(v1DronePayload, {
+  query: {
+    ...v1DroneContext.query,
+    eventType: "claim"
+  }
+});
 
 if (!v1LiveSource?.collector || !v1LiveSource.originalTitle || !v1LiveSource.capturedAt) {
   throw new Error("V1 events must preserve source provenance metadata");
@@ -2160,6 +2188,22 @@ if (!v1LiveSource?.collector || !v1LiveSource.originalTitle || !v1LiveSource.cap
 
 if (v1LiveEvent?.extraction?.eventType !== "drone" || v1LiveEvent?.extraction?.category !== "strike") {
   throw new Error("V1 events must preserve granular extraction event type and coarse category");
+}
+
+if (
+  v1DroneEvents.events.length !== 1 ||
+  v1DroneEvents.events[0]?.eventType !== "drone" ||
+  v1DroneEvents.events[0]?.category !== "strike" ||
+  !v1DroneEvents.links.events.includes("eventType=drone") ||
+  v1DroneFeed.feed[0]?.eventType !== "drone" ||
+  v1DroneTimeline.timeline[0]?.items[0]?.eventType !== "drone" ||
+  v1DroneSearch.results[0]?.eventType !== "drone" ||
+  v1DroneSearch.facets.eventTypes.drone !== 1 ||
+  v1DroneStreamSnapshot.data.counts.events !== 1 ||
+  !v1DroneStreamSnapshot.data.links.events.includes("eventType=drone") ||
+  v1NonMatchingEventType.events.length !== 0
+) {
+  throw new Error("V1 eventType filtering failed events, feed, timeline, search, or stream checks");
 }
 
 if (!v1Events.events[0].links.detail.startsWith("/event?") || !v1Events.links.stream.startsWith("/v1/stream/events")) {
