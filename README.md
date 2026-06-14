@@ -256,7 +256,7 @@ Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`,
 
 See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, the event-type legend contract, and the activation checklist for planned official-site, licensed API, and social/API sources. `/api/source-curation` exposes those activation requirements directly so planned sources stay inspectable without being fetched.
 
-Use `/readiness?region=ukraine-east&lookback=30d` for the operator readiness console, or `/sources?region=ukraine-east&lookback=30d` plus `/api/source-health?region=ukraine-east` to verify the active collector pipeline. Planned official-site and licensed Liveuamap entries are listed but not fetched until an adapter or licensed API contract exists. `/api/source-curation` and `/api/production-readiness` also expose the same planned source IDs as an activation backlog; source-related readiness blockers include `sourceIds`, `sourceCount`, and `nextAction`. Configured official XML sources are read from `OFFICIAL_FEED_SOURCES` and can provide RSS, Atom, or CAP-style alert XML after terms review. Configured social API sources are read from `COMPLIANT_SOCIAL_API_SOURCES`; any `tokenEnv` values are checked as booleans and never returned. Each source row includes a non-secret `diagnostic` code/category so failed feeds can be triaged without exposing tokens, and the map/review/readiness/source operations surfaces expose those diagnostics without leaking tokens. The top-level `ready` flag remains strict; `operational`, `degraded`, and `resilience.state` separate temporary retryable collector failures from configuration or parser blockers.
+Use `/readiness?region=ukraine-east&lookback=30d` for the operator readiness console, or `/sources?region=ukraine-east&lookback=30d` plus `/api/source-health?region=ukraine-east` to verify the active collector pipeline. Planned official-site and licensed Liveuamap entries are listed but not fetched until an adapter or licensed API contract exists. `/api/source-curation` and `/api/production-readiness` also expose the same planned source IDs as an activation backlog; source-related readiness blockers include `sourceIds`, `sourceCount`, and `nextAction`. Configured official XML sources are read from `OFFICIAL_FEED_SOURCES` and can provide RSS, Atom, or CAP-style alert XML after terms review. Configured official site sources are read from `OFFICIAL_SITE_SOURCES` only after terms review; they extract source-linked article anchors and can be constrained with `includePatterns` and `excludePatterns`. Configured social API sources are read from `COMPLIANT_SOCIAL_API_SOURCES`; any `tokenEnv` values are checked as booleans and never returned. Each source row includes a non-secret `diagnostic` code/category so failed feeds can be triaged without exposing tokens, and the map/review/readiness/source operations surfaces expose those diagnostics without leaking tokens. The top-level `ready` flag remains strict; `operational`, `degraded`, and `resilience.state` separate temporary retryable collector failures from configuration or parser blockers.
 
 Example official XML source configuration:
 
@@ -268,6 +268,22 @@ Example official XML source configuration:
     "url": "https://example.gov.ua/alerts/cap.xml",
     "regions": ["ukraine-east"],
     "feedFormat": "cap",
+    "country": "Ukraine",
+    "language": "English"
+  }
+]
+```
+
+Example official site source configuration:
+
+```json
+[
+  {
+    "id": "ukraine-mod-news",
+    "name": "Ministry of Defence of Ukraine",
+    "url": "https://example.gov.ua/en/news",
+    "regions": ["ukraine-east"],
+    "includePatterns": ["kharkiv|donetsk|luhansk"],
     "country": "Ukraine",
     "language": "English"
   }

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { actorSides, categories, eventTypes, events, regions, severities, sourceTypes } from "../src/data.js";
-import { collectOpenWebArticles } from "../api/collectors.js";
+import { collectOpenWebArticles, configuredOfficialSiteSources } from "../api/collectors.js";
 import { detailEventsForRegion } from "../api/event.js";
 import { archiveFromEvents, publishedEventsFromEvents, reviewQueueFromEvents } from "../api/editorial-workflow.js";
 import { buildEditorialStatusPayload } from "../api/editorial-status.js";
@@ -674,6 +674,78 @@ if (
   !officialXmlFeed.health.families.some((family) => family.collector === "official-feed" && family.ok >= 1)
 ) {
   throw new Error("Configured official XML feed collector failed CAP parsing or source-health checks");
+}
+
+const officialSiteFixture = await withTemporarySourceHealthEnv(async () => {
+  process.env.OFFICIAL_SITE_SOURCES = JSON.stringify([
+    {
+      id: "ukraine-mod-news",
+      name: "Ukraine MOD Fixture",
+      url: "https://mod.example.test/en/news",
+      regions: ["ukraine-east"],
+      includePatterns: ["kharkiv|donetsk|luhansk"],
+      country: "Ukraine",
+      language: "English"
+    }
+  ]);
+
+  const officialSites = configuredOfficialSiteSources("ukraine-east");
+  const fetchImpl = async (url) => {
+    if (String(url).includes("api.gdeltproject.org")) {
+      return jsonResponse(200, { articles: [] });
+    }
+    if (String(url).includes("mod.example.test")) {
+      return textResponse(
+        200,
+        `<html><body>
+          <a href="/en/news/kharkiv-drone-attack">Ukraine reports drone attack near Kharkiv after Russian strike</a>
+          <a href="/en/culture">Museum opening in Kyiv</a>
+        </body></html>`
+      );
+    }
+    return textResponse(200, "<rss><channel></channel></rss>");
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchImpl;
+  try {
+    const collection = await collectOpenWebArticles({
+      region: "ukraine-east",
+      lookback: "30d",
+      maxRecords: 5
+    });
+    const health = await buildSourceHealthPayload({
+      region: "ukraine-east",
+      lookback: "30d",
+      now: new Date("2026-06-13T12:10:00Z"),
+      maxSources: 8,
+      fetchImpl
+    });
+    const curation = buildSourceCurationPayload({
+      region: "ukraine-east",
+      now: new Date("2026-06-13T12:10:00Z")
+    });
+    return { collection, health, curation, officialSites };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+if (
+  officialSiteFixture.officialSites.length !== 1 ||
+  !officialSiteFixture.collection.articles.some(
+    (article) =>
+      article.sourceRegistryId === "ukraine-mod-news" &&
+      article.collector === "official-site" &&
+      article.url === "https://mod.example.test/en/news/kharkiv-drone-attack" &&
+      article.title.includes("Kharkiv")
+  ) ||
+  officialSiteFixture.health.summary.configuredOfficialSites !== 1 ||
+  !officialSiteFixture.health.sources.some((source) => source.id === "ukraine-mod-news" && source.ok && source.diagnostic?.code === "official-site.links") ||
+  !officialSiteFixture.health.families.some((family) => family.collector === "official-site" && family.ok >= 1) ||
+  !officialSiteFixture.curation.sourceRegistry.activeSources.some((source) => source.id === "ukraine-mod-news" && source.collector === "official-site") ||
+  officialSiteFixture.curation.sourceRegistry.plannedBacklog.some((source) => source.id === "ukraine-mod-news")
+) {
+  throw new Error("Configured official-site collector failed fixture, source-health, or curation activation checks");
 }
 
 const missingSocialTokenHealth = await withTemporarySourceHealthEnv(async () => {
@@ -2491,6 +2563,7 @@ async function withTemporaryAiExtractionEnv(callback) {
 async function withTemporarySourceHealthEnv(callback) {
   const keys = [
     "OFFICIAL_FEED_SOURCES",
+    "OFFICIAL_SITE_SOURCES",
     "COMPLIANT_SOCIAL_API_SOURCES",
     "ALLOWED_OSINT_TOKEN",
     "MISSING_ALLOWED_TOKEN"

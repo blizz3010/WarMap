@@ -24,12 +24,12 @@ WarMap should imitate the useful public shape of Liveuamap, not copy its data. T
 
 Active sources are defined in `api/source-registry.js` and exposed through `/api/source-curation?region=ukraine-east`. Runtime reachability is exposed through `/api/source-health?region=ukraine-east`, including a non-secret diagnostic code/category on every source row.
 
-- Active collectors: GDELT DOC, region-matched media RSS, official RSS-compatible feeds, optional terms-reviewed official RSS/Atom/CAP XML feeds from `OFFICIAL_FEED_SOURCES`, and opt-in compliant social APIs.
-- Planned collectors: official-site adapters for Ukraine Ministry of Defence, State Emergency Service of Ukraine, Russian Defence Ministry claim labeling, and a licensed Liveuamap API integration.
+- Active collectors: GDELT DOC, region-matched media RSS, official RSS-compatible feeds, optional terms-reviewed official RSS/Atom/CAP XML feeds from `OFFICIAL_FEED_SOURCES`, optional terms-reviewed official site adapters from `OFFICIAL_SITE_SOURCES`, and opt-in compliant social APIs.
+- Planned collectors: official-site adapters for Ukraine Ministry of Defence, State Emergency Service of Ukraine, Russian Defence Ministry claim labeling until matching terms-reviewed `OFFICIAL_SITE_SOURCES` entries are configured, and a licensed Liveuamap API integration.
 - Activation profiles: `/api/source-curation` now returns per-source requirements before activation, including licensed-API terms, official-site adapter requirements, social/API token redaction, review policy labels, and a grouped `activationBacklog` with source IDs and next actions.
 - Liveuamap-compatible model: `/api/source-curation` separates source-attribution families for official military claims, regional authorities, media/open-web reporting, compliant social APIs, and licensed aggregator relationships. This keeps Liveuamap as a workflow reference while requiring original-source collection or a paid/written Liveuamap API relationship.
 - Event-type legend: `src/data.js` defines the granular marker vocabulary used by `/api/source-curation` and `/v1/config`, including missile, drone, air-defense, air-alert, ground-clash, troop-movement, artillery, map-control, maritime, infrastructure, casualty, displacement, claim, and media-evidence types. Each event type maps to a stable category color and includes extraction hints plus an editor review cue.
-- Health checks: active GDELT/RSS/official-feed sources, configured official XML feeds, and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched. `/api/source-health` keeps `ready` strict while adding `operational`, `degraded`, and `resilience.state` so retryable source timeouts are visible without being confused with missing configuration or hard parser failures.
+- Health checks: active GDELT/RSS/official-feed sources, configured official XML feeds, configured official site sources, and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched. `/api/source-health` keeps `ready` strict while adding `operational`, `degraded`, and `resilience.state` so retryable source timeouts are visible without being confused with missing configuration or hard parser failures.
 - Intake storage checks: `/api/intake-store-health` verifies optional cron candidate snapshot storage without writing, and treats a missing GitHub snapshot file as acceptable because the first configured cron run can create it.
 - Event storage checks: `/api/storage-readiness` exposes the PostgreSQL/PostGIS schema contract, and `/api/event-store-health` verifies a configured database, PostGIS extension, and expected tables without returning database secrets.
 - Social/API sources remain opt-in through `COMPLIANT_SOCIAL_API_SOURCES`; only add endpoints whose terms permit automated use.
@@ -39,6 +39,7 @@ Active sources are defined in `api/source-registry.js` and exposed through `/api
 Before moving a planned source to `active`:
 
 - Confirm the source has RSS, JSON, CAP, API, or written permission for automated collection.
+- For official HTML pages, configure `OFFICIAL_SITE_SOURCES` only after terms review and use include/exclude patterns to keep extraction scoped.
 - Record `collector`, `sourceType`, `trustTier`, `access`, `country`, `url`, and applicable `regions`.
 - Add a parser test or fixture in `scripts/check-static.mjs`.
 - Route all items through AI extraction and the editorial queue.

@@ -1,4 +1,9 @@
-import { configuredOfficialFeedSources, configuredSocialApiSources } from "./collectors.js";
+import {
+  configuredOfficialFeedSources,
+  configuredOfficialSiteSources,
+  configuredSocialApiSources,
+  extractOfficialSiteItems
+} from "./collectors.js";
 import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeLookback } from "./news-normalizer.js";
 import { plannedSourcesForRegion, sourcesForRegion } from "./source-registry.js";
 
@@ -17,9 +22,11 @@ export async function buildSourceHealthPayload({
   const registrySources = sourcesForRegion(normalizedRegion);
   const activeSources = registrySources.filter((source) => source.status === "active");
   const officialFeedSources = configuredOfficialFeedSources(normalizedRegion);
+  const officialSiteSources = configuredOfficialSiteSources(normalizedRegion);
   const probedSources = dedupeSources([
     ...activeSources.filter((source) => PROBED_COLLECTORS.has(source.collector)),
-    ...officialFeedSources
+    ...officialFeedSources,
+    ...officialSiteSources
   ]).slice(0, maxSources);
   const socialSources = configuredSocialApiSources(normalizedRegion).slice(0, maxSources);
 
@@ -70,6 +77,7 @@ export async function buildSourceHealthPayload({
       activeSources: activeSources.length,
       plannedSources: plannedRows.length,
       configuredOfficialFeeds: officialFeedSources.length,
+      configuredOfficialSites: officialSiteSources.length,
       configuredSocialApis: socialSources.length,
       checkedSources: checked.length,
       reachableSources: reachable.length,
@@ -111,7 +119,9 @@ async function probeRegistrySource(source, context) {
     : source.url;
   const accept = source.collector === "gdelt-doc"
     ? "application/json"
-    : "application/rss+xml, application/xml, text/xml";
+    : source.collector === "official-site"
+      ? "text/html, application/xhtml+xml"
+      : "application/rss+xml, application/xml, text/xml";
 
   try {
     const response = await fetchWithTimeout(context.fetchImpl, url, {
@@ -155,6 +165,25 @@ async function probeRegistrySource(source, context) {
         diagnostic: Array.isArray(payload.articles)
           ? successDiagnostic("gdelt.article-list", context.now)
           : schemaDiagnostic("schema.missing-articles", context.now)
+      });
+    }
+
+    if (source.collector === "official-site") {
+      const html = await response.text();
+      const items = extractOfficialSiteItems(html, source, context.normalizedRegion, context.normalizedLookback);
+      return sourceHealthRow(source, {
+        configured: true,
+        checked: true,
+        ok: items.length > 0,
+        status: items.length > 0 ? "reachable" : "empty",
+        url,
+        itemCount: items.length,
+        message: items.length > 0
+          ? `${source.name} returned official-site links.`
+          : `${source.name} returned no relevant official-site links.`,
+        diagnostic: items.length > 0
+          ? successDiagnostic("official-site.links", context.now)
+          : emptyDiagnostic("official-site.empty", context.now)
       });
     }
 
