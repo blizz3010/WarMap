@@ -198,6 +198,17 @@ if (
   throw new Error("Expected dashboard embed to use v1 events, theater switching, and synchronized feed controls");
 }
 
+if (
+  !appSource.includes("function eventTypeDisplay(item)") ||
+  !appSource.includes("eventTypeDisplay(item)") ||
+  !appSource.includes("event-type-pill") ||
+  !appSource.includes("Event type</dt>") ||
+  !embedSource.includes("function eventTypeDisplay(event)") ||
+  !embedSource.includes("eventTypes")
+) {
+  throw new Error("Expected map, feed, detail, and embed surfaces to display granular event types");
+}
+
 if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes("archive-sources")) {
   throw new Error("Expected public archive page to render approved archive records with sources");
 }

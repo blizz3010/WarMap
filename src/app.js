@@ -1151,9 +1151,10 @@ function filteredEvents(applyViewport) {
     const mediaMatch = !state.mediaOnly || Boolean(item.media);
     const viewportMatch = !bounds || bounds.contains([item.location.lon, item.location.lat]);
     const timeMatch = !minTimestamp || eventTimestamp(item) >= minTimestamp;
+    const eventType = eventTypeDisplay(item);
     const searchMatch =
       !state.search ||
-      `${item.title} ${item.summary} ${item.place} ${item.province} ${item.sources.map((source) => source.name).join(" ")}`
+      `${item.title} ${item.summary} ${eventType.label} ${eventType.short} ${item.place} ${item.province} ${item.sources.map((source) => source.name).join(" ")}`
         .toLowerCase()
         .includes(state.search);
 
@@ -1275,18 +1276,18 @@ function clusteredMarkerItems(eventsToRender) {
 }
 
 function eventToMarkerItem(item) {
-  const category = categories[item.category];
+  const eventType = eventTypeDisplay(item);
   return {
     kind: "event",
     markerId: item.id,
     event: item,
     coordinates: [item.location.lon, item.location.lat],
-    color: category.color,
-    short: category.short,
+    color: eventType.color,
+    short: eventType.short,
     severity: item.severity,
     isSelected: item.id === state.selectedEventId,
     isReported: item.verification === "reported",
-    title: `${item.place}: ${item.title}`
+    title: `${eventType.label} - ${item.place}: ${item.title}`
   };
 }
 
@@ -1354,6 +1355,7 @@ function renderFeed(visible) {
       const category = categories[item.category];
       const severity = severities[item.severity];
       const side = actorSides[item.side] ?? actorSides.unknown;
+      const eventType = eventTypeDisplay(item);
       return `
         <article class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}" style="--card-color:${category.color}">
           <button type="button" data-event-id="${escapeAttr(item.id)}" class="feed-card-button">
@@ -1366,6 +1368,7 @@ function renderFeed(visible) {
               <h3>${escapeHtml(item.title)}</h3>
               <p>${escapeHtml(item.summary)}</p>
               <div class="feed-meta">
+                <span class="event-type-pill" style="--type-color:${eventType.color}">${escapeHtml(eventType.short)} ${escapeHtml(eventType.label)}</span>
                 <span style="color:${category.color}">${category.label}</span>
                 <span style="color:${severity.color}">${severity.label}</span>
                 <span style="color:${side.color}">${side.label}</span>
@@ -1387,9 +1390,10 @@ function renderFeed(visible) {
 }
 
 function renderMediaThumb(item) {
+  const eventType = eventTypeDisplay(item);
   return `
     <div class="media-thumb media-${escapeAttr(item.media.tone)}" aria-label="${escapeAttr(item.media.label)}">
-      <span>${categories[item.category].short}</span>
+      <span>${escapeHtml(eventType.short)}</span>
     </div>
   `;
 }
@@ -1417,6 +1421,7 @@ function renderDetail() {
   }
 
   const category = categories[item.category];
+  const eventType = eventTypeDisplay(item);
   const severity = severities[item.severity];
   const side = actorSides[item.side] ?? actorSides.unknown;
   const review = reviewInfo(item);
@@ -1448,6 +1453,7 @@ function renderDetail() {
         <h3>Summary</h3>
         <p>${escapeHtml(item.summary)}</p>
         <dl class="detail-facts">
+          <div><dt>Event type</dt><dd style="color:${eventType.color}">${escapeHtml(eventType.label)}</dd></div>
           <div><dt>Category</dt><dd style="color:${category.color}">${category.label}</dd></div>
           <div><dt>Severity</dt><dd style="color:${severity.color}">${severity.label}</dd></div>
           <div><dt>Side</dt><dd style="color:${side.color}">${side.label}</dd></div>
@@ -2832,6 +2838,30 @@ function renderSource(source) {
 
 function sourceCountLabel(count) {
   return `${count} ${count === 1 ? "source" : "sources"}`;
+}
+
+function eventTypeDisplay(item) {
+  const eventTypeId = item.extraction?.eventType ?? item.eventType;
+  const eventType = eventTypes[eventTypeId];
+  const fallbackCategory = categories[item.category] ?? categories.other;
+  if (!eventType) {
+    return {
+      id: item.category ?? "other",
+      label: fallbackCategory.label,
+      short: fallbackCategory.short,
+      color: fallbackCategory.color,
+      category: item.category ?? "other"
+    };
+  }
+
+  const eventTypeCategory = categories[eventType.category] ?? fallbackCategory;
+  return {
+    id: eventTypeId,
+    label: eventType.label,
+    short: eventType.short,
+    color: eventTypeCategory.color,
+    category: eventType.category
+  };
 }
 
 function sourceProvenanceLabel(source) {
