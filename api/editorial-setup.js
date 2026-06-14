@@ -68,6 +68,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
         ready: sourceBacklog.summary.count === 0,
         env: [
           "OFFICIAL_FEED_SOURCES",
+          "OFFICIAL_SITE_SOURCES",
           "COMPLIANT_SOCIAL_API_SOURCES",
           "approved Liveuamap API/license before liveuamap-api activation"
         ],

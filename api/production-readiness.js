@@ -128,7 +128,7 @@ function curationBlockers(curation) {
       status: "planned",
       sourceCount: sourceIds.length,
       sourceIds,
-      nextAction: "Confirm automated-use terms and add official RSS/API/CAP adapters.",
+      nextAction: "Confirm automated-use terms and configure OFFICIAL_SITE_SOURCES or a preferred RSS/API/CAP feed.",
       message: "Planned official-site sources need terms review and adapters before activation."
     });
   }
