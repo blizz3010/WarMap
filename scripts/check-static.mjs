@@ -76,6 +76,7 @@ const requiredFiles = [
   "archive.html",
   "review.html",
   "setup.html",
+  "sources.html",
   "embed.html",
   "scripts/apply-storage-migration.mjs",
   "scripts/apply-review-export.mjs",
@@ -85,6 +86,7 @@ const requiredFiles = [
   "src/event-page.js",
   "src/review-page.js",
   "src/setup-page.js",
+  "src/sources-page.js",
   "src/styles.css",
   "api/ai-extractor.js",
   "api/archive.js",
@@ -145,6 +147,7 @@ const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${roo
 const indexPageSource = readFileSync(new URL("index.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const setupPageSource = readFileSync(new URL("src/setup-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const sourcesPageSource = readFileSync(new URL("src/sources-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const archiveApiSource = readFileSync(new URL("api/archive.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
@@ -289,7 +292,9 @@ if (
   !appSource.includes("/api/publication-preview?") ||
   !appSource.includes("/api/editorial-setup?") ||
   !appSource.includes("/setup?") ||
+  !appSource.includes("/sources?") ||
   !appSource.includes("function setupPageLink()") ||
+  !appSource.includes("function sourcesPageLink()") ||
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("function renderSourceHealthSummary()") ||
@@ -317,12 +322,28 @@ if (
   !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("data-setup-region") ||
+  !setupPageSource.includes("/sources?") ||
   !setupPageSource.includes("sourceActivation.backlog") ||
   !stylesSource.includes(".setup-target-list") ||
   !stylesSource.includes(".setup-source-list") ||
   !stylesSource.includes(".setup-link-list")
 ) {
   throw new Error("Expected setup page to render editorial setup targets, source activation, fallback bridge, and readiness links");
+}
+
+if (
+  !sourcesPageSource.includes("/api/source-curation?") ||
+  !sourcesPageSource.includes("/api/source-health?") ||
+  !sourcesPageSource.includes("function renderSourcesPage()") ||
+  !sourcesPageSource.includes("function renderBacklogSource(source)") ||
+  !sourcesPageSource.includes("function renderHealthDiagnostics(health)") ||
+  !sourcesPageSource.includes("liveuamapCompatibleModel") ||
+  !sourcesPageSource.includes("data-sources-region") ||
+  !stylesSource.includes(".source-registry-list") ||
+  !stylesSource.includes(".source-health-list") ||
+  !stylesSource.includes(".source-link-list")
+) {
+  throw new Error("Expected sources page to render curation registry, health diagnostics, Liveuamap boundary, and source links");
 }
 
 if (

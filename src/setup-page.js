@@ -3,6 +3,7 @@ import { regions } from "./data.js";
 const params = new URLSearchParams(window.location.search);
 const stateNode = document.querySelector("[data-setup-state]");
 const mapLink = document.querySelector("[data-map-link]");
+const sourcesLink = document.querySelector("[data-sources-link]");
 const reviewLink = document.querySelector("[data-review-link]");
 const apiLink = document.querySelector("[data-api-link]");
 
@@ -237,8 +238,9 @@ function renderSetupLinks(links = {}) {
     ["Readiness", linkOrFallback(links.productionReadiness, productionReadinessUrl())],
     ["Editorial", links.editorialStatus],
     ["Store", links.editorialStoreHealth],
-    ["Sources", links.sourceHealth],
-    ["Curation", links.sourceCuration],
+    ["Sources", sourcesPageUrl()],
+    ["Health API", links.sourceHealth],
+    ["Curation API", links.sourceCuration],
     ["Review", links.reviewDesk],
     ["Archive", links.archive],
     ["V1 events", links.v1Events]
@@ -262,6 +264,7 @@ function bindSetupControls() {
 function syncTopLinks() {
   const regionQuery = new URLSearchParams({ region: state.region }).toString();
   mapLink.href = `/?${regionQuery}`;
+  sourcesLink.href = sourcesPageUrl();
   reviewLink.href = `/review?${regionQuery}`;
   apiLink.href = editorialSetupApiUrl();
 }
@@ -272,6 +275,10 @@ function editorialSetupApiUrl() {
 
 function productionReadinessUrl() {
   return `/api/production-readiness?${new URLSearchParams({ region: state.region }).toString()}`;
+}
+
+function sourcesPageUrl() {
+  return `/sources?${new URLSearchParams({ region: state.region }).toString()}`;
 }
 
 function linkOrFallback(value, fallback) {
