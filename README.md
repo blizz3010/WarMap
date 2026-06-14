@@ -90,7 +90,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
 - `/api/editorial-setup?region=ukraine-east` returns the non-secret production setup contract: required editorial environment variables, GitHub store verification links, static export fallback path, current blockers, and review/publication links.
 - `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
-- `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
+- `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, per-source activation requirements, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, and redacts tokens.
 - `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
 - `/api/publication-status?region=ukraine-east` audits approved records across the map, feed, detail, archive, and public API surfaces, including source-link and coordinate checks for every published event.
@@ -188,7 +188,7 @@ COMPLIANT_SOCIAL_API_SOURCES='[
 
 Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`, `link`, `permalink`, `publishedAt`, `createdAt`, `image`, and `mediaUrl`. Every social API item still enters the review queue as an unverified candidate.
 
-See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, and the activation checklist for planned official-site, licensed API, and social/API sources.
+See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, and the activation checklist for planned official-site, licensed API, and social/API sources. `/api/source-curation` exposes those activation requirements directly so planned sources stay inspectable without being fetched.
 
 Use `/api/source-health?region=ukraine-east` to verify the active collector pipeline. Planned official-site and licensed Liveuamap entries are listed but not fetched until an adapter or licensed API contract exists. Configured social API sources are read from `COMPLIANT_SOCIAL_API_SOURCES`; any `tokenEnv` values are checked as booleans and never returned. Each source row includes a non-secret `diagnostic` code/category so failed feeds can be triaged without exposing tokens.
 

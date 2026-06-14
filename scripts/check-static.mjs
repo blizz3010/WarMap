@@ -302,9 +302,12 @@ const ukraineCuration = buildSourceCurationPayload({
 });
 if (
   ukraineCuration.kind !== "SourceCuration" ||
+  !ukraineCuration.activationChecks.some((check) => check.id === "permission") ||
   !ukraineCuration.liveuamapReferences.some((reference) => reference.url === "https://liveuamap.com/promo/api") ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "ukraine-mod-news") ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api") ||
+  !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api" && source.activation?.requiredBeforeActivation?.some((item) => item.includes("licensed-api adapter"))) ||
+  !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "russia-mod-en" && source.activation?.reviewPolicy === "claim-label-required") ||
   !ukraineCuration.readiness.canPublishFromCollectors ||
   !ukraineCuration.endpoints.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
   !ukraineCuration.readiness.needsOfficialSiteAdapters ||
