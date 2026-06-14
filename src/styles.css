@@ -3130,6 +3130,81 @@ dd {
   font-size: 11px;
 }
 
+.publication-targets {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.publication-targets > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.publication-targets strong {
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.publication-targets span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.publication-target-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.publication-target-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.publication-target-list li.is-ready {
+  border-left-color: #22c55e;
+}
+
+.publication-target-list a {
+  color: #e5e7eb;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.publication-target-list a:hover,
+.publication-target-list a:focus-visible {
+  color: var(--accent);
+}
+
+.publication-target-list li > strong {
+  color: #bfdbfe;
+  font-size: 11px;
+}
+
+.publication-target-list small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.publication-target-list small:last-child {
+  grid-column: 1 / -1;
+}
+
 .review-source-strip > span {
   color: var(--dim);
   font-size: 11px;
