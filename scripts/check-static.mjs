@@ -77,6 +77,7 @@ const requiredFiles = [
   "review.html",
   "setup.html",
   "sources.html",
+  "readiness.html",
   "embed.html",
   "scripts/apply-storage-migration.mjs",
   "scripts/apply-review-export.mjs",
@@ -87,6 +88,7 @@ const requiredFiles = [
   "src/review-page.js",
   "src/setup-page.js",
   "src/sources-page.js",
+  "src/readiness-page.js",
   "src/styles.css",
   "api/ai-extractor.js",
   "api/archive.js",
@@ -148,6 +150,7 @@ const indexPageSource = readFileSync(new URL("index.html", `file:///${root.repla
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const setupPageSource = readFileSync(new URL("src/setup-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const sourcesPageSource = readFileSync(new URL("src/sources-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const readinessPageSource = readFileSync(new URL("src/readiness-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const archiveApiSource = readFileSync(new URL("api/archive.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
@@ -293,8 +296,10 @@ if (
   !appSource.includes("/api/editorial-setup?") ||
   !appSource.includes("/setup?") ||
   !appSource.includes("/sources?") ||
+  !appSource.includes("/readiness?") ||
   !appSource.includes("function setupPageLink()") ||
   !appSource.includes("function sourcesPageLink()") ||
+  !appSource.includes("function readinessPageLink()") ||
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("function renderSourceHealthSummary()") ||
@@ -323,6 +328,7 @@ if (
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("data-setup-region") ||
   !setupPageSource.includes("/sources?") ||
+  !setupPageSource.includes("/readiness?") ||
   !setupPageSource.includes("sourceActivation.backlog") ||
   !stylesSource.includes(".setup-target-list") ||
   !stylesSource.includes(".setup-source-list") ||
@@ -339,11 +345,31 @@ if (
   !sourcesPageSource.includes("function renderHealthDiagnostics(health)") ||
   !sourcesPageSource.includes("liveuamapCompatibleModel") ||
   !sourcesPageSource.includes("data-sources-region") ||
+  !sourcesPageSource.includes("/readiness?") ||
   !stylesSource.includes(".source-registry-list") ||
   !stylesSource.includes(".source-health-list") ||
   !stylesSource.includes(".source-link-list")
 ) {
   throw new Error("Expected sources page to render curation registry, health diagnostics, Liveuamap boundary, and source links");
+}
+
+if (
+  !readinessPageSource.includes("/api/production-readiness?") ||
+  !readinessPageSource.includes("/api/editorial-store-health") ||
+  !readinessPageSource.includes("/api/source-curation?") ||
+  !readinessPageSource.includes("/api/source-health?") ||
+  !readinessPageSource.includes("/api/ingestion-status") ||
+  !readinessPageSource.includes("/api/storage-readiness") ||
+  !readinessPageSource.includes("/api/event-store-health") ||
+  !readinessPageSource.includes("/api/notification-status?") ||
+  !readinessPageSource.includes("function renderReadinessPage()") ||
+  !readinessPageSource.includes("function renderCheckRow(check)") ||
+  !readinessPageSource.includes("data-readiness-region") ||
+  !stylesSource.includes(".readiness-check-list") ||
+  !stylesSource.includes(".readiness-blocker-list") ||
+  !stylesSource.includes(".readiness-link-list")
+) {
+  throw new Error("Expected readiness console to aggregate production, editorial, source, ingestion, storage, publication, and notification checks");
 }
 
 if (

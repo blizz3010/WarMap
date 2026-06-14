@@ -3,6 +3,7 @@ import { regions } from "./data.js";
 const params = new URLSearchParams(window.location.search);
 const stateNode = document.querySelector("[data-setup-state]");
 const mapLink = document.querySelector("[data-map-link]");
+const readinessLink = document.querySelector("[data-readiness-link]");
 const sourcesLink = document.querySelector("[data-sources-link]");
 const reviewLink = document.querySelector("[data-review-link]");
 const apiLink = document.querySelector("[data-api-link]");
@@ -236,6 +237,7 @@ function renderFallbackBridge(bridge) {
 function renderSetupLinks(links = {}) {
   const rows = [
     ["Readiness", linkOrFallback(links.productionReadiness, productionReadinessUrl())],
+    ["Readiness Console", readinessPageUrl()],
     ["Editorial", links.editorialStatus],
     ["Store", links.editorialStoreHealth],
     ["Sources", sourcesPageUrl()],
@@ -264,6 +266,7 @@ function bindSetupControls() {
 function syncTopLinks() {
   const regionQuery = new URLSearchParams({ region: state.region }).toString();
   mapLink.href = `/?${regionQuery}`;
+  readinessLink.href = readinessPageUrl();
   sourcesLink.href = sourcesPageUrl();
   reviewLink.href = `/review?${regionQuery}`;
   apiLink.href = editorialSetupApiUrl();
@@ -279,6 +282,10 @@ function productionReadinessUrl() {
 
 function sourcesPageUrl() {
   return `/sources?${new URLSearchParams({ region: state.region }).toString()}`;
+}
+
+function readinessPageUrl() {
+  return `/readiness?${new URLSearchParams({ region: state.region }).toString()}`;
 }
 
 function linkOrFallback(value, fallback) {

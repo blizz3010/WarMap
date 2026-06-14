@@ -1695,7 +1695,7 @@ function renderReviewReadinessPanel() {
       <section class="intel-section readiness-card">
         <header>
           <h3>Launch Readiness</h3>
-          <a href="${escapeAttr(setupPageLink())}" target="_blank" rel="noreferrer noopener">Setup</a>
+          <a href="${escapeAttr(readinessPageLink())}" target="_blank" rel="noreferrer noopener">Console</a>
         </header>
         <p class="status-summary is-blocked">${escapeHtml(state.readinessMessage || "Checking production readiness.")}</p>
       </section>
@@ -1712,7 +1712,7 @@ function renderReviewReadinessPanel() {
     <section class="intel-section readiness-card">
       <header>
         <h3>Launch Readiness</h3>
-        <a href="${escapeAttr(setupPageLink())}" target="_blank" rel="noreferrer noopener">Setup</a>
+        <a href="${escapeAttr(readinessPageLink())}" target="_blank" rel="noreferrer noopener">Console</a>
       </header>
       <p class="status-summary ${readiness.ready ? "is-ready" : "is-blocked"}">
         ${readiness.ready ? "Required gates are ready." : `${requiredBlockers.length} required gate${requiredBlockers.length === 1 ? "" : "s"} blocked.`}
@@ -1735,6 +1735,7 @@ function renderReviewReadinessPanel() {
         <li><span>Optional follow-ups</span><strong>${optionalBlockerCount}</strong></li>
       </ul>
       <nav class="readiness-links" aria-label="Launch readiness links">
+        <a href="${escapeAttr(readinessPageLink())}" target="_blank" rel="noreferrer noopener">Console</a>
         <a href="${escapeAttr(setupPageLink())}" target="_blank" rel="noreferrer noopener">Setup</a>
         <a href="${escapeAttr(productionReadinessLink())}" target="_blank" rel="noreferrer noopener">Readiness</a>
         <a href="${escapeAttr(editorialSetupApiLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
@@ -3230,6 +3231,14 @@ function productionReadinessLink() {
 function setupPageLink() {
   const params = new URLSearchParams({ region: state.regionId });
   return `/setup?${params.toString()}`;
+}
+
+function readinessPageLink() {
+  const params = new URLSearchParams({
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/readiness?${params.toString()}`;
 }
 
 function editorialSetupApiLink() {

@@ -3,6 +3,7 @@ import { regions } from "./data.js";
 const params = new URLSearchParams(window.location.search);
 const stateNode = document.querySelector("[data-sources-state]");
 const mapLink = document.querySelector("[data-map-link]");
+const readinessLink = document.querySelector("[data-readiness-link]");
 const setupLink = document.querySelector("[data-setup-link]");
 const reviewLink = document.querySelector("[data-review-link]");
 const apiLink = document.querySelector("[data-api-link]");
@@ -171,8 +172,9 @@ function renderSourcesPage() {
           <section class="event-page-section">
             <h2>Links</h2>
             <nav class="source-link-list" aria-label="Source operations links">
+              <a href="${escapeAttr(readinessPageUrl())}">Readiness</a>
               <a href="${escapeAttr(setupPageUrl())}">Setup</a>
-              <a href="${escapeAttr(productionReadinessUrl())}">Readiness</a>
+              <a href="${escapeAttr(productionReadinessUrl())}">Readiness JSON</a>
               <a href="${escapeAttr(reviewPageUrl())}">Review</a>
               <a href="${escapeAttr(curation.endpoints?.events ?? eventsUrl())}">Events API</a>
             </nav>
@@ -337,6 +339,7 @@ function updateSourcesUrl() {
 function syncTopLinks() {
   const regionQuery = new URLSearchParams({ region: state.region }).toString();
   mapLink.href = `/?${regionQuery}`;
+  readinessLink.href = readinessPageUrl();
   setupLink.href = setupPageUrl();
   reviewLink.href = reviewPageUrl();
   apiLink.href = sourceCurationUrl();
@@ -360,6 +363,10 @@ function reviewPageUrl() {
 
 function productionReadinessUrl() {
   return `/api/production-readiness?${new URLSearchParams({ region: state.region }).toString()}`;
+}
+
+function readinessPageUrl() {
+  return `/readiness?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function eventsUrl() {
