@@ -75,6 +75,7 @@ const requiredFiles = [
   "event.html",
   "archive.html",
   "review.html",
+  "setup.html",
   "embed.html",
   "scripts/apply-storage-migration.mjs",
   "scripts/apply-review-export.mjs",
@@ -83,6 +84,7 @@ const requiredFiles = [
   "src/embed.js",
   "src/event-page.js",
   "src/review-page.js",
+  "src/setup-page.js",
   "src/styles.css",
   "api/ai-extractor.js",
   "api/archive.js",
@@ -142,6 +144,7 @@ const embedPageSource = readFileSync(new URL("embed.html", `file:///${root.repla
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const indexPageSource = readFileSync(new URL("index.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const setupPageSource = readFileSync(new URL("src/setup-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const archiveApiSource = readFileSync(new URL("api/archive.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
@@ -285,6 +288,8 @@ if (
   !appSource.includes("/api/source-health?") ||
   !appSource.includes("/api/publication-preview?") ||
   !appSource.includes("/api/editorial-setup?") ||
+  !appSource.includes("/setup?") ||
+  !appSource.includes("function setupPageLink()") ||
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("function renderSourceHealthSummary()") ||
@@ -303,6 +308,21 @@ if (
   !appSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected inline review panel to expose static decision exports when writes are blocked");
+}
+
+if (
+  !setupPageSource.includes("/api/editorial-setup?") ||
+  !setupPageSource.includes("function renderSetup(setup)") ||
+  !setupPageSource.includes("function renderSetupTarget(target)") ||
+  !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
+  !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
+  !setupPageSource.includes("data-setup-region") ||
+  !setupPageSource.includes("sourceActivation.backlog") ||
+  !stylesSource.includes(".setup-target-list") ||
+  !stylesSource.includes(".setup-source-list") ||
+  !stylesSource.includes(".setup-link-list")
+) {
+  throw new Error("Expected setup page to render editorial setup targets, source activation, fallback bridge, and readiness links");
 }
 
 if (

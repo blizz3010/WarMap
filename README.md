@@ -90,7 +90,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/review-dossier?id=...&region=ukraine-east` returns one candidate's source evidence, AI extraction confidence, duplicate context, publication checks, and safe decision payload templates for analyst review.
 - `/api/publication-preview?id=...&region=ukraine-east` builds a non-persisted approval dry run for one queue candidate, showing the exact map/feed/detail/archive/API record that a human approval would publish.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
-- `/api/editorial-setup?region=ukraine-east` returns the non-secret production setup contract: required editorial environment variables, GitHub/Postgres store verification links, source activation backlog targets, static export fallback path, current blockers, and review/publication/source links.
+- `/setup?region=ukraine-east` renders the non-secret launch checklist for editorial environment variables, GitHub/Postgres store verification, source activation backlog targets, static export fallback, and review/publication/source links. `/api/editorial-setup?region=ukraine-east` returns the same setup contract as JSON.
 - `/api/editorial-store-health` runs a read-only GitHub Contents or Postgres health check for the durable editorial store, including repo/file or event-store table readability, without exposing tokens.
 - `/api/intake-store-health` runs a read-only GitHub Contents or local-file health check for optional cron candidate snapshots, including repo, branch, path, snapshot-file readability, and secret redaction.
 - `/api/storage-readiness` exposes the PostgreSQL/PostGIS event-store schema contract, required env names, table plan, migration SQL, and non-secret readiness checks for durable event storage.
@@ -145,7 +145,7 @@ When enabled, approved/rejected/corrected/retracted decisions are loaded by `/ap
 
 Use `/api/editorial-store-health` after configuring those variables on Vercel. A missing GitHub `editorial/decisions.json` file is reported as acceptable because the first approved write can create it; repo, branch, token, malformed existing decision JSON, missing Postgres tables, and missing review tokens are reported as blockers.
 
-For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions. The standalone review page reads `/api/editorial-status`, and the map review panel reads `/api/production-readiness`, so editors can see durable-store, reviewer-token, source, and publication blockers before submitting publish actions.
+For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions. The standalone review page reads `/api/editorial-status`, and the map review panel reads `/api/production-readiness`, so editors can see durable-store, reviewer-token, source, and publication blockers before submitting publish actions. Use `/setup?region=ukraine-east` for the operator-facing checklist that links those blockers to the non-secret Vercel environment names and verification endpoints.
 
 ## Scheduled ingestion heartbeat
 
