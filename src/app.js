@@ -1,6 +1,7 @@
 import {
   actorSides,
   categories,
+  eventTypes,
   events as fallbackEvents,
   regions,
   severities,
@@ -174,6 +175,7 @@ const UI_COPY = {
     mapKey: "Map Key",
     iconLegend: "Icon and Side Legend",
     iconTaxonomy: "Icon Taxonomy",
+    eventTypes: "Event Types",
     sideColors: "Side Colors",
     curationChain: "Curation Chain",
     alertPrefsSaved: "Alert preferences saved locally",
@@ -2102,6 +2104,19 @@ function renderKeyPanel() {
     )
     .join("");
 
+  const eventTypeRows = Object.entries(eventTypes)
+    .map(([key, eventType]) => {
+      const category = categories[eventType.category] ?? categories.other;
+      return `
+        <li>
+          <span class="taxonomy-token" style="--swatch:${category.color}">${escapeHtml(eventType.short)}</span>
+          <strong>${escapeHtml(eventType.label)}</strong>
+          <small>${escapeHtml(`${eventType.legendGroup} / ${category.label}`)}</small>
+        </li>
+      `;
+    })
+    .join("");
+
   const sideRows = Object.entries(actorSides)
     .map(
       ([key, side]) => `
@@ -2125,6 +2140,10 @@ function renderKeyPanel() {
     <section class="intel-section">
       <h3>${escapeHtml(uiCopy("iconTaxonomy"))}</h3>
       <ul class="taxonomy-list">${categoryRows}</ul>
+    </section>
+    <section class="intel-section">
+      <h3>${escapeHtml(uiCopy("eventTypes"))}</h3>
+      <ul class="taxonomy-list">${eventTypeRows}</ul>
     </section>
     <section class="intel-section">
       <h3>${escapeHtml(uiCopy("sideColors"))}</h3>
