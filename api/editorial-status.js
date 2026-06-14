@@ -22,7 +22,8 @@ export function buildEditorialStatusPayload(context = {}) {
       authRequired: capabilities.authRequired,
       tokenConfigured: capabilities.tokenConfigured,
       storePath: capabilities.storePath ?? null,
-      github: capabilities.github ?? null
+      github: capabilities.github ?? null,
+      postgres: capabilities.postgres ?? null
     },
     counts: {
       editorialDecisions: decisions.length
@@ -96,6 +97,15 @@ function requiredConfiguration(capabilities) {
       readyItem("EDITORIAL_GITHUB_REPO", Boolean(capabilities.github?.repo)),
       readyItem("EDITORIAL_GITHUB_BRANCH", Boolean(capabilities.github?.branch)),
       readyItem("EDITORIAL_GITHUB_PATH", Boolean(capabilities.github?.path)),
+      readyItem("EDITORIAL_REVIEW_TOKEN", Boolean(capabilities.tokenConfigured))
+    ];
+  }
+
+  if (capabilities.mode === "postgres" || capabilities.mode === "postgres-unconfigured") {
+    return [
+      readyItem("EDITORIAL_STORE_PROVIDER=postgres", true),
+      readyItem("DATABASE_URL or POSTGRES_URL", Boolean(capabilities.postgres?.databaseUrlConfigured)),
+      readyItem(`WARMAP_STORAGE_SCHEMA_VERSION=${capabilities.postgres?.schemaVersion ?? "event-store-schema.v1"}`, Boolean(capabilities.postgres?.schemaVersionConfirmed)),
       readyItem("EDITORIAL_REVIEW_TOKEN", Boolean(capabilities.tokenConfigured))
     ];
   }

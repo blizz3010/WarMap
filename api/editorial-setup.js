@@ -41,6 +41,17 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
         verification: "/api/editorial-store-health"
       },
       {
+        id: "postgres-editorial-store",
+        label: "Postgres editorial store",
+        ready: editorial.store.mode === "postgres" && editorial.readiness.durableStoreReady,
+        env: [
+          "EDITORIAL_STORE_PROVIDER=postgres",
+          "DATABASE_URL or POSTGRES_URL",
+          "WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1"
+        ],
+        verification: "/api/editorial-store-health"
+      },
+      {
         id: "review-token",
         label: "Reviewer token",
         ready: editorial.readiness.reviewTokenReady,

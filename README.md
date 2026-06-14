@@ -90,8 +90,8 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/review-dossier?id=...&region=ukraine-east` returns one candidate's source evidence, AI extraction confidence, duplicate context, publication checks, and safe decision payload templates for analyst review.
 - `/api/publication-preview?id=...&region=ukraine-east` builds a non-persisted approval dry run for one queue candidate, showing the exact map/feed/detail/archive/API record that a human approval would publish.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
-- `/api/editorial-setup?region=ukraine-east` returns the non-secret production setup contract: required editorial environment variables, GitHub store verification links, static export fallback path, current blockers, and review/publication links.
-- `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
+- `/api/editorial-setup?region=ukraine-east` returns the non-secret production setup contract: required editorial environment variables, GitHub/Postgres store verification links, static export fallback path, current blockers, and review/publication links.
+- `/api/editorial-store-health` runs a read-only GitHub Contents or Postgres health check for the durable editorial store, including repo/file or event-store table readability, without exposing tokens.
 - `/api/intake-store-health` runs a read-only GitHub Contents or local-file health check for optional cron candidate snapshots, including repo, branch, path, snapshot-file readability, and secret redaction.
 - `/api/storage-readiness` exposes the PostgreSQL/PostGIS event-store schema contract, required env names, table plan, migration SQL, and non-secret readiness checks for durable event storage.
 - `/api/event-store-health` performs the live read-only PostgreSQL/PostGIS connection, extension, and expected-table checks when database env is configured.
@@ -130,9 +130,20 @@ EDITORIAL_GITHUB_PATH=editorial/decisions.json
 EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
 ```
 
+Alternatively, the editorial store can use the same PostgreSQL/PostGIS schema as the event store:
+
+```bash
+EDITORIAL_STORE_PROVIDER=postgres
+DATABASE_URL=postgres://...
+WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1
+EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
+```
+
+When Postgres is selected, approval and correction decisions upsert the approved event snapshot, source documents, and the human decision audit record in one transaction.
+
 When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. Approved/corrected snapshots are materialized back into map/feed/detail/archive/API responses even if the original live article no longer appears in the current collector window. Review decisions can include a `reviewer` value so candidates retain assignee ownership. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
 
-Use `/api/editorial-store-health` after configuring those variables on Vercel. A missing `editorial/decisions.json` file is reported as acceptable because the first approved write can create it; repo, branch, token, and malformed existing decision JSON are reported as blockers.
+Use `/api/editorial-store-health` after configuring those variables on Vercel. A missing GitHub `editorial/decisions.json` file is reported as acceptable because the first approved write can create it; repo, branch, token, malformed existing decision JSON, missing Postgres tables, and missing review tokens are reported as blockers.
 
 For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions. The standalone review page reads `/api/editorial-status`, and the map review panel reads `/api/production-readiness`, so editors can see durable-store, reviewer-token, source, and publication blockers before submitting publish actions.
 

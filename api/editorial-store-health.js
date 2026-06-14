@@ -1,4 +1,4 @@
-import { editorialGithubStoreHealth } from "./editorial-store.js";
+import { editorialStoreHealth } from "./editorial-store.js";
 
 export default async function handler(request, response) {
   if (request.method && request.method !== "GET") {
@@ -8,5 +8,5 @@ export default async function handler(request, response) {
   }
 
   response.setHeader("Cache-Control", "no-store");
-  response.status(200).json(await editorialGithubStoreHealth());
+  response.status(200).json(await editorialStoreHealth());
 }

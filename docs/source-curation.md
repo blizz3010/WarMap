@@ -43,5 +43,5 @@ Before moving a planned source to `active`:
 - Use status, assignee, and priority filters to separate open-source intake, desk-owned review, split review, and urgent verification work.
 - Make sure source URLs survive into `/api/events`, `/api/review-queue`, `/api/event`, `/api/archive`, and `/v1/events`.
 - If using scheduled ingestion, verify the optional intake snapshot store keeps source-linked candidates available after the live feed window changes.
-- Before replacing the snapshot bridge, apply the `/api/storage-readiness` migration, confirm `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, verify `/api/event-store-health`, then set `EVENT_STORE_WRITE_MODE=candidates`.
+- Before replacing the snapshot bridge, apply the `/api/storage-readiness` migration, confirm `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, verify `/api/event-store-health`, then set `EVENT_STORE_WRITE_MODE=candidates` and, if using database-backed review decisions, `EDITORIAL_STORE_PROVIDER=postgres`.
 - If the source is a conflict-party official claim, require an explicit claim label or high-scrutiny review path before publication.
