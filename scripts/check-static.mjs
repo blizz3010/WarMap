@@ -320,6 +320,10 @@ if (
   !appSource.includes("inline-review-source-strip") ||
   !appSource.includes("function renderReviewGateChecklist(item)") ||
   !appSource.includes("function renderReviewSourceLink(source)") ||
+  !appSource.includes("function inlineReviewDuplicateGroups(candidates") ||
+  !appSource.includes("function renderInlineDuplicateGroups(groups)") ||
+  !appSource.includes("function reviewPageDuplicateLink(duplicateKey)") ||
+  !appSource.includes("inline-duplicate-list") ||
   !appSource.includes("renderInlineReviewExportBundle") ||
   !appSource.includes("data-copy-review-export") ||
   !appSource.includes("inline-review-export") ||

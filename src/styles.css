@@ -3074,6 +3074,10 @@ dd {
   list-style: none;
 }
 
+.inline-duplicate-list {
+  margin-top: 8px;
+}
+
 .review-duplicate-list li {
   display: grid;
   gap: 4px;
