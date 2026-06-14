@@ -27,13 +27,16 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
     ...publicationReadinessBlockers(publication.records),
     ...platformBlockers(platform)
   ];
+  const requiredBlockers = blockers.filter((item) => item.required);
+  const optionalBlockers = blockers.filter((item) => !item.required);
 
   return {
     kind: "ProductionReadiness",
     schemaVersion: "production-readiness.v1",
     generatedAt: now.toISOString(),
     region,
-    ready: blockers.filter((item) => item.required).length === 0,
+    ready: requiredBlockers.length === 0,
+    summary: readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers }),
     sections: {
       editorial,
       extraction,
@@ -81,6 +84,8 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
       },
       platform
     },
+    requiredBlockers,
+    optionalBlockers,
     blockers
   };
 }
@@ -186,4 +191,14 @@ function platformBlockers(platform) {
     });
   }
   return blockers;
+}
+
+function readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers }) {
+  return {
+    blockerCount: blockers.length,
+    requiredBlockerCount: requiredBlockers.length,
+    optionalBlockerCount: optionalBlockers.length,
+    requiredBlockerIds: requiredBlockers.map((blocker) => blocker.id),
+    optionalBlockerIds: optionalBlockers.map((blocker) => blocker.id)
+  };
 }
