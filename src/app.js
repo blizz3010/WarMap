@@ -1707,6 +1707,7 @@ function renderReviewReadinessPanel() {
   const editorial = readiness.sections?.editorial ?? {};
   const publication = readiness.sections?.publication ?? {};
   const sourceCuration = readiness.sections?.sourceCuration ?? {};
+  const sourceBacklog = sourceCuration.activationBacklog?.summary ?? sourceCuration.readiness?.activationBacklogSummary ?? {};
   return `
     <section class="intel-section readiness-card">
       <header>
@@ -1721,8 +1722,10 @@ function renderReviewReadinessPanel() {
         <div><dt>Token</dt><dd>${editorial.readiness?.reviewTokenReady ? "Ready" : "Missing"}</dd></div>
         <div><dt>Published</dt><dd>${Number(publication.published ?? 0)}</dd></div>
         <div><dt>Sources</dt><dd>${Number(sourceCuration.activeSources ?? 0)} active</dd></div>
+        <div><dt>Backlog</dt><dd>${Number(sourceBacklog.count ?? 0)} planned</dd></div>
       </dl>
       ${renderSourceHealthSummary()}
+      ${renderSourceActivationBacklog(sourceCuration)}
       <ul class="status-list readiness-blockers">
         ${
           requiredBlockers
@@ -1739,6 +1742,40 @@ function renderReviewReadinessPanel() {
         <a href="${escapeAttr(publicationStatusLink())}" target="_blank" rel="noreferrer noopener">Publication</a>
       </nav>
     </section>
+  `;
+}
+
+function renderSourceActivationBacklog(sourceCuration) {
+  const backlog = sourceCuration.activationBacklog;
+  const sourceIds = backlog?.summary?.sourceIds ?? sourceCuration.readiness?.activationBacklogSummary?.sourceIds ?? [];
+  if (!sourceIds.length) {
+    return "";
+  }
+
+  const groups = backlog?.byCollector ?? [];
+  const rows = groups.length
+    ? groups
+    : [{ collector: "planned", count: sourceIds.length, sourceIds }];
+  return `
+    <div class="source-activation-backlog">
+      <div>
+        <strong>Source activation</strong>
+        <span>${sourceIds.length} planned source${sourceIds.length === 1 ? "" : "s"}</span>
+      </div>
+      <ul class="status-list">
+        ${rows
+          .map(
+            (group) => `
+              <li>
+                <span>${escapeHtml(titleCase(group.collector))}</span>
+                <strong>${Number(group.count ?? group.sourceIds?.length ?? 0)}</strong>
+                <small>${escapeHtml((group.sourceIds ?? []).slice(0, 3).join(", "))}${(group.sourceIds ?? []).length > 3 ? "..." : ""}</small>
+              </li>
+            `
+          )
+          .join("")}
+      </ul>
+    </div>
   `;
 }
 
