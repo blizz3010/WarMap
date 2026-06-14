@@ -1,6 +1,7 @@
 import { archiveFromEvents, editorialSummary, publishedEventsFromEvents } from "./editorial-workflow.js";
 import { collectOpenWebArticles } from "./collectors.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
+import { loadEventsFromEventStore } from "./event-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
@@ -16,8 +17,9 @@ export default async function handler(request, response) {
   const decisions = await loadEditorialDecisions();
   const seedPublished = eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(seedEvents, decisions)), region);
   const snapshotPublished = eventsForRegionScope(publishedEventsFromEvents(eventsFromEditorialSnapshots(decisions)), region);
+  const storedPublished = eventsForRegionScope(publishedEventsFromEvents(applyEditorialDecisions(await loadEventsFromEventStore({ now: new Date() }), decisions)), region);
   const livePublished = region === "all" ? [] : await publishedLiveEvents(region, request, decisions);
-  const published = dedupeEvents([...livePublished, ...seedPublished, ...snapshotPublished]);
+  const published = dedupeEvents([...livePublished, ...seedPublished, ...storedPublished, ...snapshotPublished]);
 
   response.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=600");
   response.status(200).json({
@@ -28,6 +30,7 @@ export default async function handler(request, response) {
       region,
       returnedEvents: published.length,
       snapshotEvents: snapshotPublished.length,
+      eventStoreEvents: storedPublished.length,
       editorialDecisions: decisions.length,
       editorial: editorialSummary(published),
       verification: "approved event archive with editorial snapshots when available"

@@ -1,6 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { enrichEditorialEvents } from "./editorial-workflow.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
+import { loadEventsFromEventStore } from "./event-store.js";
 import { loadIntakeSnapshots } from "./intake-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
@@ -49,6 +50,23 @@ export default async function handler(request, response) {
         region,
         source: "editorial snapshot store",
         snapshotEvents: scopedSnapshotEvents.length,
+        editorialDecisions: decisions.length
+      }
+    });
+    return;
+  }
+
+  const scopedStoredEvents = detailEventsForRegion(await loadEventsFromEventStore({ now: new Date() }), decisions, region, { enrich: true });
+  const storedMatch = findEvent(scopedStoredEvents, id);
+  if (storedMatch) {
+    response.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=600");
+    response.status(200).json({
+      event: storedMatch,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        region,
+        source: "durable event store",
+        eventStoreEvents: scopedStoredEvents.length,
         editorialDecisions: decisions.length
       }
     });
