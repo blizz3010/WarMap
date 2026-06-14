@@ -78,7 +78,7 @@ export default async function handler(request, response) {
         socialStatus: collection.socialStatus,
         collectorStatus: collection.collectorStatus,
         upstreamErrors: collection.upstreamErrors,
-        verification: "open-web leads, not confirmed incidents"
+        verification: verificationLabelForPublication(publication)
       }
     });
   } catch (error) {
@@ -105,4 +105,14 @@ function timestamp(value) {
 function normalizePublicationMode(value) {
   const mode = String(value ?? "all").toLowerCase();
   return PUBLICATION_MODES.has(mode) ? mode : "all";
+}
+
+function verificationLabelForPublication(publication) {
+  if (publication === "published") {
+    return "approved editorial records";
+  }
+  if (publication === "review") {
+    return "review queue candidates";
+  }
+  return "open-web leads, not confirmed incidents";
 }
