@@ -143,6 +143,190 @@ export async function saveIntakeSnapshots(events = [], { region = "", env = proc
   };
 }
 
+export async function intakeSnapshotStoreHealth({ env = process.env, now = new Date(), fetchImpl = fetch } = {}) {
+  const capabilities = intakeSnapshotStoreCapabilities({ env, now });
+  const githubStore = githubStoreConfig(env);
+  const checks = [
+    healthCheck(
+      "provider",
+      capabilities.enabled,
+      capabilities.enabled ? capabilities.mode : "missing",
+      capabilities.enabled
+        ? "Intake snapshot storage is configured."
+        : "Set INGESTION_STORE_PROVIDER=github or local-file before preserving review candidates."
+    )
+  ];
+
+  const health = {
+    kind: "IntakeSnapshotStoreHealth",
+    schemaVersion: "intake-snapshot-store-health.v1",
+    generatedAt: now.toISOString(),
+    ready: false,
+    mode: capabilities.mode,
+    retentionDays: capabilities.retentionDays,
+    maxSnapshots: capabilities.maxSnapshots,
+    store: {
+      provider: clean(env.INGESTION_STORE_PROVIDER).toLowerCase() || null,
+      path: capabilities.storePath ?? githubStore.path ?? "",
+      canWrite: capabilities.canWrite,
+      github: capabilities.github
+        ? {
+            repo: capabilities.github.repo,
+            branch: capabilities.github.branch,
+            path: capabilities.github.path,
+            configured: capabilities.github.configured,
+            tokenConfigured: capabilities.github.tokenConfigured
+          }
+        : null
+    },
+    checks
+  };
+
+  if (capabilities.mode === "local-file" || capabilities.mode === "local-file-unavailable") {
+    checks.push(
+      healthCheck(
+        "local-file",
+        capabilities.canWrite,
+        capabilities.mode,
+        capabilities.canWrite
+          ? "Local intake snapshot file storage is writable in this runtime."
+          : "Local intake snapshot file storage is not available in this runtime."
+      )
+    );
+    return finalizeHealth(health);
+  }
+
+  if (clean(env.INGESTION_STORE_PROVIDER).toLowerCase() !== "github") {
+    return finalizeHealth(health);
+  }
+
+  checks.push(
+    healthCheck(
+      "github-token",
+      Boolean(githubStore.token),
+      githubStore.token ? "configured" : "missing",
+      githubStore.token
+        ? "GitHub token is configured."
+        : "Set INGESTION_GITHUB_TOKEN, EDITORIAL_GITHUB_TOKEN, or GITHUB_TOKEN with Contents read/write access."
+    ),
+    healthCheck(
+      "github-repo",
+      Boolean(githubStore.repo),
+      githubStore.repo ? "configured" : "missing",
+      githubStore.repo ? "GitHub repository is configured." : "Set INGESTION_GITHUB_REPO or Vercel Git repo metadata."
+    ),
+    healthCheck(
+      "github-branch",
+      Boolean(githubStore.branch),
+      githubStore.branch ? "configured" : "missing",
+      githubStore.branch ? "GitHub branch is configured." : "Set INGESTION_GITHUB_BRANCH."
+    ),
+    healthCheck(
+      "github-path",
+      Boolean(githubStore.path),
+      githubStore.path ? "configured" : "missing",
+      githubStore.path ? "GitHub intake snapshot path is configured." : "Set INGESTION_GITHUB_PATH."
+    )
+  );
+
+  if (!githubStore.configured) {
+    return finalizeHealth(health);
+  }
+
+  try {
+    const repoResponse = await fetchImpl(githubRepoUrl(githubStore), {
+      headers: githubHeaders(githubStore)
+    });
+    checks.push(
+      healthCheck(
+        "github-repo-access",
+        repoResponse.ok,
+        String(repoResponse.status),
+        repoResponse.ok
+          ? "GitHub repository is reachable with the configured token."
+          : `GitHub repository check returned ${repoResponse.status}.`
+      )
+    );
+
+    if (!repoResponse.ok) {
+      return finalizeHealth(health);
+    }
+
+    const branchResponse = await fetchImpl(githubBranchUrl(githubStore), {
+      headers: githubHeaders(githubStore)
+    });
+    checks.push(
+      healthCheck(
+        "github-branch-access",
+        branchResponse.ok,
+        String(branchResponse.status),
+        branchResponse.ok
+          ? "GitHub branch is reachable with the configured token."
+          : `GitHub branch check returned ${branchResponse.status}.`
+      )
+    );
+
+    if (!branchResponse.ok) {
+      return finalizeHealth(health);
+    }
+
+    const fileResponse = await fetchImpl(githubContentsUrl(githubStore, { includeRef: true }), {
+      headers: githubHeaders(githubStore)
+    });
+    if (fileResponse.status === 404) {
+      checks.push(
+        healthCheck(
+          "github-snapshot-file",
+          true,
+          "missing-ok",
+          "Snapshot file does not exist yet; the first configured cron write can create it.",
+          { snapshotCount: 0, shaPresent: false }
+        )
+      );
+      return finalizeHealth(health);
+    }
+
+    if (!fileResponse.ok) {
+      checks.push(
+        healthCheck(
+          "github-snapshot-file",
+          false,
+          String(fileResponse.status),
+          `GitHub snapshot file check returned ${fileResponse.status}.`
+        )
+      );
+      return finalizeHealth(health);
+    }
+
+    const payload = await fileResponse.json();
+    const content = Buffer.from(String(payload.content ?? "").replace(/\s/g, ""), "base64").toString("utf8").trim();
+    const parsed = content ? JSON.parse(content) : [];
+    const records = normalizeSnapshotRecords(parsed);
+    checks.push(
+      healthCheck(
+        "github-snapshot-file",
+        Array.isArray(parsed),
+        "readable",
+        Array.isArray(parsed)
+          ? "Snapshot file is readable and contains a JSON array."
+          : "Snapshot file exists but does not contain a JSON array.",
+        { snapshotCount: records.length, shaPresent: Boolean(payload.sha) }
+      )
+    );
+  } catch (error) {
+    checks.push(
+      healthCheck(
+        "github-api",
+        false,
+        "error",
+        `GitHub intake snapshot store health check failed: ${String(error?.message ?? error)}`
+      )
+    );
+  }
+
+  return finalizeHealth(health);
+}
+
 function snapshotRecordFromEvent(event, { region, now }) {
   const snapshot = sanitizeEditorialEventSnapshot(event);
   if (!snapshot) {
@@ -319,6 +503,14 @@ function githubContentsUrl(githubStore, options = {}) {
   return options.includeRef ? `${url}?ref=${encodeURIComponent(githubStore.branch)}` : url;
 }
 
+function githubRepoUrl(githubStore) {
+  return `https://api.github.com/repos/${githubStore.repo}`;
+}
+
+function githubBranchUrl(githubStore) {
+  return `${githubRepoUrl(githubStore)}/branches/${encodeURIComponent(githubStore.branch)}`;
+}
+
 function githubHeaders(githubStore) {
   return {
     Accept: "application/vnd.github+json",
@@ -326,6 +518,23 @@ function githubHeaders(githubStore) {
     "Content-Type": "application/json",
     "User-Agent": "WarMapLive/0.1 intake-store",
     "X-GitHub-Api-Version": GITHUB_API_VERSION
+  };
+}
+
+function healthCheck(id, ok, status, message, extra = {}) {
+  return {
+    id,
+    ok: Boolean(ok),
+    status,
+    message,
+    ...extra
+  };
+}
+
+function finalizeHealth(health) {
+  return {
+    ...health,
+    ready: health.checks.every((check) => check.ok)
   };
 }
 

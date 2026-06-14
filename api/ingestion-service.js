@@ -54,6 +54,7 @@ export function buildIngestionStatusPayload({ env = process.env, now = new Date(
     endpoints: {
       status: INGESTION_STATUS_PATH,
       cron: INGESTION_CRON_PATH,
+      intakeStoreHealth: "/api/intake-store-health",
       reviewQueue: "/api/review-queue",
       events: "/api/events",
       sourceHealth: "/api/source-health"

@@ -21,7 +21,7 @@ import {
   buildIngestionStatusPayload,
   runIngestionHeartbeat
 } from "../api/ingestion-service.js";
-import { intakeSnapshotStoreCapabilities, loadIntakeSnapshots } from "../api/intake-store.js";
+import { intakeSnapshotStoreCapabilities, intakeSnapshotStoreHealth, loadIntakeSnapshots } from "../api/intake-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import {
   buildNotificationStatusPayload,
@@ -84,6 +84,7 @@ const requiredFiles = [
   "api/ingestion-service.js",
   "api/ingestion-status.js",
   "api/intake-store.js",
+  "api/intake-store-health.js",
   "api/news-normalizer.js",
   "api/notification-service.js",
   "api/notification-status.js",
@@ -798,6 +799,7 @@ if (
   ingestionStatus.runtime.schedule !== "17 2 * * *" ||
   ingestionStatus.runtime.intakeStore.mode !== "disabled" ||
   !ingestionStatus.plan.regions.some((region) => region.id === "ukraine-east") ||
+  ingestionStatus.endpoints.intakeStoreHealth !== "/api/intake-store-health" ||
   !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-cron-secret") ||
   !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-snapshot-store" && blocker.status === "disabled") ||
   JSON.stringify(ingestionStatus).includes("topsecret123")
@@ -933,6 +935,73 @@ try {
 } finally {
   rmSync(intakeTempDir, { recursive: true, force: true });
 }
+
+const missingIntakeHealth = await withTemporaryIngestionEnvAsync(async () =>
+  intakeSnapshotStoreHealth({ now: new Date("2026-05-28T02:04:01Z") })
+);
+if (
+  missingIntakeHealth.kind !== "IntakeSnapshotStoreHealth" ||
+  missingIntakeHealth.ready ||
+  missingIntakeHealth.mode !== "disabled" ||
+  !missingIntakeHealth.checks.some((check) => check.id === "provider" && check.status === "missing")
+) {
+  throw new Error("Intake snapshot store health failed missing-provider checks");
+}
+
+await withTemporaryIngestionEnvAsync(async () => {
+  process.env.INGESTION_STORE_PROVIDER = "github";
+  process.env.INGESTION_GITHUB_TOKEN = "fake-intake-token";
+  delete process.env.EDITORIAL_GITHUB_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  process.env.INGESTION_GITHUB_REPO = "owner/repo";
+  process.env.INGESTION_GITHUB_BRANCH = "main";
+  process.env.INGESTION_GITHUB_PATH = "editorial/intake-snapshots.json";
+
+  const urls = [];
+  const snapshotRecord = {
+    id: sampleUkraineEvents[0].id,
+    region: "ukraine-east",
+    capturedAt: "2026-05-28T02:03:46.000Z",
+    event: sampleUkraineEvents[0]
+  };
+  const health = await intakeSnapshotStoreHealth({
+    now: new Date("2026-05-28T02:04:02Z"),
+    fetchImpl: async (url, options) => {
+      urls.push(String(url));
+      const authorization = options?.headers?.Authorization ?? "";
+      if (!authorization.includes("fake-intake-token")) {
+        throw new Error("Expected intake store health to send the configured token");
+      }
+
+      if (String(url) === "https://api.github.com/repos/owner/repo") {
+        return jsonResponse(200, { full_name: "owner/repo" });
+      }
+
+      if (String(url) === "https://api.github.com/repos/owner/repo/branches/main") {
+        return jsonResponse(200, { name: "main" });
+      }
+
+      if (String(url) === "https://api.github.com/repos/owner/repo/contents/editorial/intake-snapshots.json?ref=main") {
+        return jsonResponse(200, {
+          content: Buffer.from(`${JSON.stringify([snapshotRecord], null, 2)}\n`, "utf8").toString("base64"),
+          sha: "intake123"
+        });
+      }
+
+      throw new Error(`Unexpected intake store health URL: ${url}`);
+    }
+  });
+
+  if (
+    !health.ready ||
+    health.store.github?.tokenConfigured !== true ||
+    health.checks.find((check) => check.id === "github-snapshot-file")?.snapshotCount !== 1 ||
+    urls.length !== 3 ||
+    JSON.stringify(health).includes("fake-intake-token")
+  ) {
+    throw new Error("Intake GitHub store health failed configured read-only checks");
+  }
+});
 
 const ingestionReadyProduction = await withTemporaryEditorialEnvAsync(async () =>
   withTemporaryIngestionEnvAsync(async () => {
