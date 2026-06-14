@@ -1584,12 +1584,13 @@ function renderIntelPanel(visible = filteredEvents(true)) {
 }
 
 function renderReviewPanel(visible) {
-  const reviewItems = visible
-    .filter((item) => reviewInfo(item).publicationStatus === "review_only")
+  const reviewCandidates = visible.filter((item) => reviewInfo(item).publicationStatus === "review_only");
+  const reviewItems = [...reviewCandidates]
     .sort((left, right) => reviewPriorityRank(reviewInfo(right).priority) - reviewPriorityRank(reviewInfo(left).priority))
     .slice(0, 12);
   const publishedCount = visible.filter((item) => reviewInfo(item).publicationStatus === "published").length;
-  const queueCount = visible.filter((item) => reviewInfo(item).publicationStatus === "review_only").length;
+  const queueCount = reviewCandidates.length;
+  const duplicateGroups = inlineReviewDuplicateGroups(reviewCandidates).slice(0, 4);
   const extraction = state.feedMeta.extraction;
 
   return `
@@ -1603,6 +1604,7 @@ function renderReviewPanel(visible) {
     <section class="intel-stats">
       <div><strong>${queueCount}</strong><span>Queued</span></div>
       <div><strong>${publishedCount}</strong><span>Published</span></div>
+      <div><strong>${duplicateGroups.length}</strong><span>Duplicate groups</span></div>
       <div><strong>${visible.length}</strong><span>Visible</span></div>
     </section>
     ${state.editorialMessage ? `<p class="editorial-message">${escapeHtml(state.editorialMessage)}</p>` : ""}
@@ -1613,6 +1615,7 @@ function renderReviewPanel(visible) {
         ? `<section class="intel-section"><h3>Extraction</h3><p>${escapeHtml(extraction.provider)} - ${escapeHtml(extraction.mode)} - ${escapeHtml(extraction.schemaVersion)}</p></section>`
         : ""
     }
+    ${duplicateGroups.length ? renderInlineDuplicateGroups(duplicateGroups) : ""}
     <section class="intel-section">
       <h3>Candidates</h3>
       <ul class="review-queue-list">
@@ -1685,6 +1688,27 @@ function renderReviewPanel(visible) {
         <li><strong>Refine</strong><span>Editors can correct, merge duplicates, split bundled facts, or retract later</span></li>
       </ul>
     </section>
+  `;
+}
+
+function renderInlineDuplicateGroups(groups) {
+  return `
+    <section class="intel-section">
+      <h3>Duplicate Groups</h3>
+      <ul class="review-duplicate-list inline-duplicate-list">
+        ${groups.map(renderInlineDuplicateGroup).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+function renderInlineDuplicateGroup(group) {
+  return `
+    <li>
+      <a href="${escapeAttr(reviewPageDuplicateLink(group.duplicateKey))}" target="_blank" rel="noreferrer noopener">${escapeHtml(group.duplicateKey)}</a>
+      <span>${Number(group.count ?? 0)} candidates - ${Number(group.sourceCount ?? 0)} sources</span>
+      <small>${escapeHtml((group.places ?? []).join(", ") || "Unknown place")}</small>
+    </li>
   `;
 }
 
@@ -3083,6 +3107,47 @@ function reviewInfo(item) {
   };
 }
 
+function inlineReviewDuplicateGroups(candidates = []) {
+  const groups = new Map();
+  candidates.forEach((item) => {
+    const review = reviewInfo(item);
+    const duplicateKey = review.duplicateKey;
+    if (!duplicateKey) {
+      return;
+    }
+    const group = groups.get(duplicateKey) ?? {
+      duplicateKey,
+      count: 0,
+      eventIds: [],
+      places: new Set(),
+      priorities: new Set(),
+      sourceCount: 0
+    };
+    group.count += 1;
+    group.eventIds.push(item.id);
+    if (item.place) group.places.add(item.place);
+    if (review.priority) group.priorities.add(review.priority);
+    group.sourceCount += Number(item.sourceCount ?? item.sources?.length ?? 0);
+    groups.set(duplicateKey, group);
+  });
+
+  return [...groups.values()]
+    .filter((group) => group.count > 1)
+    .map((group) => ({
+      duplicateKey: group.duplicateKey,
+      count: group.count,
+      eventIds: group.eventIds,
+      places: [...group.places].sort(),
+      priorities: [...group.priorities].sort(),
+      sourceCount: group.sourceCount
+    }))
+    .sort((left, right) => {
+      const countCompare = right.count - left.count;
+      if (countCompare) return countCompare;
+      return right.sourceCount - left.sourceCount;
+    });
+}
+
 function reviewPriorityRank(priority) {
   return { low: 1, normal: 2, high: 3, urgent: 4 }[priority] ?? 0;
 }
@@ -3265,6 +3330,15 @@ function sourceHealthLink() {
     lookback: lookbackForApi(state.timeRange)
   });
   return `/api/source-health?${params.toString()}`;
+}
+
+function reviewPageDuplicateLink(duplicateKey) {
+  const params = new URLSearchParams({
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange),
+    duplicateKey
+  });
+  return `/review?${params.toString()}`;
 }
 
 function reviewDossierLink(item) {
