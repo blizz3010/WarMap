@@ -819,12 +819,18 @@ if (
   editorialSetup.schemaVersion !== "editorial-setup.v1" ||
   editorialSetup.ready ||
   editorialSetup.current.storeMode !== "static-readonly" ||
+  editorialSetup.current.sourceActivationBacklog !== 6 ||
   editorialSetup.current.requiredBlockers < 2 ||
   !editorialSetup.requiredConfiguration.some((item) => item.name === "EDITORIAL_STORE_PROVIDER=github" && !item.configured) ||
   !editorialSetup.requiredConfiguration.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && !item.configured) ||
   !editorialSetup.setupTargets.some((target) => target.id === "github-editorial-store" && !target.ready && target.env.includes("EDITORIAL_GITHUB_TOKEN")) ||
+  !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
+  !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||
+  !editorialSetup.sourceActivation?.sources?.some((source) => source.id === "compliant-social-apis" && source.nextAction.includes("endpoint metadata")) ||
   editorialSetup.fallbackBridge.targetFile !== "api/editorial-decisions.js" ||
   !editorialSetup.links.productionReadiness.includes("/api/production-readiness?region=ukraine-east") ||
+  !editorialSetup.links.sourceCuration.includes("/api/source-curation?region=ukraine-east") ||
+  !editorialSetup.links.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
   !editorialSetup.links.reviewDesk.includes("/review?region=ukraine-east")
 ) {
   throw new Error("Editorial setup payload failed missing-secret setup checks");

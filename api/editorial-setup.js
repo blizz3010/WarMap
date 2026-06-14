@@ -6,6 +6,8 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
   const readiness = await buildProductionReadinessPayload({ region, now });
   const editorial = readiness.sections.editorial;
   const publication = readiness.sections.publication;
+  const sourceCuration = readiness.sections.sourceCuration;
+  const sourceBacklog = sourceCuration.activationBacklog ?? { summary: { count: 0, sourceIds: [] }, byCollector: [], sources: [] };
   const requiredBlockers = readiness.blockers.filter((blocker) => blocker.required);
   const optionalBlockers = readiness.blockers.filter((blocker) => !blocker.required);
   const regionQuery = `region=${encodeURIComponent(region)}`;
@@ -22,6 +24,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       reviewTokenReady: editorial.readiness.reviewTokenReady,
       decisions: editorial.counts.editorialDecisions,
       published: publication.published,
+      sourceActivationBacklog: sourceBacklog.summary.count,
       requiredBlockers: requiredBlockers.length,
       optionalBlockers: optionalBlockers.length
     },
@@ -57,8 +60,36 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
         ready: editorial.readiness.reviewTokenReady,
         env: ["EDITORIAL_REVIEW_TOKEN"],
         verification: "/api/editorial-status"
+      },
+      {
+        id: "source-activation",
+        label: "Source activation backlog",
+        ready: sourceBacklog.summary.count === 0,
+        env: [
+          "OFFICIAL_FEED_SOURCES",
+          "COMPLIANT_SOCIAL_API_SOURCES",
+          "approved Liveuamap API/license before liveuamap-api activation"
+        ],
+        verification: `/api/source-curation?${regionQuery}`
       }
     ],
+    sourceActivation: {
+      ready: sourceBacklog.summary.count === 0,
+      backlog: {
+        count: sourceBacklog.summary.count,
+        sourceIds: sourceBacklog.summary.sourceIds ?? [],
+        collectorCounts: sourceBacklog.summary.collectorCounts ?? {}
+      },
+      byCollector: sourceBacklog.byCollector ?? [],
+      sources: (sourceBacklog.sources ?? []).map((source) => ({
+        id: source.id,
+        name: source.name,
+        collector: source.collector,
+        reviewPolicy: source.reviewPolicy,
+        nextAction: source.nextAction,
+        requirements: source.requirements
+      }))
+    },
     fallbackBridge: {
       ready: true,
       exportEndpoint: "/api/review-export",
@@ -69,6 +100,8 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       productionReadiness: `/api/production-readiness?${regionQuery}`,
       editorialStatus: "/api/editorial-status",
       editorialStoreHealth: "/api/editorial-store-health",
+      sourceCuration: `/api/source-curation?${regionQuery}`,
+      sourceHealth: `/api/source-health?${regionQuery}`,
       reviewQueue: `/api/review-queue?${regionQuery}`,
       reviewDesk: `/review?${regionQuery}`,
       reviewExport: "/api/review-export",
