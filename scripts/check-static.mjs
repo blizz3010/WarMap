@@ -786,11 +786,71 @@ if (sampleLiveEvents.length !== 1 || sampleLiveEvents[0].place !== "Isfahan" || 
 }
 
 if (
-  sampleLiveEvents[0].extraction?.eventType !== "strike" ||
+  sampleLiveEvents[0].extraction?.eventType !== "drone" ||
+  sampleLiveEvents[0].extraction?.category !== "strike" ||
   sampleLiveEvents[0].extraction?.location?.place !== "Isfahan" ||
   sampleLiveEvents[0].review?.duplicateKey !== sampleLiveEvents[0].extraction?.duplicateKey
 ) {
   throw new Error("Live news normalizer failed AI extraction metadata");
+}
+
+const wordBoundarySampleEvents = normalizeArticlesToEvents(
+  [
+    {
+      title: "Officials said explosions were reported near Kharkiv",
+      url: "https://example.com/world/ukraine-kharkiv-said",
+      domain: "example.com",
+      sourcecountry: "United States",
+      language: "English",
+      seendate: "20260528T020203Z"
+    }
+  ],
+  { now: new Date("2026-05-28T03:02:03Z"), region: "ukraine-east" }
+);
+
+if (wordBoundarySampleEvents[0]?.extraction?.eventType !== "strike") {
+  throw new Error("AI extraction term matching must avoid substring and speech-cue false positives");
+}
+
+const droneStrikeContextEvents = normalizeArticlesToEvents(
+  [
+    {
+      title: "Russian drone strike reported near Kharkiv",
+      description: "Officials say air defenses engaged several drones after explosions in the region.",
+      url: "https://example.com/world/ukraine-kharkiv-drone-context",
+      domain: "example.com",
+      sourcecountry: "United States",
+      language: "English",
+      seendate: "20260528T023203Z"
+    }
+  ],
+  { now: new Date("2026-05-28T03:02:03Z"), region: "ukraine-east" }
+);
+
+if (
+  droneStrikeContextEvents[0]?.extraction?.eventType !== "drone" ||
+  droneStrikeContextEvents[0]?.extraction?.category !== "strike"
+) {
+  throw new Error("AI extraction must preserve granular drone type inside strike-context reporting");
+}
+
+const responderContextEvents = normalizeArticlesToEvents(
+  [
+    {
+      title: "Russian army launches massive strike on Putyvl in Sumy region",
+      description: "The area was repeatedly attacked while rescue workers were operating.",
+      url: "https://example.com/world/ukraine-sumy-rescue-strike",
+      domain: "example.com",
+      sourcecountry: "United States",
+      language: "English",
+      seendate: "20260528T030203Z"
+    }
+  ],
+  { now: new Date("2026-05-28T04:02:03Z"), region: "ukraine-east" }
+);
+
+if (responderContextEvents[0]?.extraction?.eventType !== "strike") {
+  throw new Error("AI extraction must keep direct strike reports from being overruled by responder context");
 }
 
 if (
@@ -861,6 +921,8 @@ await withTemporaryAiExtractionEnv(async () => {
     );
     if (
       aiEvents[0]?.extraction?.provider !== "llm-http" ||
+      aiEvents[0]?.extraction?.eventType !== "infrastructure-hit" ||
+      aiEvents[0]?.extraction?.category !== "infrastructure" ||
       aiEvents[0]?.category !== "infrastructure" ||
       aiEvents[0]?.place !== "Odesa" ||
       aiEvents[0]?.summary !== "External extractor identified infrastructure disruption near Odesa." ||
@@ -1414,7 +1476,8 @@ if (
   reviewDossier?.kind !== "ReviewDossier" ||
   reviewDossier.candidate.id !== sampleUkraineEvents[0].id ||
   !reviewDossier.evidence.sources[0]?.url ||
-  reviewDossier.evidence.extraction.eventType !== "strike" ||
+  reviewDossier.evidence.extraction.eventType !== "drone" ||
+  reviewDossier.evidence.extraction.category !== "strike" ||
   !reviewDossier.evidence.duplicateContext.relatedCandidates.some((candidate) => candidate.id === duplicateUkraineCandidate.id) ||
   !reviewDossier.editorial.checks.publicationSnapshotReady ||
   !reviewDossier.publicationPreview.canExportApproval ||
@@ -2061,9 +2124,31 @@ const v1LiveSource = buildV1EventsPayload(
     }
   }
 ).events[0]?.sources[0];
+const v1LiveEvent = buildV1EventsPayload(
+  {
+    events: sampleUkraineEvents,
+    meta: {
+      generatedAt: "2026-05-28T00:00:00.000Z",
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all"
+    }
+  },
+  {
+    query: {
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all"
+    }
+  }
+).events[0];
 
 if (!v1LiveSource?.collector || !v1LiveSource.originalTitle || !v1LiveSource.capturedAt) {
   throw new Error("V1 events must preserve source provenance metadata");
+}
+
+if (v1LiveEvent?.extraction?.eventType !== "drone" || v1LiveEvent?.extraction?.category !== "strike") {
+  throw new Error("V1 events must preserve granular extraction event type and coarse category");
 }
 
 if (!v1Events.events[0].links.detail.startsWith("/event?") || !v1Events.links.stream.startsWith("/v1/stream/events")) {

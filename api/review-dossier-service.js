@@ -154,6 +154,7 @@ function extractionSummary(candidate) {
     mode: extraction.mode ?? null,
     schemaVersion: extraction.schemaVersion ?? null,
     eventType: extraction.eventType ?? candidate.category,
+    category: extraction.category ?? candidate.category,
     severity: extraction.severity ?? candidate.severity,
     actorSide: extraction.actorSide ?? candidate.side,
     summary: extraction.summary ?? candidate.summary,

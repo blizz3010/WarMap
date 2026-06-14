@@ -300,7 +300,7 @@ function applyExtractionToEvent(event, extraction) {
 
   return {
     ...event,
-    ...(extraction.eventType ? { category: extraction.eventType } : {}),
+    ...(extraction.category ? { category: extraction.category } : {}),
     ...(extraction.severity ? { severity: extraction.severity } : {}),
     ...(extraction.actorSide ? { side: extraction.actorSide } : {}),
     ...(extraction.summary ? { summary: extraction.summary } : {}),

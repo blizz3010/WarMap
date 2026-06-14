@@ -273,7 +273,8 @@ Example official XML source configuration:
 
 `api/ai-extractor.js` records a structured extraction object on each live candidate. The current default is `AI_EXTRACTION_PROVIDER=deterministic-local`, a local rule-based fallback that extracts:
 
-- event type/category
+- granular event type, such as `drone`, `missile`, `air-defense`, or `infrastructure-hit`
+- coarse map/feed category, such as `air`, `strike`, or `infrastructure`
 - location and precision
 - summary
 - actor side
@@ -292,7 +293,7 @@ AI_EXTRACTION_TIMEOUT_MS=2500
 AI_EXTRACTION_MAX_ARTICLES=12
 ```
 
-WarMap sends the article candidate, current deterministic fallback extraction, source metadata, and required output contract. The provider can return JSON fields such as `eventType`, `severity`, `actorSide`, `summary`, `location`, `duplicateKey`, `confidence`, `fieldConfidence`, and `signals`. Provider output is sanitized, bounded, and merged onto the fallback. Extracted records still remain review-only until an editor approves them.
+WarMap sends the article candidate, current deterministic fallback extraction, source metadata, and required output contract. The provider can return JSON fields such as `eventType`, `category`, `severity`, `actorSide`, `summary`, `location`, `duplicateKey`, `confidence`, `fieldConfidence`, and `signals`. `eventType` uses the granular taxonomy from `/v1/config`; `category` remains the stable map/feed filter. Provider output is sanitized, bounded, and merged onto the fallback, and legacy provider responses that put a coarse category in `eventType` are translated into the closest granular type. Extracted records still remain review-only until an editor approves them.
 
 ## Production direction
 
