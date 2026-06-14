@@ -117,6 +117,7 @@ const embedPageSource = readFileSync(new URL("embed.html", `file:///${root.repla
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const indexPageSource = readFileSync(new URL("index.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 
 if (!vercelConfig.crons?.some((job) => job.path === "/api/cron/ingest" && job.schedule === "17 2 * * *")) {
@@ -175,7 +176,8 @@ if (
   !reviewPageSource.includes("/api/review-dossier?") ||
   !reviewPageSource.includes("/api/review-action") ||
   !reviewPageSource.includes("/api/review-export") ||
-  !reviewPageSource.includes("/api/editorial-status")
+  !reviewPageSource.includes("/api/editorial-status") ||
+  !reviewPageSource.includes("/api/source-health?")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
 }
@@ -191,9 +193,12 @@ if (
 if (
   !appSource.includes("/api/review-export") ||
   !appSource.includes("/api/production-readiness?") ||
+  !appSource.includes("/api/source-health?") ||
   !appSource.includes("/api/editorial-setup?") ||
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
+  !appSource.includes("function renderSourceHealthSummary()") ||
+  !appSource.includes("function sourceHealthStatusClass(health)") ||
   !appSource.includes("inline-review-source-strip") ||
   !appSource.includes("function renderReviewGateChecklist(item)") ||
   !appSource.includes("function renderReviewSourceLink(source)") ||
@@ -207,6 +212,15 @@ if (
 
 if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("publishReady")) {
   throw new Error("Expected standalone review page to show editorial publishing readiness");
+}
+
+if (
+  !reviewPageSource.includes("function renderSourceHealthStatus()") ||
+  !reviewPageSource.includes("health?.operational") ||
+  !stylesSource.includes(".status-summary.is-warning") ||
+  !stylesSource.includes(".source-health-facts")
+) {
+  throw new Error("Expected review surfaces to show operational/degraded source health");
 }
 
 if (!reviewPageSource.includes("warmap.editorialToken") || !reviewPageSource.includes("review-source-strip")) {

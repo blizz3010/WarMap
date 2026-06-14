@@ -12,6 +12,8 @@ const state = {
   message: "",
   exportBundle: null,
   status: null,
+  sourceHealth: null,
+  sourceHealthMessage: "",
   queue: null
 };
 
@@ -23,14 +25,32 @@ async function loadReviewQueue() {
   mapLink.href = `/?${new URLSearchParams({ region: state.region }).toString()}`;
 
   try {
-    const [queueResponse, statusResponse] = await Promise.all([
+    const sourceHealthRequest = fetch(sourceHealthUrl(), { headers: { Accept: "application/json" } })
+      .then(async (sourceHealthResponse) => ({
+        sourceHealthResponse,
+        sourceHealthPayload: await sourceHealthResponse.json().catch(() => null)
+      }))
+      .catch((sourceHealthError) => ({ sourceHealthError }));
+    const [queueResponse, statusResponse, sourceHealthResult] = await Promise.all([
       fetch(apiUrl, { headers: { Accept: "application/json" } }),
-      fetch("/api/editorial-status", { headers: { Accept: "application/json" } })
+      fetch("/api/editorial-status", { headers: { Accept: "application/json" } }),
+      sourceHealthRequest
     ]);
     const payload = await queueResponse.json();
     const statusPayload = await statusResponse.json().catch(() => null);
     if (statusResponse.ok && statusPayload?.kind === "EditorialStatus") {
       state.status = statusPayload;
+    }
+    const { sourceHealthResponse, sourceHealthPayload, sourceHealthError } = sourceHealthResult;
+    if (sourceHealthResponse?.ok && sourceHealthPayload?.kind === "SourceHealth") {
+      state.sourceHealth = sourceHealthPayload;
+      state.sourceHealthMessage = "";
+    } else {
+      state.sourceHealth = null;
+      state.sourceHealthMessage =
+        sourceHealthError instanceof Error
+          ? sourceHealthError.message
+          : sourceHealthPayload?.message || sourceHealthPayload?.error || `Source health returned ${sourceHealthResponse?.status ?? "unavailable"}`;
     }
     if (!queueResponse.ok || !Array.isArray(payload.candidates)) {
       throw new Error(payload.message || payload.error || `Review queue returned ${queueResponse.status}`);
@@ -119,6 +139,7 @@ function renderReviewQueue() {
 
           <section class="event-page-section">
             <h2>Collector Status</h2>
+            ${renderSourceHealthStatus()}
             <ul class="status-list">
               ${Object.entries(meta.collectorStatus ?? {})
                 .map(([collector, status]) => `<li><span>${escapeHtml(titleCase(collector))}</span><strong>${escapeHtml(status)}</strong></li>`)
@@ -168,6 +189,43 @@ function renderPublishingStatus() {
         .join("")}
     </ul>
   `;
+}
+
+function renderSourceHealthStatus() {
+  const health = state.sourceHealth;
+  if (!health) {
+    return `<p class="status-summary is-blocked">${escapeHtml(state.sourceHealthMessage || "Source health unavailable.")}</p>`;
+  }
+
+  const resilience = health.resilience ?? {};
+  return `
+    <p class="status-summary ${sourceHealthStatusClass(health)}">
+      Collector health ${escapeHtml(titleCase(resilience.state ?? "unknown"))}. ${escapeHtml(resilience.message ?? sourceHealthFallbackMessage(health))}
+    </p>
+    <dl class="event-page-facts archive-facts source-health-facts">
+      <div><dt>Reachable</dt><dd>${Number(health.summary?.reachableSources ?? 0)}</dd></div>
+      <div><dt>Retryable</dt><dd>${Number(health.summary?.retryableFailures ?? 0)}</dd></div>
+      <div><dt>Hard</dt><dd>${Number(health.summary?.hardFailures ?? 0)}</dd></div>
+      <div><dt>Missing config</dt><dd>${Number(health.summary?.missingConfiguration ?? 0)}</dd></div>
+    </dl>
+  `;
+}
+
+function sourceHealthStatusClass(health) {
+  if (health?.ready) {
+    return "is-ready";
+  }
+  if (health?.operational) {
+    return "is-warning";
+  }
+  return "is-blocked";
+}
+
+function sourceHealthFallbackMessage(health) {
+  if (health?.operational) {
+    return "Collectors are serving candidates with warnings.";
+  }
+  return "Collectors need attention before publication.";
 }
 
 function storeModeLabel(mode) {
@@ -536,6 +594,10 @@ function updateReviewUrl() {
 
 function reviewQueueUrl() {
   return `/api/review-queue?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function sourceHealthUrl() {
+  return `/api/source-health?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function reviewDossierUrl(item) {

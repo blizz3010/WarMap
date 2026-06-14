@@ -1483,6 +1483,12 @@ dd {
   color: #bbf7d0;
 }
 
+.status-summary.is-warning {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fde68a;
+}
+
 .status-summary.is-blocked {
   border-color: rgba(245, 158, 11, 0.38);
   background: rgba(245, 158, 11, 0.1);
@@ -1562,13 +1568,22 @@ dd {
 
 .readiness-links {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
 }
 
 .readiness-links a {
   padding: 0 6px;
   text-align: center;
+}
+
+.source-health-summary {
+  display: grid;
+  gap: 0;
+}
+
+.source-health-facts {
+  margin-bottom: 8px;
 }
 
 .inline-review-source-strip,
