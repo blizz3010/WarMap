@@ -44,7 +44,7 @@ The check validates the static app files and the event, region, category, severi
 
 - primary source attempt: GDELT DOC 2.0 article search
 - media RSS sources: region-matched feeds from the source registry
-- official feeds: active government/multilateral RSS-compatible feeds, tracked separately from media RSS
+- official feeds: active government/multilateral RSS-compatible feeds plus optional `OFFICIAL_FEED_SOURCES` entries for terms-reviewed RSS, Atom, or CAP XML feeds
 - compliant social APIs: opt-in JSON API sources configured only through `COMPLIANT_SOCIAL_API_SOURCES`
 - local geocoding: known Iran, Gulf, Ukraine, Black Sea, and regional place aliases
 - theater scoping: normalized events are filtered through the selected region bounds before list, detail, review, archive, and publication responses are returned
@@ -191,7 +191,23 @@ Supported JSON item fields include `title`, `text`, `summary`, `content`, `url`,
 
 See `docs/source-curation.md` for the Liveuamap-inspired source curation model, the do-not-scrape boundary, and the activation checklist for planned official-site, licensed API, and social/API sources. `/api/source-curation` exposes those activation requirements directly so planned sources stay inspectable without being fetched.
 
-Use `/api/source-health?region=ukraine-east` to verify the active collector pipeline. Planned official-site and licensed Liveuamap entries are listed but not fetched until an adapter or licensed API contract exists. Configured social API sources are read from `COMPLIANT_SOCIAL_API_SOURCES`; any `tokenEnv` values are checked as booleans and never returned. Each source row includes a non-secret `diagnostic` code/category so failed feeds can be triaged without exposing tokens. The top-level `ready` flag remains strict; `operational`, `degraded`, and `resilience.state` separate temporary retryable collector failures from configuration or parser blockers.
+Use `/api/source-health?region=ukraine-east` to verify the active collector pipeline. Planned official-site and licensed Liveuamap entries are listed but not fetched until an adapter or licensed API contract exists. Configured official XML sources are read from `OFFICIAL_FEED_SOURCES` and can provide RSS, Atom, or CAP-style alert XML after terms review. Configured social API sources are read from `COMPLIANT_SOCIAL_API_SOURCES`; any `tokenEnv` values are checked as booleans and never returned. Each source row includes a non-secret `diagnostic` code/category so failed feeds can be triaged without exposing tokens. The top-level `ready` flag remains strict; `operational`, `degraded`, and `resilience.state` separate temporary retryable collector failures from configuration or parser blockers.
+
+Example official XML source configuration:
+
+```json
+[
+  {
+    "id": "ukraine-alerts-cap",
+    "name": "Ukraine Alerts CAP",
+    "url": "https://example.gov.ua/alerts/cap.xml",
+    "regions": ["ukraine-east"],
+    "feedFormat": "cap",
+    "country": "Ukraine",
+    "language": "English"
+  }
+]
+```
 
 ## AI extraction layer
 

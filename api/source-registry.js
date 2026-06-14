@@ -127,11 +127,11 @@ export const SOURCE_REGISTRY = [
   },
   {
     id: "official-sites",
-    name: "Official government and emergency sites",
+    name: "Configured official XML feeds",
     collector: "official-feed",
     sourceType: "official",
     trustTier: "primary source",
-    access: "site RSS, CAP, JSON, or HTML with permission",
+    access: "terms-reviewed RSS, Atom, or CAP XML feeds configured through OFFICIAL_FEED_SOURCES",
     status: "planned",
     regions: ["*"]
   },

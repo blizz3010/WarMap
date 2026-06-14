@@ -1,4 +1,4 @@
-import { configuredSocialApiSources } from "./collectors.js";
+import { configuredOfficialFeedSources, configuredSocialApiSources } from "./collectors.js";
 import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeLookback } from "./news-normalizer.js";
 import { plannedSourcesForRegion, sourcesForRegion } from "./source-registry.js";
 
@@ -16,7 +16,11 @@ export async function buildSourceHealthPayload({
   const normalizedLookback = normalizeLookback(lookback);
   const registrySources = sourcesForRegion(normalizedRegion);
   const activeSources = registrySources.filter((source) => source.status === "active");
-  const probedSources = activeSources.filter((source) => PROBED_COLLECTORS.has(source.collector)).slice(0, maxSources);
+  const officialFeedSources = configuredOfficialFeedSources(normalizedRegion);
+  const probedSources = dedupeSources([
+    ...activeSources.filter((source) => PROBED_COLLECTORS.has(source.collector)),
+    ...officialFeedSources
+  ]).slice(0, maxSources);
   const socialSources = configuredSocialApiSources(normalizedRegion).slice(0, maxSources);
 
   const [activeChecks, socialChecks] = await Promise.all([
@@ -65,6 +69,7 @@ export async function buildSourceHealthPayload({
     summary: {
       activeSources: activeSources.length,
       plannedSources: plannedRows.length,
+      configuredOfficialFeeds: officialFeedSources.length,
       configuredSocialApis: socialSources.length,
       checkedSources: checked.length,
       reachableSources: reachable.length,
@@ -154,7 +159,7 @@ async function probeRegistrySource(source, context) {
     }
 
     const xml = await response.text();
-    const itemCount = [...xml.matchAll(/<item\b/gi)].length;
+    const itemCount = xmlFeedItemCount(xml);
     return sourceHealthRow(source, {
       configured: true,
       checked: true,
@@ -162,7 +167,7 @@ async function probeRegistrySource(source, context) {
       status: itemCount > 0 ? "reachable" : "empty",
       url,
       itemCount,
-      message: itemCount > 0 ? `${source.name} returned RSS items.` : `${source.name} returned no RSS items.`,
+      message: itemCount > 0 ? `${source.name} returned XML feed items.` : `${source.name} returned no XML feed items.`,
       diagnostic: itemCount > 0
         ? successDiagnostic("feed.items", context.now)
         : emptyDiagnostic("feed.empty", context.now)
@@ -368,6 +373,26 @@ function errorDiagnostic(error, now) {
 
 function retryableStatus(status) {
   return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function xmlFeedItemCount(xml) {
+  const counts = [
+    [...xml.matchAll(/<item\b/gi)].length,
+    [...xml.matchAll(/<entry\b/gi)].length,
+    [...xml.matchAll(/<(?:[\w.-]+:)?alert\b/gi)].length
+  ];
+  return Math.max(...counts);
+}
+
+function dedupeSources(sources) {
+  const byKey = new Map();
+  sources.forEach((source) => {
+    const key = source.id || source.url;
+    if (key && !byKey.has(key)) {
+      byKey.set(key, source);
+    }
+  });
+  return [...byKey.values()];
 }
 
 function sourceResilienceSummary({
