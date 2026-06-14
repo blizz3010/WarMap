@@ -180,7 +180,15 @@ When enabled, cron stores sanitized review-candidate snapshots with original sou
 
 `/api/storage-readiness` documents the PostgreSQL/PostGIS schema needed to move documents, extracted claims, canonical events, source evidence, editorial decisions, event updates, and ingestion runs out of static modules or GitHub snapshot files.
 
-Configure the database target after applying the migration SQL returned by the endpoint:
+Preview the exact migration SQL locally, then apply it only when `DATABASE_URL` or `POSTGRES_URL` points at the intended database:
+
+```bash
+npm run apply-storage-migration
+npm run apply-storage-migration -- --print-sql
+npm run apply-storage-migration -- --apply
+```
+
+Configure the database target after the migration succeeds:
 
 ```bash
 DATABASE_URL=postgres://...
@@ -197,7 +205,7 @@ Candidate writes from the scheduled ingestion heartbeat are opt-in:
 EVENT_STORE_WRITE_MODE=candidates
 ```
 
-When enabled with a ready database, cron stores source-linked review candidates in `warmap_sources`, `warmap_documents`, `warmap_events`, and `warmap_event_sources`. `/api/production-readiness` includes a non-required `postgres-event-store` blocker until database readiness is configured, and `/api/ingestion-status` includes an `event-store-candidate-writes` blocker until candidate writes are explicitly enabled.
+When enabled with a ready database, cron stores source-linked review candidates in `warmap_sources`, `warmap_documents`, `warmap_events`, and `warmap_event_sources`. `/api/events`, `/api/review-queue`, `/api/event`, `/api/archive`, `/api/publication-status`, and the `/v1/*` routes read stored events back with visible source links. `/api/production-readiness` includes a non-required `postgres-event-store` blocker until database readiness is configured, and `/api/ingestion-status` includes an `event-store-candidate-writes` blocker until candidate writes are explicitly enabled.
 
 ## Platform capability registry
 

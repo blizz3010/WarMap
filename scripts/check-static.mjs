@@ -52,6 +52,7 @@ import { buildSourceCurationPayload } from "../api/source-curation.js";
 import { buildSourceHealthPayload } from "../api/source-health.js";
 import { buildStorageReadinessPayload, STORAGE_SCHEMA_VERSION, STORAGE_TABLES } from "../api/storage-readiness.js";
 import { applyReviewExportText, renderStaticEditorialDecisionModule } from "./apply-review-export.mjs";
+import { applyStorageMigration, storageMigrationPlan } from "./apply-storage-migration.mjs";
 import {
   buildV1EventsPayload,
   buildV1FeedPayload,
@@ -75,6 +76,7 @@ const requiredFiles = [
   "archive.html",
   "review.html",
   "embed.html",
+  "scripts/apply-storage-migration.mjs",
   "scripts/apply-review-export.mjs",
   "src/app.js",
   "src/archive-page.js",
@@ -146,10 +148,15 @@ const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.repl
 const eventsApiSource = readFileSync(new URL("api/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const publicationServiceSource = readFileSync(new URL("api/publication-service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewQueueApiSource = readFileSync(new URL("api/review-queue.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const packageConfig = JSON.parse(readFileSync(new URL("package.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 
 if (!vercelConfig.crons?.some((job) => job.path === "/api/cron/ingest" && job.schedule === "17 2 * * *")) {
   throw new Error("Expected Vercel cron configuration for the ingestion heartbeat");
+}
+
+if (packageConfig.scripts?.["apply-storage-migration"] !== "node scripts/apply-storage-migration.mjs") {
+  throw new Error("Expected npm script for applying the storage migration");
 }
 
 if (!appSource.includes("new EventSource(eventStreamUrl())") || !appSource.includes("/v1/stream/events")) {
@@ -667,6 +674,41 @@ if (
   JSON.stringify(configuredStorageReadiness).includes("supersecret-password")
 ) {
   throw new Error("Storage readiness payload failed schema, migration, or secret-redaction checks");
+}
+
+const storageMigrationDryRun = storageMigrationPlan({
+  env: {},
+  now: new Date("2026-06-14T09:05:00Z")
+});
+const storageMigrationApplyLog = [];
+const storageMigrationApplied = await applyStorageMigration({
+  env: {
+    DATABASE_URL: "postgres://warmap:supersecret-password@db.example.test:5432/warmap",
+    WARMAP_STORAGE_SCHEMA_VERSION: STORAGE_SCHEMA_VERSION
+  },
+  apply: true,
+  now: new Date("2026-06-14T09:05:30Z"),
+  queryImpl: async (text, values = []) => {
+    storageMigrationApplyLog.push({ text, values });
+    if (String(text).includes("information_schema.tables")) {
+      return { rows: STORAGE_TABLES.map((table) => ({ table_name: table.name })) };
+    }
+    return { rows: [] };
+  }
+});
+if (
+  storageMigrationDryRun.kind !== "StorageMigrationPlan" ||
+  storageMigrationDryRun.mode !== "dry-run" ||
+  !storageMigrationDryRun.sql.includes("create extension if not exists postgis") ||
+  storageMigrationApplied.mode !== "apply" ||
+  !storageMigrationApplied.applied ||
+  !storageMigrationApplied.ready ||
+  storageMigrationApplied.foundTables.length !== STORAGE_TABLES.length ||
+  !storageMigrationApplyLog[0]?.text.includes("create table if not exists warmap_events") ||
+  JSON.stringify(storageMigrationDryRun).includes("supersecret-password") ||
+  JSON.stringify(storageMigrationApplied).includes("supersecret-password")
+) {
+  throw new Error("Storage migration helper failed dry-run, apply, inventory, or secret-redaction checks");
 }
 
 const editorialSetup = await withTemporaryEditorialEnvAsync(async () => {
