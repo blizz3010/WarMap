@@ -948,6 +948,12 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned") ||
   !productionReadiness.blockers.some(
     (blocker) => blocker.id === "server-notifications" && blocker.setupProfileId === "server-notifications" && blocker.setupHref?.includes("#setup-profile-server-notifications")
+  ) ||
+  !productionReadiness.blockers.some(
+    (blocker) => blocker.id === "language-catalogs" && blocker.setupProfileId === "language-catalog-roadmap" && blocker.setupHref?.includes("#setup-profile-language-catalog-roadmap")
+  ) ||
+  !productionReadiness.blockers.some(
+    (blocker) => blocker.id === "paid-layer-entitlements" && blocker.setupProfileId === "paid-layer-entitlements" && blocker.setupCommandHref?.includes("#setup-command-profile-paid-layer-entitlements")
   )
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
@@ -1045,6 +1051,8 @@ if (
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "scheduled-ingestion" && profile.recommended && profile.variables.some((item) => item.name === "CRON_SECRET" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-event-store-candidates" && profile.variables.some((item) => item.name === "EVENT_STORE_WRITE_MODE" && item.value === "candidates")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "server-notifications" && profile.variables.some((item) => item.name === "NOTIFICATION_ADMIN_TOKEN" && item.secret)) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "language-catalog-roadmap" && profile.provider === "localization" && profile.notes.some((note) => note.includes("Planned language catalogs"))) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "paid-layer-entitlements" && profile.provider === "entitlements" && profile.notes.some((note) => note.includes("Planned paid layers"))) ||
   editorialSetup.vercelEnvironment?.target !== "production" ||
   editorialSetup.vercelEnvironment?.cli?.pull !== "vercel pull --environment=production" ||
   editorialSetup.vercelEnvironment?.cli?.redeploy !== "vercel deploy --prod" ||
@@ -1073,6 +1081,16 @@ if (
     profile.id === "server-notifications" &&
     profile.commands.some((command) => command.name === "NOTIFICATION_WEBHOOK_SECRET" && command.addCommand === "vercel env add NOTIFICATION_WEBHOOK_SECRET production" && command.secret)
   ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "language-catalog-roadmap" &&
+    profile.commands.length === 0 &&
+    profile.verification.includes("/api/platform-config")
+  ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "paid-layer-entitlements" &&
+    profile.commands.length === 0 &&
+    profile.verification.includes("/api/platform-config")
+  ) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_SITE_SOURCES")) ||
   !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||
@@ -1091,6 +1109,12 @@ if (
   ) ||
   !editorialSetup.blockers?.some(
     (blocker) => blocker.id === "official-site-adapters" && blocker.sourcesHref?.includes("/sources?region=ukraine-east")
+  ) ||
+  !editorialSetup.blockers?.some(
+    (blocker) => blocker.id === "language-catalogs" && blocker.setupHref?.includes("#setup-profile-language-catalog-roadmap")
+  ) ||
+  !editorialSetup.blockers?.some(
+    (blocker) => blocker.id === "paid-layer-entitlements" && blocker.setupHref?.includes("#setup-profile-paid-layer-entitlements")
   )
 ) {
   throw new Error("Editorial setup payload failed missing-secret setup checks");

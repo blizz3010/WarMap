@@ -283,6 +283,42 @@ function buildEnvironmentProfiles({ editorial, extraction, ingestion, storage, p
         "Browser alerts are local-ready; server webhook delivery stays disabled until these env vars are configured.",
         "Webhook payloads include original source links and signed headers."
       ]
+    },
+    {
+      id: "language-catalog-roadmap",
+      label: "Language catalogs and translation",
+      recommended: false,
+      ready: !platform?.plannedLanguages?.length,
+      purpose: "Roadmap profile for moving beyond local shell-copy localization into reviewed event translation catalogs.",
+      provider: "localization",
+      variables: [],
+      verification: [
+        "/api/platform-config",
+        `/api/production-readiness?${regionQuery}`
+      ],
+      notes: [
+        `Planned language catalogs: ${(platform?.plannedLanguages ?? []).join(", ") || "none"}.`,
+        "The current UI changes shell copy, lang, and dir locally; source articles and event summaries remain in their source language.",
+        "Add catalog storage, translation provider policy, and editorial review before translated event content is marked active."
+      ]
+    },
+    {
+      id: "paid-layer-entitlements",
+      label: "Paid layer entitlements",
+      recommended: false,
+      ready: Boolean(platform?.paidLayersReady),
+      purpose: "Roadmap profile for paid map layers that require billing, entitlement checks, and licensed datasets.",
+      provider: "entitlements",
+      variables: [],
+      verification: [
+        "/api/platform-config",
+        `/api/production-readiness?${regionQuery}`
+      ],
+      notes: [
+        `Planned paid layers: ${(platform?.plannedPaidLayers ?? []).join(", ") || "none"}.`,
+        "Do not enable paid layers until billing, account state, entitlement checks, moderation, and license terms are implemented.",
+        "Keep layer records as metadata until licensed geometries or datasets are available for the target theater."
+      ]
     }
   ];
 }
