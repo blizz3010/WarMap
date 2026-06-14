@@ -686,6 +686,11 @@ const productionReadiness = await withTemporaryStorageEnvAsync(async () =>
 if (
   productionReadiness.kind !== "ProductionReadiness" ||
   productionReadiness.ready ||
+  productionReadiness.summary?.requiredBlockerCount !== productionReadiness.requiredBlockers?.length ||
+  productionReadiness.summary?.optionalBlockerCount !== productionReadiness.optionalBlockers?.length ||
+  !productionReadiness.summary?.requiredBlockerIds?.includes("editorial-store") ||
+  !productionReadiness.requiredBlockers?.some((blocker) => blocker.id === "editorial-store") ||
+  !productionReadiness.optionalBlockers?.some((blocker) => blocker.id === "ai-provider") ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
   productionReadiness.sections.sourceCuration.activeSources < 1 ||
