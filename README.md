@@ -230,6 +230,10 @@ NOTIFICATION_MIN_SEVERITY=high
 
 With those variables configured, send `Authorization: Bearer <NOTIFICATION_ADMIN_TOKEN>` to `POST /api/notification-status`. The webhook receives a `WarMapNotificationBatch` payload with event links and original source links, plus `x-warmap-notification-timestamp` and `x-warmap-notification-signature` headers.
 
+## Editorial launch profiles
+
+`/setup?region=ukraine-east` includes copy-safe environment profiles for the two durable editorial-store paths. The recommended short path is `EDITORIAL_STORE_PROVIDER=github` with a fine-grained GitHub token, repo/branch/path settings, and `EDITORIAL_REVIEW_TOKEN`. The Postgres path uses `EDITORIAL_STORE_PROVIDER=postgres`, `DATABASE_URL` or `POSTGRES_URL`, `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, and the same reviewer token. Secret values are shown only as placeholders; verify the active production state with `/readiness?region=ukraine-east&lookback=30d` after setting Vercel environment variables.
+
 ## Collector configuration
 
 RSS and official-feed sources live in `api/source-registry.js`. Compliant social APIs are intentionally not scraped or hard-coded; add only API endpoints you are allowed to use:

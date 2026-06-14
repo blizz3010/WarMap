@@ -29,6 +29,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       optionalBlockers: optionalBlockers.length
     },
     requiredConfiguration: editorial.requiredConfiguration,
+    environmentProfiles: buildEnvironmentProfiles({ editorial, regionQuery }),
     setupTargets: [
       {
         id: "github-editorial-store",
@@ -111,6 +112,73 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       v1Events: `/v1/events?${regionQuery}&publication=published`
     },
     blockers: readiness.blockers
+  };
+}
+
+function buildEnvironmentProfiles({ editorial, regionQuery }) {
+  const github = editorial.store?.github ?? {};
+  const postgres = editorial.store?.postgres ?? {};
+  const tokenConfigured = Boolean(editorial.store?.tokenConfigured || editorial.readiness?.reviewTokenReady);
+  return [
+    {
+      id: "github-contents-editorial",
+      label: "GitHub Contents editorial store",
+      recommended: true,
+      ready: editorial.store?.mode === "github-contents" && editorial.readiness?.durableStoreReady && tokenConfigured,
+      purpose: "Fastest production path for durable editorial decisions on Vercel.",
+      provider: "github",
+      variables: [
+        envItem("EDITORIAL_STORE_PROVIDER", "github", true, false, "Selects the GitHub Contents adapter."),
+        envItem("EDITORIAL_GITHUB_TOKEN", "<fine-grained GitHub token>", Boolean(github.tokenConfigured), true, "Needs repository Contents read/write access."),
+        envItem("EDITORIAL_GITHUB_REPO", github.repo || "blizz3010/WarMap", Boolean(github.repo), false, "Repository that stores editorial decisions."),
+        envItem("EDITORIAL_GITHUB_BRANCH", github.branch || "main", Boolean(github.branch), false, "Branch receiving decision updates."),
+        envItem("EDITORIAL_GITHUB_PATH", github.path || "editorial/decisions.json", Boolean(github.path), false, "JSON file used by the store."),
+        envItem("EDITORIAL_REVIEW_TOKEN", "<long random reviewer token>", tokenConfigured, true, "Shared with trusted reviewers through the review UI.")
+      ],
+      verification: [
+        "/api/editorial-store-health",
+        "/api/editorial-status",
+        `/api/production-readiness?${regionQuery}`
+      ],
+      notes: [
+        "Use a fine-grained GitHub token scoped only to this repository.",
+        "Set the same reviewer token in Vercel and in the trusted review browser."
+      ]
+    },
+    {
+      id: "postgres-editorial",
+      label: "Postgres editorial store",
+      recommended: false,
+      ready: editorial.store?.mode === "postgres" && editorial.readiness?.durableStoreReady && tokenConfigured,
+      purpose: "Database-backed editorial decisions for the later event/document store path.",
+      provider: "postgres",
+      variables: [
+        envItem("EDITORIAL_STORE_PROVIDER", "postgres", editorial.store?.mode === "postgres", false, "Selects the Postgres adapter."),
+        envItem("DATABASE_URL or POSTGRES_URL", "<postgres connection string>", Boolean(postgres.databaseUrlConfigured), true, "Connection URL for the event and editorial store."),
+        envItem("WARMAP_STORAGE_SCHEMA_VERSION", postgres.schemaVersion || "event-store-schema.v1", Boolean(postgres.schemaVersionConfirmed), false, "Confirms the migration has been applied."),
+        envItem("EDITORIAL_REVIEW_TOKEN", "<long random reviewer token>", tokenConfigured, true, "Shared with trusted reviewers through the review UI.")
+      ],
+      verification: [
+        "/api/storage-readiness",
+        "/api/event-store-health",
+        "/api/editorial-store-health",
+        `/api/production-readiness?${regionQuery}`
+      ],
+      notes: [
+        "Run the Postgres/PostGIS migration before setting WARMAP_STORAGE_SCHEMA_VERSION.",
+        "Use /api/event-store-health for the read-only database check after secrets are configured."
+      ]
+    }
+  ];
+}
+
+function envItem(name, value, configured, secret, description) {
+  return {
+    name,
+    value,
+    configured: Boolean(configured),
+    secret: Boolean(secret),
+    description
   };
 }
 
