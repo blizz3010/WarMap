@@ -81,7 +81,7 @@ The default v1 publication mode is `published`, matching the public-map contract
 - `/embed?region=ukraine-east&lookback=30d&publication=all` opens directly on an eastern Ukraine theater.
 - `/embed?region=ukraine&publication=published` limits the widget to editor-approved public records.
 
-The embed header includes a theater selector, live/published count, source mode status, and a link back to the full map. Feed rows and map markers share the selected event state.
+The embed header includes a theater selector, live/published count, source mode status, and a link back to the full map that preserves theater, publication, and non-default lookback state. Feed rows and map markers share the selected event state.
 
 ## Editorial API slice
 

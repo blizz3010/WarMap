@@ -1,11 +1,12 @@
 import { categories, eventTypes, events as fallbackEvents, regions } from "./data.js";
 
 const PUBLICATION_MODES = new Set(["all", "published", "review"]);
+const LOOKBACK_WINDOWS = new Set(["1h", "6h", "24h", "7d", "30d", "90d", "180d", "all"]);
 const params = new URLSearchParams(window.location.search);
 const state = {
   regionId: initialRegionId(),
-  lookback: params.get("lookback") || "30d",
-  publication: PUBLICATION_MODES.has(params.get("publication")) ? params.get("publication") : "all",
+  lookback: normalizeEmbedLookback(params.get("lookback")),
+  publication: normalizeEmbedPublication(params.get("publication")),
   selectedEventId: null,
   events: []
 };
@@ -166,7 +167,7 @@ function selectEvent(eventId, panTo) {
 
 function updateChrome(count) {
   els.count.textContent = `${count.toLocaleString()} ${state.publication === "published" ? "published" : "live"} events`;
-  els.mapLink.href = `/?region=${encodeURIComponent(state.regionId)}`;
+  els.mapLink.href = fullMapLink();
   els.mapLink.textContent = currentRegion().name;
 }
 
@@ -260,6 +261,27 @@ function writeEmbedUrl() {
   next.set("lookback", state.lookback);
   next.set("publication", state.publication);
   history.replaceState(null, "", `${window.location.pathname}?${next.toString()}`);
+}
+
+function fullMapLink() {
+  const query = new URLSearchParams({ region: state.regionId });
+  if (state.lookback !== "30d") {
+    query.set("lookback", state.lookback);
+  }
+  if (state.publication !== "all") {
+    query.set("publication", state.publication);
+  }
+  return `/?${query.toString()}`;
+}
+
+function normalizeEmbedPublication(value) {
+  const publication = String(value ?? "all").toLowerCase();
+  return PUBLICATION_MODES.has(publication) ? publication : "all";
+}
+
+function normalizeEmbedLookback(value) {
+  const lookback = String(value ?? "30d").toLowerCase();
+  return LOOKBACK_WINDOWS.has(lookback) ? lookback : "30d";
 }
 
 function formatDate(value) {
