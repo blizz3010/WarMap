@@ -237,15 +237,17 @@ function toSourceRegistryResource(source) {
 function filteredResources(events = [], context = {}) {
   const id = String(context.query?.id ?? context.query?.slug ?? "").trim();
   const category = String(context.query?.category ?? "").trim();
+  const eventType = String(context.query?.eventType ?? "").trim();
   const severity = String(context.query?.severity ?? "").trim();
   const sourceType = String(context.query?.sourceType ?? "").trim();
 
   return events.filter((event) => {
     const idMatch = !id || event.id === id || event.slug === id;
     const categoryMatch = !category || event.category === category;
+    const eventTypeMatch = !eventType || eventTypeId(event) === eventType;
     const severityMatch = !severity || event.severity === severity;
     const sourceMatch = !sourceType || event.sources?.some((source) => source.type === sourceType);
-    return idMatch && categoryMatch && severityMatch && sourceMatch;
+    return idMatch && categoryMatch && eventTypeMatch && severityMatch && sourceMatch;
   });
 }
 
@@ -255,6 +257,7 @@ function toEventResource(event, context) {
     slug: event.slug,
     title: event.title,
     summary: event.summary,
+    eventType: eventTypeId(event) || null,
     category: event.category,
     severity: event.severity,
     verification: event.verification,
@@ -305,6 +308,7 @@ function toFeedItem(event, context) {
     place: event.place,
     province: event.province,
     country: event.country,
+    eventType: eventTypeId(event) || null,
     category: event.category,
     severity: event.severity,
     verification: event.verification,
@@ -322,6 +326,7 @@ function toTimelineItem(event, context) {
     id: event.id,
     title: event.title,
     place: event.place,
+    eventType: eventTypeId(event) || null,
     category: event.category,
     severity: event.severity,
     firstSeenAt: event.firstSeenAt,
@@ -372,7 +377,7 @@ function collectionLinks(context) {
 function versionedPath(name, context) {
   const params = new URLSearchParams();
   const query = context.query ?? {};
-  ["region", "lookback", "publication", "q", "category", "severity", "sourceType"].forEach((key) => {
+  ["region", "lookback", "publication", "q", "category", "eventType", "severity", "sourceType"].forEach((key) => {
     if (query[key]) {
       params.set(key, query[key]);
     }
@@ -400,6 +405,7 @@ function buildMeta(meta = {}, context = {}, returnedEvents = 0) {
 function searchFacets(events) {
   return {
     categories: countBy(events, (event) => event.category),
+    eventTypes: countBy(events, (event) => eventTypeId(event)),
     severities: countBy(events, (event) => event.severity),
     sourceTypes: countBy(events.flatMap((event) => event.sources ?? []), (source) => source.type)
   };
@@ -412,12 +418,17 @@ function searchableText(event) {
     event.place,
     event.province,
     event.country,
+    eventTypeId(event),
     event.category,
     event.severity,
     ...(event.sources ?? []).map((source) => `${source.name} ${source.type}`)
   ]
     .join(" ")
     .toLowerCase();
+}
+
+function eventTypeId(event) {
+  return event.extraction?.eventType ?? event.eventType ?? "";
 }
 
 function countBy(items, getter) {
