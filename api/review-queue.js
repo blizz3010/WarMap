@@ -38,11 +38,17 @@ export default async function handler(request, response) {
       throw new Error(collection.upstreamErrors.join("; "));
     }
 
-    const queue = reviewQueueFromEvents(scopedEvents);
+    const filters = {
+      status: request.query?.status,
+      assignee: request.query?.assignee,
+      priority: request.query?.priority
+    };
+    const queue = reviewQueueFromEvents(scopedEvents, filters);
     response.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=300");
     response.status(200).json({
       candidates: queue.candidates,
       summary: queue.summary,
+      filters: queue.filters,
       meta: {
         generatedAt: generatedAt.toISOString(),
         region,
@@ -59,6 +65,7 @@ export default async function handler(request, response) {
         officialFeeds: collection.officialFeeds,
         socialApiSources: collection.socialApiSources,
         upstreamErrors: collection.upstreamErrors,
+        filters: queue.filters,
         verification: "editorial queue for open-web leads"
       }
     });

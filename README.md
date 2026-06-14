@@ -86,6 +86,7 @@ The embed header includes a theater selector, live/published count, source mode 
 ## Editorial API slice
 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
+- `/api/review-queue?region=ukraine-east&status=candidate&assignee=editorial-desk` returns source-linked candidates with optional status, assignee, and priority filters for desk assignment.
 - `/api/review-dossier?id=...&region=ukraine-east` returns one candidate's source evidence, AI extraction confidence, duplicate context, publication checks, and safe decision payload templates for analyst review.
 - `/api/publication-preview?id=...&region=ukraine-east` builds a non-persisted approval dry run for one queue candidate, showing the exact map/feed/detail/archive/API record that a human approval would publish.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
@@ -104,7 +105,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/archive?region=iran` returns approved events grouped by day, including approved live candidates when a review decision exists.
 - `/event?id=...&region=...` renders a public event record backed by `/api/event`.
 - `/archive?region=iran&lookback=90d` renders the public approved-event archive backed by `/api/archive`.
-- `/review?region=ukraine-east&lookback=30d` renders the standalone editorial queue backed by `/api/review-queue` and `/api/review-action`.
+- `/review?region=ukraine-east&lookback=30d` renders the standalone editorial queue backed by `/api/review-queue` and `/api/review-action`, including status/assignee/priority filters and a persisted reviewer identity for decision ownership.
 
 Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured. Until those secrets exist, the standalone review page calls `/api/review-export` after a blocked approval/correction and shows a static module that can be committed to `api/editorial-decisions.js`; committed static decisions are loaded by the same map, feed, detail, archive, and API publication path. The preview links in the review surfaces are always dry-run only: they do not approve, store, or publish an event without a reviewer action/export.
 
@@ -127,7 +128,7 @@ EDITORIAL_GITHUB_PATH=editorial/decisions.json
 EDITORIAL_REVIEW_TOKEN=long_random_reviewer_token
 ```
 
-When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. Approved/corrected snapshots are materialized back into map/feed/detail/archive/API responses even if the original live article no longer appears in the current collector window. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
+When enabled, approved/rejected/corrected/retracted decisions are loaded by `/api/events`, `/api/review-queue`, `/api/event`, and `/api/archive`. Approved/corrected snapshots are materialized back into map/feed/detail/archive/API responses even if the original live article no longer appears in the current collector window. Review decisions can include a `reviewer` value so candidates retain assignee ownership. The review UI must send `Authorization: Bearer <EDITORIAL_REVIEW_TOKEN>` or `x-editorial-token`; without that token the API returns `EDITORIAL_AUTH_NOT_CONFIGURED` or `EDITORIAL_AUTH_REQUIRED`.
 
 Use `/api/editorial-store-health` after configuring those variables on Vercel. A missing `editorial/decisions.json` file is reported as acceptable because the first approved write can create it; repo, branch, token, and malformed existing decision JSON are reported as blockers.
 
