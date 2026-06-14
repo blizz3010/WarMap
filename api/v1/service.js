@@ -1,3 +1,5 @@
+import { DEFAULT_REGION_ID } from "../news-normalizer.js";
+
 export const V1_API_VERSION = "v1";
 export const V1_SCHEMA_VERSION = "warmap.public.v1";
 
@@ -88,7 +90,7 @@ export function buildV1StreamSnapshot(payload, context = {}) {
       apiVersion: V1_API_VERSION,
       schemaVersion: V1_SCHEMA_VERSION,
       generatedAt,
-      region: payload.meta?.region ?? context.query?.region ?? "iran",
+      region: payload.meta?.region ?? context.query?.region ?? DEFAULT_REGION_ID,
       lookback: payload.meta?.lookback ?? context.query?.lookback ?? "30d",
       publication: payload.meta?.publication ?? context.query?.publication ?? "published",
       counts: {
@@ -352,7 +354,7 @@ function visibleSources(event) {
 }
 
 function eventLinks(event, context) {
-  const region = context.query?.region ?? context.meta?.region ?? "iran";
+  const region = context.query?.region ?? context.meta?.region ?? DEFAULT_REGION_ID;
   const lookback = context.query?.lookback ?? context.meta?.lookback ?? "30d";
   const encodedId = encodeURIComponent(event.id);
   const query = new URLSearchParams({ id: event.id, region, lookback });
@@ -389,7 +391,7 @@ function versionedPath(name, context) {
 function buildMeta(meta = {}, context = {}, returnedEvents = 0) {
   return {
     generatedAt: meta.generatedAt ?? new Date().toISOString(),
-    region: meta.region ?? context.query?.region ?? "iran",
+    region: meta.region ?? context.query?.region ?? DEFAULT_REGION_ID,
     lookback: meta.lookback ?? context.query?.lookback ?? "30d",
     publication: meta.publication ?? context.query?.publication ?? "published",
     returnedEvents,

@@ -157,6 +157,8 @@ const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.repl
 const eventsApiSource = readFileSync(new URL("api/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const publicationServiceSource = readFileSync(new URL("api/publication-service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewQueueApiSource = readFileSync(new URL("api/review-queue.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const v1ServiceSource = readFileSync(new URL("api/v1/service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const v1StreamSource = readFileSync(new URL("api/v1/stream/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const packageConfig = JSON.parse(readFileSync(new URL("package.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 
@@ -533,7 +535,11 @@ if (!regions.some((region) => region.id === "ukraine-east")) {
 if (
   DEFAULT_REGION_ID !== "ukraine-east" ||
   !appSource.includes('? requested : "ukraine-east"') ||
-  !embedSource.includes('? requested : "ukraine-east"')
+  !embedSource.includes('? requested : "ukraine-east"') ||
+  !v1ServiceSource.includes("DEFAULT_REGION_ID") ||
+  !v1StreamSource.includes("DEFAULT_REGION_ID") ||
+  v1ServiceSource.includes('?? "iran"') ||
+  v1StreamSource.includes('?? "iran"')
 ) {
   throw new Error("Default theater should open on eastern Ukraine unless a region query is provided");
 }
