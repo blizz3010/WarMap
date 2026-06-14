@@ -184,6 +184,17 @@ if (
   throw new Error("Expected the main filter rail to support granular event-type filters");
 }
 
+if (
+  !indexPageSource.includes('id="publicationMode"') ||
+  !appSource.includes("publicationMode: initialPublicationMode()") ||
+  !appSource.includes("publication: state.publicationMode") ||
+  !appSource.includes("function initialPublicationMode()") ||
+  !appSource.includes("function normalizePublicationMode(value)") ||
+  !appSource.includes("appendPublicationParam(params)")
+) {
+  throw new Error("Expected the main map/feed to support all/review/published publication modes");
+}
+
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
   throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
 }

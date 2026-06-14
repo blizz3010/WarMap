@@ -7,7 +7,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - region selector plus one-click theater strip for Middle East and Ukraine area presets, top navigation, time/key controls, and global search
 - dense map canvas with colored incident markers and zoom-aware marker clustering
 - reverse-chronological feed synchronized with selected map events and visible original source links
-- filter rail for verification, source type, severity, category, granular event type, media, and viewport-only mode
+- filter rail for verification, publication mode, source type, severity, category, granular event type, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
 - shareable `/event?id=...&region=...` detail page with granular event type, source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, granular event types, source links, map/detail/API links, and theater filtering

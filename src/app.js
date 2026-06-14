@@ -9,10 +9,18 @@ import {
   verificationStates
 } from "./data.js";
 
+const PUBLICATION_MODES = new Set(["all", "review", "published"]);
+const PUBLICATION_MODE_LABELS = {
+  all: "All leads",
+  review: "Review queue",
+  published: "Published only"
+};
+
 const state = {
   regionId: initialRegionId(),
   selectedEventId: null,
   search: "",
+  publicationMode: initialPublicationMode(),
   verifiedOnly: false,
   officialOnly: false,
   mediaOnly: false,
@@ -75,6 +83,7 @@ const els = {
   officialOnlyToggle: document.querySelector("#officialOnlyToggle"),
   pauseStreamButton: document.querySelector("#pauseStreamButton"),
   premiumLayerList: document.querySelector("#premiumLayerList"),
+  publicationMode: document.querySelector("#publicationMode"),
   regionSelect: document.querySelector("#regionSelect"),
   resetFilters: document.querySelector("#resetFilters"),
   severityFilters: document.querySelector("#severityFilters"),
@@ -150,6 +159,10 @@ const UI_COPY = {
     reset: "Reset",
     close: "Close",
     verification: "Verification",
+    publication: "Publication",
+    publicationAll: "All leads",
+    publicationReview: "Review queue",
+    publicationPublished: "Published only",
     sourceType: "Source type",
     severity: "Severity",
     category: "Category",
@@ -507,6 +520,7 @@ init();
 
 function init() {
   state.platformConfig = PLATFORM_CONFIG_FALLBACK;
+  els.publicationMode.value = state.publicationMode;
   renderFilterControls();
   renderRegionOptions();
   renderPlatformChrome();
@@ -646,7 +660,7 @@ function renderTheaterSwitch() {
 
   els.theaterSummary.innerHTML = `
     <strong>${escapeHtml(region.name)}</strong>
-    <span>${state.events.length.toLocaleString()} loaded leads - ${escapeHtml(state.feedMeta.verification ?? "review queue")}</span>
+    <span>${state.events.length.toLocaleString()} ${escapeHtml(publicationModeLabel().toLowerCase())} - ${escapeHtml(state.feedMeta.verification ?? "review queue")}</span>
   `;
 
   els.theaterSwitch.querySelectorAll("[data-theater-region]").forEach((button) => {
@@ -715,6 +729,14 @@ function bindControls() {
   els.mediaOnlyToggle.addEventListener("change", () => {
     state.mediaOnly = els.mediaOnlyToggle.checked;
     render();
+  });
+
+  els.publicationMode.addEventListener("change", () => {
+    state.publicationMode = normalizePublicationMode(els.publicationMode.value);
+    clearInlineReviewExport();
+    render();
+    loadLiveEvents();
+    restartEventStream();
   });
 
   els.filterToggle.addEventListener("click", () => setFiltersOpen(!state.filtersOpen));
@@ -868,7 +890,7 @@ async function loadLiveEvents(options = {}) {
     const params = new URLSearchParams({
       region,
       lookback: lookbackForApi(state.timeRange),
-      publication: "all"
+      publication: state.publicationMode
     });
     const response = await fetch(`/api/events?${params.toString()}`, {
       headers: { Accept: "application/json" }
@@ -888,6 +910,7 @@ async function loadLiveEvents(options = {}) {
     state.streamLastRefreshAt = Date.now();
     state.feedMeta = payload.meta ?? {
       source: "Live open-web feed",
+      publication: state.publicationMode,
       verification: "open-web leads, not confirmed incidents"
     };
     if (preserveSelection && previousSelectedId && payload.events.some((item) => item.id === previousSelectedId)) {
@@ -911,8 +934,8 @@ async function loadLiveEvents(options = {}) {
     selectHashEventIfAvailable(false);
     updateStreamStatusLabel(
       payload.events.length > 0
-        ? `${reason === "stream" ? "Stream refresh" : "Live open-web feed"} - ${payload.events.length} leads / ${rangeLabel(state.timeRange)}`
-        : `No live leads in ${rangeLabel(state.timeRange)}`
+        ? `${reason === "stream" ? "Stream refresh" : "Live open-web feed"} - ${payload.events.length} ${publicationModeLabel(state.publicationMode).toLowerCase()} / ${rangeLabel(state.timeRange)}`
+        : `No ${publicationModeLabel(state.publicationMode).toLowerCase()} in ${rangeLabel(state.timeRange)}`
     );
   } catch (error) {
     if (requestId !== liveRequestId) {
@@ -925,6 +948,7 @@ async function loadLiveEvents(options = {}) {
     state.events = fallbackEvents;
     state.feedMeta = {
       source: "Prototype data",
+      publication: state.publicationMode,
       verification: "live feed unavailable",
       error: error instanceof Error ? error.message : "Unknown live feed error"
     };
@@ -1117,7 +1141,7 @@ function eventStreamUrl() {
   const params = new URLSearchParams({
     region: state.regionId,
     lookback: lookbackForApi(state.timeRange),
-    publication: "all"
+    publication: state.publicationMode
   });
   return `/v1/stream/events?${params.toString()}`;
 }
@@ -1357,7 +1381,7 @@ function focusCluster(clusterEvents) {
 
 function renderFeed(visible) {
   if (!visible.length) {
-    els.feedList.innerHTML = `<p class="empty-state">No events match this time range and filter set.</p>`;
+    els.feedList.innerHTML = `<p class="empty-state">No ${escapeHtml(publicationModeLabel().toLowerCase())} match this time range and filter set.</p>`;
     return;
   }
 
@@ -2379,6 +2403,7 @@ function resetFilters() {
   state.mediaOnly = false;
   state.viewportOnly = false;
   state.timeRange = "30d";
+  state.publicationMode = "all";
   resetFilterSets();
   els.globalSearch.value = "";
   els.verifiedOnlyToggle.checked = false;
@@ -2386,6 +2411,7 @@ function resetFilters() {
   els.mediaOnlyToggle.checked = false;
   els.viewportOnlyToggle.checked = false;
   els.timeRange.value = state.timeRange;
+  els.publicationMode.value = state.publicationMode;
   document.querySelectorAll("[data-filter-kind]").forEach((input) => {
     input.checked = true;
   });
@@ -2505,11 +2531,15 @@ function renderLocalizedShellCopy() {
   setText("#closeFilters", uiCopy("close"));
   const filterSections = els.filterRail.querySelectorAll(".filter-section");
   setNodeText(filterSections[0]?.querySelector("h3"), uiCopy("verification"));
-  setNodeText(filterSections[1]?.querySelector("h3"), uiCopy("sourceType"));
-  setNodeText(filterSections[2]?.querySelector("h3"), uiCopy("severity"));
-  setNodeText(filterSections[3]?.querySelector("h3"), uiCopy("category"));
-  setNodeText(filterSections[4]?.querySelector("h3"), uiCopy("eventTypes"));
-  setNodeText(filterSections[5]?.querySelector("h3"), uiCopy("dateRange"));
+  setNodeText(filterSections[1]?.querySelector("h3"), uiCopy("publication"));
+  setNodeText(filterSections[2]?.querySelector("h3"), uiCopy("sourceType"));
+  setNodeText(filterSections[3]?.querySelector("h3"), uiCopy("severity"));
+  setNodeText(filterSections[4]?.querySelector("h3"), uiCopy("category"));
+  setNodeText(filterSections[5]?.querySelector("h3"), uiCopy("eventTypes"));
+  setNodeText(filterSections[6]?.querySelector("h3"), uiCopy("dateRange"));
+  setNodeText(els.publicationMode?.querySelector('option[value="all"]'), uiCopy("publicationAll"));
+  setNodeText(els.publicationMode?.querySelector('option[value="review"]'), uiCopy("publicationReview"));
+  setNodeText(els.publicationMode?.querySelector('option[value="published"]'), uiCopy("publicationPublished"));
   setInputLabelText(els.viewportOnlyToggle, uiCopy("viewportOnly"));
   setText("#locateRegion", uiCopy("aim"));
   setText("#fitEvents", uiCopy("fit"));
@@ -2797,6 +2827,11 @@ function initialRegionId() {
   return regions.some((region) => region.id === requested) ? requested : "iran";
 }
 
+function initialPublicationMode() {
+  const params = new URLSearchParams(window.location.search);
+  return normalizePublicationMode(params.get("publication"));
+}
+
 function focusGeoJsonForRegion(regionId) {
   if (String(regionId).startsWith("ukraine") || regionId === "black-sea") {
     return FOCUS_GEOJSON_BY_FAMILY.ukraine;
@@ -2964,6 +2999,15 @@ function lookbackForApi(range) {
   return ["1h", "6h", "24h", "7d", "30d", "90d"].includes(range) ? range : "30d";
 }
 
+function normalizePublicationMode(value) {
+  const mode = String(value ?? "all").toLowerCase();
+  return PUBLICATION_MODES.has(mode) ? mode : "all";
+}
+
+function publicationModeLabel(mode = state.publicationMode) {
+  return PUBLICATION_MODE_LABELS[normalizePublicationMode(mode)] ?? PUBLICATION_MODE_LABELS.all;
+}
+
 function rangeLabel(range) {
   const labels = {
     "1h": "1h",
@@ -3020,6 +3064,7 @@ function escapeAttr(value) {
 
 function eventHashLink(item) {
   const params = new URLSearchParams({ region: state.regionId });
+  appendPublicationParam(params);
   return `/?${params.toString()}#event=${encodeURIComponent(item.id)}`;
 }
 
@@ -3029,6 +3074,7 @@ function eventPageLink(item) {
     region: state.regionId,
     lookback: lookbackForApi(state.timeRange)
   });
+  appendPublicationParam(params);
   return `/event?${params.toString()}`;
 }
 
@@ -3038,6 +3084,7 @@ function eventApiLink(item) {
     region: state.regionId,
     lookback: lookbackForApi(state.timeRange)
   });
+  appendPublicationParam(params);
   return `/api/event?${params.toString()}`;
 }
 
@@ -3088,6 +3135,12 @@ function archivePageLink() {
     lookback: lookbackForApi(state.timeRange)
   });
   return `/archive?${params.toString()}`;
+}
+
+function appendPublicationParam(params) {
+  if (state.publicationMode !== "all") {
+    params.set("publication", state.publicationMode);
+  }
 }
 
 function syncEventHash(eventId) {
