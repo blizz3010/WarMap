@@ -1,4 +1,5 @@
 import { loadEventCollection, queryWithDefaults, rejectNonGet } from "../adapter.js";
+import { DEFAULT_REGION_ID } from "../../news-normalizer.js";
 import { buildV1StreamSnapshot, formatServerSentEvent } from "../service.js";
 
 export default async function handler(request, response) {
@@ -28,7 +29,7 @@ export default async function handler(request, response) {
         events: [],
         meta: {
           generatedAt: new Date().toISOString(),
-          region: query.region ?? "iran",
+          region: query.region ?? DEFAULT_REGION_ID,
           lookback: query.lookback ?? "30d",
           publication: query.publication,
           upstreamErrors: [error instanceof Error ? error.message : "Unknown upstream error"]
