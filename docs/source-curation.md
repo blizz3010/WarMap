@@ -28,6 +28,7 @@ Active sources are defined in `api/source-registry.js` and exposed through `/api
 - Planned collectors: official-site adapters for Ukraine Ministry of Defence, State Emergency Service of Ukraine, Russian Defence Ministry claim labeling, and a licensed Liveuamap API integration.
 - Activation profiles: `/api/source-curation` now returns per-source requirements before activation, including licensed-API terms, official-site adapter requirements, social/API token redaction, and review policy labels.
 - Health checks: active GDELT/RSS/official-feed sources, configured official XML feeds, and configured compliant social APIs are probed read-only; planned official-site and licensed Liveuamap entries are listed but not fetched. `/api/source-health` keeps `ready` strict while adding `operational`, `degraded`, and `resilience.state` so retryable source timeouts are visible without being confused with missing configuration or hard parser failures.
+- Intake storage checks: `/api/intake-store-health` verifies optional cron candidate snapshot storage without writing, and treats a missing GitHub snapshot file as acceptable because the first configured cron run can create it.
 - Social/API sources remain opt-in through `COMPLIANT_SOCIAL_API_SOURCES`; only add endpoints whose terms permit automated use.
 
 ## Activation checklist
