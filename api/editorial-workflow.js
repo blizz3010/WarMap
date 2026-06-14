@@ -140,7 +140,8 @@ function normalizeQueueFilters(filters = {}) {
   return {
     status: cleanFilter(filters.status),
     assignee: cleanFilter(filters.assignee),
-    priority: cleanFilter(filters.priority)
+    priority: cleanFilter(filters.priority),
+    duplicateKey: cleanFilter(filters.duplicateKey)
   };
 }
 
@@ -152,6 +153,9 @@ function matchesQueueFilters(event, filters) {
     return false;
   }
   if (filters.assignee && filters.assignee !== "all" && normalizeAssignee(event.review.assignee) !== filters.assignee) {
+    return false;
+  }
+  if (filters.duplicateKey && filters.duplicateKey !== "all" && event.review.duplicateKey !== filters.duplicateKey) {
     return false;
   }
   return true;

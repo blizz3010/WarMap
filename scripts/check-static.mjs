@@ -276,9 +276,14 @@ if (
   !reviewPageSource.includes("/api/editorial-status") ||
   !reviewPageSource.includes("/api/source-health?") ||
   !reviewPageSource.includes("/api/publication-preview?") ||
+  !reviewPageSource.includes("data-review-duplicate-key") ||
+  !reviewPageSource.includes("function duplicateGroupOptions(summary") ||
+  !reviewPageSource.includes("function reviewFilterHref(overrides") ||
   !reviewPageSource.includes("function renderDuplicateGroups(summary") ||
   !reviewPageSource.includes("function renderDuplicateDetail(review)") ||
-  !stylesSource.includes(".review-duplicate-list")
+  !reviewQueueApiSource.includes("duplicateKey: request.query?.duplicateKey") ||
+  !stylesSource.includes(".review-duplicate-list") ||
+  !stylesSource.includes(".review-duplicate-list a")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
 }
@@ -1848,6 +1853,9 @@ if (
 
 const queue = reviewQueueFromEvents(events);
 const duplicateSampleQueue = reviewQueueFromEvents([sampleUkraineEvents[0], duplicateUkraineCandidate]);
+const duplicateFilteredSampleQueue = reviewQueueFromEvents([sampleUkraineEvents[0], duplicateUkraineCandidate], {
+  duplicateKey: sampleUkraineEvents[0].review.duplicateKey
+});
 const filteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {
   status: "candidate",
   assignee: "editorial-desk"
@@ -1860,6 +1868,14 @@ if (
   !duplicateSampleQueue.summary.duplicateGroups?.[0]?.eventIds?.includes(duplicateUkraineCandidate.id)
 ) {
   throw new Error("Review queue duplicate grouping failed duplicate-key summary checks");
+}
+if (
+  duplicateFilteredSampleQueue.candidates.length !== 2 ||
+  duplicateFilteredSampleQueue.filters.duplicateKey !== sampleUkraineEvents[0].review.duplicateKey ||
+  duplicateFilteredSampleQueue.summary.filteredDuplicateGroupCount !== 1 ||
+  duplicateFilteredSampleQueue.summary.filteredDuplicateCandidateCount !== 2
+) {
+  throw new Error("Review queue duplicate-key filter failed grouped candidate checks");
 }
 if (
   filteredSampleQueue.candidates.length !== 1 ||
@@ -1877,6 +1893,13 @@ const emptyFilteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {
 });
 if (emptyFilteredSampleQueue.candidates.length !== 0 || emptyFilteredSampleQueue.summary.filteredQueueDepth !== 0) {
   throw new Error("Review queue filters failed empty status filtering");
+}
+
+const emptyDuplicateFilteredSampleQueue = reviewQueueFromEvents([sampleUkraineEvents[0], duplicateUkraineCandidate], {
+  duplicateKey: "missing-duplicate-key"
+});
+if (emptyDuplicateFilteredSampleQueue.candidates.length !== 0 || emptyDuplicateFilteredSampleQueue.summary.filteredQueueDepth !== 0) {
+  throw new Error("Review queue duplicate-key filter failed empty group filtering");
 }
 
 const published = publishedEventsFromEvents(events);
