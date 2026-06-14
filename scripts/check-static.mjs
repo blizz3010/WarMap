@@ -352,11 +352,16 @@ if (
   !sourcesPageSource.includes("/api/source-health?") ||
   !sourcesPageSource.includes("function renderSourcesPage()") ||
   !sourcesPageSource.includes("function renderBacklogSource(source)") ||
+  !sourcesPageSource.includes("function renderActivationTemplates(templates)") ||
+  !sourcesPageSource.includes("data-copy-source-template") ||
+  !sourcesPageSource.includes("data-copy-source-command") ||
   !sourcesPageSource.includes("function renderHealthDiagnostics(health)") ||
   !sourcesPageSource.includes("liveuamapCompatibleModel") ||
   !sourcesPageSource.includes("data-sources-region") ||
   !sourcesPageSource.includes("/readiness?") ||
   !stylesSource.includes(".source-registry-list") ||
+  !stylesSource.includes(".source-template-list") ||
+  !stylesSource.includes(".source-template-json") ||
   !stylesSource.includes(".source-health-list") ||
   !stylesSource.includes(".source-link-list")
 ) {
@@ -528,6 +533,7 @@ const ukraineCuration = buildSourceCurationPayload({
   region: "ukraine-east",
   now: new Date("2026-05-28T02:03:00Z")
 });
+const ukraineActivationTemplates = ukraineCuration.sourceRegistry.activationBacklog?.templates ?? [];
 if (
   ukraineCuration.kind !== "SourceCuration" ||
   !ukraineCuration.activationChecks.some((check) => check.id === "permission") ||
@@ -538,6 +544,10 @@ if (
   !ukraineCuration.sourceRegistry.activationBacklog?.summary?.sourceIds?.includes("ukraine-mod-news") ||
   !ukraineCuration.sourceRegistry.activationBacklog?.byCollector?.some((group) => group.collector === "official-site" && group.sourceIds.includes("ukraine-mod-news")) ||
   !ukraineCuration.sourceRegistry.activationBacklog?.sources?.some((source) => source.id === "liveuamap-api" && source.nextAction.includes("licensed-api adapter")) ||
+  !ukraineActivationTemplates.some((template) => template.sourceId === "ukraine-mod-news" && template.env === "OFFICIAL_SITE_SOURCES" && template.command === "vercel env add OFFICIAL_SITE_SOURCES production" && template.json.includes('"includePatterns"')) ||
+  !ukraineActivationTemplates.some((template) => template.sourceId === "official-sites" && template.env === "OFFICIAL_FEED_SOURCES" && template.json.includes('"feedFormat"')) ||
+  !ukraineActivationTemplates.some((template) => template.sourceId === "compliant-social-apis" && template.env === "COMPLIANT_SOCIAL_API_SOURCES" && template.tokenCommand === "vercel env add ALLOWED_OSINT_API_TOKEN production") ||
+  !ukraineActivationTemplates.some((template) => template.sourceId === "liveuamap-api" && template.licenseRequired && !template.command && template.reviewPolicy === "license-and-attribution-review" && template.note.includes("Do not scrape public map pages")) ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api" && source.activation?.requiredBeforeActivation?.some((item) => item.includes("licensed-api adapter"))) ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "russia-mod-en" && source.activation?.reviewPolicy === "claim-label-required") ||
   !ukraineCuration.readiness.canPublishFromCollectors ||
