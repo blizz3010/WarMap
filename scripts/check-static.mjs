@@ -37,6 +37,7 @@ import { buildReviewDossierFromCandidates } from "../api/review-dossier-service.
 import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import { buildSourceHealthPayload } from "../api/source-health.js";
+import { buildStorageReadinessPayload, STORAGE_SCHEMA_VERSION } from "../api/storage-readiness.js";
 import { applyReviewExportText, renderStaticEditorialDecisionModule } from "./apply-review-export.mjs";
 import {
   buildV1EventsPayload,
@@ -100,6 +101,7 @@ const requiredFiles = [
   "api/review-queue.js",
   "api/source-curation.js",
   "api/source-health.js",
+  "api/storage-readiness.js",
   "api/source-registry.js",
   "api/v1/adapter.js",
   "api/v1/config.js",
@@ -564,17 +566,22 @@ if (
   throw new Error("Source health payload failed HTTP diagnostic checks");
 }
 
-const productionReadiness = await withTemporaryEditorialEnvAsync(async () => {
-  process.env.VERCEL = "1";
-  process.env.EDITORIAL_STORE_PROVIDER = "";
-  delete process.env.EDITORIAL_GITHUB_TOKEN;
-  delete process.env.GITHUB_TOKEN;
-  delete process.env.EDITORIAL_REVIEW_TOKEN;
-  return buildProductionReadinessPayload({
-    region: "ukraine-east",
-    now: new Date("2026-05-28T02:04:00Z")
-  });
-});
+const productionReadiness = await withTemporaryStorageEnvAsync(async () =>
+  withTemporaryEditorialEnvAsync(async () => {
+    process.env.VERCEL = "1";
+    process.env.EDITORIAL_STORE_PROVIDER = "";
+    delete process.env.EDITORIAL_GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.EDITORIAL_REVIEW_TOKEN;
+    delete process.env.DATABASE_URL;
+    delete process.env.POSTGRES_URL;
+    delete process.env.WARMAP_STORAGE_SCHEMA_VERSION;
+    return buildProductionReadinessPayload({
+      region: "ukraine-east",
+      now: new Date("2026-05-28T02:04:00Z")
+    });
+  })
+);
 if (
   productionReadiness.kind !== "ProductionReadiness" ||
   productionReadiness.ready ||
@@ -585,6 +592,9 @@ if (
   productionReadiness.sections.ingestion.ready ||
   productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||
   productionReadiness.sections.ingestion.cron !== "/api/cron/ingest" ||
+  productionReadiness.sections.storage.endpoint !== "/api/storage-readiness" ||
+  productionReadiness.sections.storage.ready ||
+  !productionReadiness.blockers.some((blocker) => blocker.id === "postgres-event-store" && blocker.status === "missing") ||
   productionReadiness.sections.publication.status !== "/api/publication-status" ||
   !Array.isArray(productionReadiness.sections.publication.surfaces) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ingestion-cron-secret" && blocker.status === "missing") ||
@@ -594,6 +604,34 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned")
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
+}
+
+const missingStorageReadiness = buildStorageReadinessPayload({
+  env: {},
+  now: new Date("2026-05-28T02:04:10Z")
+});
+const configuredStorageReadiness = buildStorageReadinessPayload({
+  env: {
+    DATABASE_URL: "postgres://warmap:supersecret-password@db.example.test:5432/warmap",
+    WARMAP_STORAGE_SCHEMA_VERSION: STORAGE_SCHEMA_VERSION,
+    PGSSLMODE: "require"
+  },
+  now: new Date("2026-05-28T02:04:15Z")
+});
+if (
+  missingStorageReadiness.kind !== "StorageReadiness" ||
+  missingStorageReadiness.ready ||
+  !missingStorageReadiness.blockers.some((blocker) => blocker.id === "postgres-event-store" && blocker.status === "missing") ||
+  configuredStorageReadiness.kind !== "StorageReadiness" ||
+  !configuredStorageReadiness.ready ||
+  configuredStorageReadiness.migration.schemaVersion !== STORAGE_SCHEMA_VERSION ||
+  !configuredStorageReadiness.migration.sql.includes("create extension if not exists postgis") ||
+  !configuredStorageReadiness.migration.sql.includes("create table if not exists warmap_events") ||
+  !configuredStorageReadiness.migration.sql.includes("warmap_events_location_gix") ||
+  !configuredStorageReadiness.tables.some((table) => table.name === "warmap_event_sources") ||
+  JSON.stringify(configuredStorageReadiness).includes("supersecret-password")
+) {
+  throw new Error("Storage readiness payload failed schema, migration, or secret-redaction checks");
 }
 
 const editorialSetup = await withTemporaryEditorialEnvAsync(async () => {
@@ -1748,6 +1786,31 @@ async function withTemporaryEditorialEnvAsync(callback) {
     "EDITORIAL_GITHUB_BRANCH",
     "EDITORIAL_GITHUB_PATH",
     "EDITORIAL_REVIEW_TOKEN"
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  try {
+    return await callback();
+  } finally {
+    keys.forEach((key) => {
+      if (previous.get(key) === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous.get(key);
+      }
+    });
+  }
+}
+
+async function withTemporaryStorageEnvAsync(callback) {
+  const keys = [
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "WARMAP_STORAGE_PROVIDER",
+    "WARMAP_STORAGE_SCHEMA",
+    "WARMAP_STORAGE_SCHEMA_VERSION",
+    "PGSSLMODE",
+    "POSTGRES_SSL_MODE"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 
