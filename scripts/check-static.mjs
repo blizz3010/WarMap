@@ -10,10 +10,14 @@ import { buildEditorialStatusPayload } from "../api/editorial-status.js";
 import {
   applyEditorialDecisions,
   authorizeEditorialRequest,
+  buildPostgresEditorialDecisionOperations,
   editorialGithubStoreHealth,
+  editorialStoreHealth,
   editorialStoreCapabilities,
   eventsFromEditorialSnapshots,
-  normalizeDecisionPayload
+  loadPostgresEditorialDecisions,
+  normalizeDecisionPayload,
+  savePostgresEditorialDecision
 } from "../api/editorial-store.js";
 import { buildEditorialSetupPayload } from "../api/editorial-setup.js";
 import {
@@ -44,7 +48,7 @@ import { buildReviewDossierFromCandidates } from "../api/review-dossier-service.
 import { buildEditorialDecisionExport } from "../api/review-export.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import { buildSourceHealthPayload } from "../api/source-health.js";
-import { buildStorageReadinessPayload, STORAGE_SCHEMA_VERSION } from "../api/storage-readiness.js";
+import { buildStorageReadinessPayload, STORAGE_SCHEMA_VERSION, STORAGE_TABLES } from "../api/storage-readiness.js";
 import { applyReviewExportText, renderStaticEditorialDecisionModule } from "./apply-review-export.mjs";
 import {
   buildV1EventsPayload,
@@ -1620,6 +1624,113 @@ withTemporaryEditorialEnv(() => {
     throw new Error("Editorial status payload failed publish-ready checks");
   }
 });
+
+await withTemporaryStorageEnvAsync(async () =>
+  withTemporaryEditorialEnvAsync(async () => {
+    process.env.VERCEL = "1";
+    process.env.EDITORIAL_STORE_PROVIDER = "postgres";
+    process.env.DATABASE_URL = "postgres://warmap:postgres-secret@db.example.test:5432/warmap";
+    process.env.WARMAP_STORAGE_SCHEMA_VERSION = STORAGE_SCHEMA_VERSION;
+    process.env.EDITORIAL_REVIEW_TOKEN = "review-secret";
+
+    const capabilities = editorialStoreCapabilities();
+    if (
+      capabilities.mode !== "postgres" ||
+      !capabilities.canWrite ||
+      !capabilities.authRequired ||
+      !capabilities.postgres?.configured ||
+      !capabilities.postgres?.databaseUrlConfigured ||
+      !capabilities.postgres?.schemaVersionConfirmed
+    ) {
+      throw new Error("Postgres editorial store capabilities are incomplete");
+    }
+
+    const status = buildEditorialStatusPayload({
+      decisions: [approvedSampleDecision],
+      now: new Date("2026-06-14T08:40:00Z")
+    });
+    if (
+      !status.readiness.publishReady ||
+      !status.store.postgres?.configured ||
+      status.store.github ||
+      !status.requiredConfiguration.some((item) => item.name === "EDITORIAL_STORE_PROVIDER=postgres" && item.configured) ||
+      !status.requiredConfiguration.some((item) => item.name === "DATABASE_URL or POSTGRES_URL" && item.configured)
+    ) {
+      throw new Error("Editorial status payload failed Postgres readiness checks");
+    }
+
+    const setup = await buildEditorialSetupPayload({
+      region: "ukraine-east",
+      now: new Date("2026-06-14T08:40:05Z")
+    });
+    if (!setup.setupTargets.some((target) => target.id === "postgres-editorial-store" && target.ready)) {
+      throw new Error("Editorial setup payload did not expose the Postgres store target");
+    }
+
+    const operations = buildPostgresEditorialDecisionOperations(approvedSampleDecision);
+    if (
+      !operations.some((operation) => operation.name === "upsert-event") ||
+      !operations.some((operation) => operation.name === "upsert-editorial-decision") ||
+      !operations.find((operation) => operation.name === "upsert-editorial-decision")?.text.includes("warmap_editorial_decisions")
+    ) {
+      throw new Error("Postgres editorial decision operations did not include event and decision upserts");
+    }
+
+    const queryLog = [];
+    const saved = await savePostgresEditorialDecision(approvedSampleDecision, {
+      queryImpl: async (text, values = []) => {
+        queryLog.push({ text, values });
+        return { rows: [] };
+      }
+    });
+    if (
+      !saved.persisted ||
+      saved.operations !== operations.length ||
+      queryLog[0]?.text !== "begin" ||
+      queryLog.at(-1)?.text !== "commit" ||
+      !queryLog.some((entry) => String(entry.text).includes("warmap_editorial_decisions"))
+    ) {
+      throw new Error("Postgres editorial decision save failed injected transaction checks");
+    }
+
+    const loaded = await loadPostgresEditorialDecisions({
+      queryImpl: async () => ({ rows: [{ payload: approvedSampleDecision }] })
+    });
+    if (loaded[0]?.id !== approvedSampleDecision.id || loaded[0]?.eventSnapshot?.id !== sampleUkraineEvents[0].id) {
+      throw new Error("Postgres editorial decisions did not load from stored payloads");
+    }
+
+    const health = await editorialStoreHealth({
+      now: new Date("2026-06-14T08:40:10Z"),
+      queryImpl: async (text) => {
+        const sql = String(text);
+        if (sql.includes("postgis_full_version")) {
+          return { rows: [{ version: "POSTGIS fixture" }] };
+        }
+        if (sql.includes("information_schema.tables")) {
+          return { rows: STORAGE_TABLES.map((table) => ({ table_name: table.name })) };
+        }
+        if (sql.includes("warmap_editorial_decisions")) {
+          return { rows: [{ decision_count: 1 }] };
+        }
+        return { rows: [{ ok: 1 }] };
+      }
+    });
+    if (
+      !health.ready ||
+      health.mode !== "postgres" ||
+      health.store.provider !== "postgres" ||
+      health.checks.find((check) => check.id === "editorial-decisions-table")?.decisionCount !== 1 ||
+      !health.eventStore?.ready
+    ) {
+      throw new Error("Postgres editorial store health failed read-only checks");
+    }
+
+    if (JSON.stringify({ status, setup, health }).includes("postgres-secret") || JSON.stringify(health).includes("review-secret")) {
+      throw new Error("Postgres editorial status or health leaked configured secrets");
+    }
+  })
+);
 
 await withTemporaryEditorialEnvAsync(async () => {
   process.env.EDITORIAL_STORE_PROVIDER = "github";

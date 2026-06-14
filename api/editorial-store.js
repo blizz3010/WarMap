@@ -1,6 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STATIC_EDITORIAL_DECISIONS } from "./editorial-decisions.js";
+import {
+  buildCandidateEventStoreOperations,
+  eventStoreCapabilities,
+  eventStoreHealth,
+  postgresQueryForEnv,
+  runEventStoreTransaction,
+  runPostgresOperationTransaction,
+  serializeEventForStore
+} from "./event-store.js";
+import { STORAGE_SCHEMA_VERSION } from "./storage-readiness.js";
 
 export const EDITORIAL_ACTIONS = new Set([
   "approve",
@@ -17,10 +27,28 @@ const GITHUB_API_VERSION = "2022-11-28";
 const memoryDecisions = [];
 const defaultStorePath = join(process.cwd(), ".data", "editorial-decisions.json");
 
-export function editorialStoreCapabilities() {
-  const hasToken = Boolean(process.env.EDITORIAL_REVIEW_TOKEN);
-  const isVercel = Boolean(process.env.VERCEL);
-  const githubStore = githubStoreConfig();
+export function editorialStoreCapabilities({ env = process.env, now = new Date() } = {}) {
+  const hasToken = Boolean(env.EDITORIAL_REVIEW_TOKEN);
+  const isVercel = Boolean(env.VERCEL);
+  const postgresStore = postgresStoreConfig({ env, now });
+  if (postgresStore) {
+    return {
+      mode: postgresStore.configured ? "postgres" : "postgres-unconfigured",
+      canWrite: postgresStore.configured,
+      authRequired: true,
+      tokenConfigured: hasToken,
+      storePath: null,
+      postgres: {
+        configured: postgresStore.configured,
+        databaseUrlConfigured: postgresStore.capabilities.databaseUrlConfigured,
+        schemaVersionConfirmed: postgresStore.capabilities.schemaVersionConfirmed,
+        schemaVersion: STORAGE_SCHEMA_VERSION,
+        healthEndpoint: postgresStore.capabilities.endpoint
+      }
+    };
+  }
+
+  const githubStore = githubStoreConfig(env);
   if (githubStore) {
     return {
       mode: githubStore.configured ? "github-contents" : "github-contents-unconfigured",
@@ -48,9 +76,19 @@ export function editorialStoreCapabilities() {
   };
 }
 
+export async function editorialStoreHealth(context = {}) {
+  const env = context.env ?? process.env;
+  const capabilities = editorialStoreCapabilities({ env, now: context.now ?? new Date() });
+  if (capabilities.mode === "postgres" || capabilities.mode === "postgres-unconfigured") {
+    return editorialPostgresStoreHealth({ ...context, env });
+  }
+  return editorialGithubStoreHealth({ ...context, env });
+}
+
 export async function editorialGithubStoreHealth(context = {}) {
-  const githubStore = githubStoreConfig();
-  const capabilities = editorialStoreCapabilities();
+  const env = context.env ?? process.env;
+  const githubStore = githubStoreConfig(env);
+  const capabilities = editorialStoreCapabilities({ env, now: context.now ?? new Date() });
   const checks = [
     healthCheck(
       "provider",
@@ -88,9 +126,9 @@ export async function editorialGithubStoreHealth(context = {}) {
     ),
     healthCheck(
       "review-token",
-      Boolean(process.env.EDITORIAL_REVIEW_TOKEN),
-      process.env.EDITORIAL_REVIEW_TOKEN ? "configured" : "missing",
-      process.env.EDITORIAL_REVIEW_TOKEN
+      Boolean(env.EDITORIAL_REVIEW_TOKEN),
+      env.EDITORIAL_REVIEW_TOKEN ? "configured" : "missing",
+      env.EDITORIAL_REVIEW_TOKEN
         ? "Reviewer token is configured."
         : "Set EDITORIAL_REVIEW_TOKEN before accepting production review actions."
     )
@@ -108,7 +146,7 @@ export async function editorialGithubStoreHealth(context = {}) {
       path: githubStore?.path ?? "",
       configured: Boolean(githubStore?.configured),
       tokenConfigured: Boolean(githubStore?.token),
-      reviewTokenConfigured: Boolean(process.env.EDITORIAL_REVIEW_TOKEN)
+      reviewTokenConfigured: Boolean(env.EDITORIAL_REVIEW_TOKEN)
     },
     checks
   };
@@ -211,6 +249,90 @@ export async function editorialGithubStoreHealth(context = {}) {
   return finalizeEditorialStoreHealth(health);
 }
 
+async function editorialPostgresStoreHealth({ env = process.env, now = new Date(), queryImpl } = {}) {
+  const capabilities = editorialStoreCapabilities({ env, now });
+  const postgresStore = postgresStoreConfig({ env, now });
+  const checks = [
+    healthCheck(
+      "provider",
+      Boolean(postgresStore),
+      postgresStore ? "configured" : "missing",
+      postgresStore
+        ? "EDITORIAL_STORE_PROVIDER is set to postgres."
+        : "Set EDITORIAL_STORE_PROVIDER=postgres before using the Postgres editorial store."
+    ),
+    healthCheck(
+      "review-token",
+      Boolean(env.EDITORIAL_REVIEW_TOKEN),
+      env.EDITORIAL_REVIEW_TOKEN ? "configured" : "missing",
+      env.EDITORIAL_REVIEW_TOKEN
+        ? "Reviewer token is configured."
+        : "Set EDITORIAL_REVIEW_TOKEN before accepting production review actions."
+    )
+  ];
+  const storeHealth = await eventStoreHealth({ env, now, queryImpl });
+  checks.push(
+    ...storeHealth.checks.map((check) => ({
+      ...check,
+      id: `event-store-${check.id}`
+    }))
+  );
+
+  const health = {
+    kind: "EditorialStoreHealth",
+    generatedAt: now.toISOString(),
+    ready: false,
+    mode: capabilities.mode,
+    store: {
+      provider: "postgres",
+      configured: Boolean(postgresStore?.configured),
+      databaseUrlConfigured: Boolean(postgresStore?.capabilities.databaseUrlConfigured),
+      schemaVersionConfirmed: Boolean(postgresStore?.capabilities.schemaVersionConfirmed),
+      schemaVersion: STORAGE_SCHEMA_VERSION,
+      reviewTokenConfigured: Boolean(env.EDITORIAL_REVIEW_TOKEN)
+    },
+    eventStore: {
+      ready: storeHealth.ready,
+      endpoint: storeHealth.capabilities?.endpoint ?? "/api/event-store-health"
+    },
+    checks
+  };
+
+  if (!storeHealth.ready) {
+    return finalizeEditorialStoreHealth(health);
+  }
+
+  const runQuery = queryImpl ?? (await postgresQueryForEnv(env, []));
+  if (!runQuery) {
+    checks.push(healthCheck("postgres-query", false, "missing", "Postgres query runner is unavailable."));
+    return finalizeEditorialStoreHealth(health);
+  }
+
+  try {
+    const result = await runQuery("select count(*)::int as decision_count from warmap_editorial_decisions", []);
+    checks.push(
+      healthCheck(
+        "editorial-decisions-table",
+        true,
+        "readable",
+        "Editorial decisions table is readable.",
+        { decisionCount: Number(firstRow(result)?.decision_count ?? 0) }
+      )
+    );
+  } catch (error) {
+    checks.push(
+      healthCheck(
+        "editorial-decisions-table",
+        false,
+        "error",
+        `Editorial decisions table check failed: ${String(error?.message ?? error)}`
+      )
+    );
+  }
+
+  return finalizeEditorialStoreHealth(health);
+}
+
 export async function loadEditorialDecisions() {
   const durableDecisions = await readDurableDecisions();
   return dedupeDecisions([
@@ -224,6 +346,16 @@ export async function loadEditorialDecisions() {
 export async function saveEditorialDecision(decision) {
   const normalized = normalizeDecision(decision);
   const capabilities = editorialStoreCapabilities();
+
+  if (capabilities.mode === "postgres") {
+    const saved = await savePostgresEditorialDecision(normalized);
+    memoryDecisions.push(normalized);
+    return {
+      decision: saved.decision,
+      persisted: saved.persisted,
+      capabilities: editorialStoreCapabilities()
+    };
+  }
 
   if (capabilities.mode === "github-contents") {
     await saveGithubDecision(normalized);
@@ -331,6 +463,64 @@ export function normalizeEditorialDecision(decision) {
   }
 
   return normalized;
+}
+
+export function buildPostgresEditorialDecisionOperations(decision) {
+  const normalized = normalizeEditorialDecision(decision);
+  const snapshot = normalized.eventSnapshot ? applyDecision(normalized.eventSnapshot, normalized) : null;
+  const storedSnapshot = snapshot ? serializeEventForStore(snapshot) : null;
+  const eventOperations = storedSnapshot ? buildCandidateEventStoreOperations([storedSnapshot]) : [];
+  const eventId = storedSnapshot?.id ?? "";
+
+  return [
+    ...eventOperations,
+    {
+      name: "upsert-editorial-decision",
+      text: `insert into warmap_editorial_decisions (id, event_id, action, reviewer, reason, created_at, payload)
+values ($1, $2, $3, $4, $5, $6::timestamptz, $7::jsonb)
+on conflict (id) do update set
+  event_id = excluded.event_id,
+  action = excluded.action,
+  reviewer = excluded.reviewer,
+  reason = excluded.reason,
+  created_at = excluded.created_at,
+  payload = excluded.payload`,
+      values: [
+        normalized.id,
+        eventId || null,
+        normalized.action,
+        normalized.reviewer,
+        normalized.notes,
+        normalized.createdAt,
+        JSON.stringify(normalized)
+      ]
+    }
+  ];
+}
+
+export async function savePostgresEditorialDecision(decision, { env = process.env, queryImpl } = {}) {
+  const normalized = normalizeEditorialDecision(decision);
+  const operations = buildPostgresEditorialDecisionOperations(normalized);
+
+  if (queryImpl) {
+    await runEventStoreTransaction(queryImpl, operations);
+    return {
+      decision: normalized,
+      persisted: true,
+      operations: operations.length
+    };
+  }
+
+  const persisted = await runPostgresOperationTransaction(env, operations);
+  if (!persisted) {
+    throw new Error("Postgres driver is unavailable; install the pg dependency before enabling editorial writes.");
+  }
+
+  return {
+    decision: normalized,
+    persisted: true,
+    operations: operations.length
+  };
 }
 
 export function authorizeEditorialRequest(request) {
@@ -573,6 +763,11 @@ function editorialStorePath() {
 }
 
 async function readDurableDecisions() {
+  const capabilities = editorialStoreCapabilities();
+  if (capabilities.mode === "postgres") {
+    return loadPostgresEditorialDecisions();
+  }
+
   const githubStore = githubStoreConfig();
   if (!githubStore?.configured) {
     return [];
@@ -581,6 +776,22 @@ async function readDurableDecisions() {
   try {
     const file = await readGithubDecisionFile(githubStore);
     return file.decisions;
+  } catch {
+    return [];
+  }
+}
+
+export async function loadPostgresEditorialDecisions({ env = process.env, queryImpl } = {}) {
+  const runQuery = queryImpl ?? (await postgresQueryForEnv(env, []));
+  if (!runQuery) {
+    return [];
+  }
+
+  try {
+    const result = await runQuery("select payload from warmap_editorial_decisions order by created_at asc", []);
+    return rowsFor(result)
+      .map((row) => parseStoredDecision(row.payload))
+      .filter(Boolean);
   } catch {
     return [];
   }
@@ -646,16 +857,30 @@ async function readGithubDecisionFile(githubStore) {
   };
 }
 
-function githubStoreConfig() {
-  const provider = clean(process.env.EDITORIAL_STORE_PROVIDER).toLowerCase();
+function postgresStoreConfig({ env = process.env, now = new Date() } = {}) {
+  const provider = clean(env.EDITORIAL_STORE_PROVIDER).toLowerCase();
+  if (provider !== "postgres") {
+    return null;
+  }
+
+  const capabilities = eventStoreCapabilities({ env, now });
+  return {
+    provider,
+    capabilities,
+    configured: capabilities.configured
+  };
+}
+
+function githubStoreConfig(env = process.env) {
+  const provider = clean(env.EDITORIAL_STORE_PROVIDER).toLowerCase();
   if (provider !== "github") {
     return null;
   }
 
-  const token = process.env.EDITORIAL_GITHUB_TOKEN || process.env.GITHUB_TOKEN || "";
-  const repo = clean(process.env.EDITORIAL_GITHUB_REPO || vercelRepoName());
-  const branch = clean(process.env.EDITORIAL_GITHUB_BRANCH || "main");
-  const path = clean(process.env.EDITORIAL_GITHUB_PATH || "editorial/decisions.json");
+  const token = env.EDITORIAL_GITHUB_TOKEN || env.GITHUB_TOKEN || "";
+  const repo = clean(env.EDITORIAL_GITHUB_REPO || vercelRepoName(env));
+  const branch = clean(env.EDITORIAL_GITHUB_BRANCH || "main");
+  const path = clean(env.EDITORIAL_GITHUB_PATH || "editorial/decisions.json");
 
   return {
     provider,
@@ -667,9 +892,9 @@ function githubStoreConfig() {
   };
 }
 
-function vercelRepoName() {
-  const owner = clean(process.env.VERCEL_GIT_REPO_OWNER);
-  const slug = clean(process.env.VERCEL_GIT_REPO_SLUG);
+function vercelRepoName(env = process.env) {
+  const owner = clean(env.VERCEL_GIT_REPO_OWNER);
+  const slug = clean(env.VERCEL_GIT_REPO_SLUG);
   return owner && slug ? `${owner}/${slug}` : "";
 }
 
@@ -716,6 +941,23 @@ function finalizeEditorialStoreHealth(health) {
     ...health,
     ready: health.checks.every((check) => check.ok)
   };
+}
+
+function rowsFor(result) {
+  return Array.isArray(result?.rows) ? result.rows : Array.isArray(result) ? result : [];
+}
+
+function firstRow(result) {
+  return rowsFor(result)[0] ?? null;
+}
+
+function parseStoredDecision(payload) {
+  try {
+    const value = typeof payload === "string" ? JSON.parse(payload) : payload;
+    return normalizeEditorialDecision(value);
+  } catch {
+    return null;
+  }
 }
 
 function dedupeDecisions(decisions) {

@@ -442,7 +442,7 @@ on conflict (event_id, document_id, role) do update set
   };
 }
 
-async function runEventStoreTransaction(runQuery, operations) {
+export async function runEventStoreTransaction(runQuery, operations) {
   await runQuery("begin", []);
   try {
     for (const operation of operations) {
@@ -455,7 +455,7 @@ async function runEventStoreTransaction(runQuery, operations) {
   }
 }
 
-async function runPostgresOperationTransaction(env, operations) {
+export async function runPostgresOperationTransaction(env, operations) {
   const connectionString = clean(env.DATABASE_URL) || clean(env.POSTGRES_URL);
   if (!connectionString) {
     return false;
@@ -488,7 +488,7 @@ async function runPostgresOperationTransaction(env, operations) {
   }
 }
 
-async function postgresQueryForEnv(env, checks = []) {
+export async function postgresQueryForEnv(env, checks = []) {
   const connectionString = clean(env.DATABASE_URL) || clean(env.POSTGRES_URL);
   if (!connectionString) {
     return null;

@@ -265,6 +265,8 @@ function storeModeLabel(mode) {
   return {
     "github-contents": "GitHub Contents",
     "github-contents-unconfigured": "GitHub missing config",
+    postgres: "Postgres",
+    "postgres-unconfigured": "Postgres missing config",
     "local-file": "Local file",
     "static-readonly": "Read only"
   }[mode] ?? titleCase(mode || "unknown");

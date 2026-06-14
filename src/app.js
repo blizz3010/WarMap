@@ -2714,6 +2714,8 @@ function storeModeLabel(mode) {
   return {
     "github-contents": "GitHub",
     "github-contents-unconfigured": "GitHub config",
+    postgres: "Postgres",
+    "postgres-unconfigured": "Postgres config",
     "local-file": "Local file",
     "static-readonly": "Read only"
   }[mode] ?? titleCase(mode || "unknown");
