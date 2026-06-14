@@ -1,4 +1,4 @@
-import { categories, events as fallbackEvents, regions } from "./data.js";
+import { categories, eventTypes, events as fallbackEvents, regions } from "./data.js";
 
 const PUBLICATION_MODES = new Set(["all", "published", "review"]);
 const params = new URLSearchParams(window.location.search);
@@ -111,13 +111,13 @@ function renderMarkers(events) {
       markers.get(event.id).getElement().classList.toggle("is-selected", event.id === state.selectedEventId);
       return;
     }
-    const category = categories[event.category] ?? categories.other;
+    const eventType = eventTypeDisplay(event);
     const node = document.createElement("button");
     node.type = "button";
     node.className = "embed-marker";
-    node.style.setProperty("--marker-color", category.color);
-    node.textContent = category.short;
-    node.title = event.title;
+    node.style.setProperty("--marker-color", eventType.color);
+    node.textContent = eventType.short;
+    node.title = `${eventType.label} - ${event.title}`;
     node.addEventListener("click", () => selectEvent(event.id, false));
     const marker = new maplibregl.Marker({ element: node, anchor: "center" })
       .setLngLat([event.location.lon, event.location.lat])
@@ -138,6 +138,7 @@ function renderFeed(events) {
         <button type="button" class="${event.id === state.selectedEventId ? "is-selected" : ""}" data-embed-event="${escapeAttr(event.id)}">
           <strong>${escapeHtml(event.timeLabel)}</strong>
           <span>${escapeHtml(event.place)}</span>
+          <small>${escapeHtml(eventTypeDisplay(event).short)}</small>
           <em>${escapeHtml(event.title)}</em>
         </button>
       `
@@ -180,6 +181,8 @@ function normalizeEvent(event) {
     title: event.title ?? "Untitled event",
     place: event.place ?? location.place ?? "Unknown",
     category: event.category ?? "other",
+    eventType: event.extraction?.eventType ?? event.eventType,
+    extraction: event.extraction ?? null,
     timeLabel: event.time?.label ?? event.timeLabel ?? formatDate(event.firstSeenAt),
     location: {
       lat: Number(location.lat),
@@ -190,6 +193,24 @@ function normalizeEvent(event) {
 
 function isMappableEvent(event) {
   return Number.isFinite(event.location.lat) && Number.isFinite(event.location.lon);
+}
+
+function eventTypeDisplay(event) {
+  const eventType = eventTypes[event.extraction?.eventType ?? event.eventType];
+  const fallbackCategory = categories[event.category] ?? categories.other;
+  if (!eventType) {
+    return {
+      label: fallbackCategory.label,
+      short: fallbackCategory.short,
+      color: fallbackCategory.color
+    };
+  }
+  const eventTypeCategory = categories[eventType.category] ?? fallbackCategory;
+  return {
+    label: eventType.label,
+    short: eventType.short,
+    color: eventTypeCategory.color
+  };
 }
 
 function fallbackEventsForRegion() {
