@@ -60,6 +60,8 @@ import {
   buildV1SearchPayload,
   buildV1StreamSnapshot,
   buildV1TimelinePayload,
+  V1_DEFAULT_LOOKBACK,
+  V1_DEFAULT_PUBLICATION,
   formatServerSentEvent
 } from "../api/v1/service.js";
 import {
@@ -2507,6 +2509,13 @@ if (v1Events.apiVersion !== "v1" || v1Events.kind !== "EventCollection" || !v1Ev
 
 if (
   v1Config.kind !== "Configuration" ||
+  v1Config.defaults?.region !== DEFAULT_REGION_ID ||
+  v1Config.defaults?.lookback !== V1_DEFAULT_LOOKBACK ||
+  v1Config.defaults?.publication !== V1_DEFAULT_PUBLICATION ||
+  v1Config.defaults?.regionName !== "Ukraine - East" ||
+  !v1Config.defaults?.links?.events.includes(`region=${DEFAULT_REGION_ID}`) ||
+  !v1Config.defaults?.links?.stream.includes(`publication=${V1_DEFAULT_PUBLICATION}`) ||
+  !v1Config.defaults?.links?.embed.startsWith("/embed?") ||
   !v1Config.regions.some((region) => region.id === "ukraine-east") ||
   !v1Config.taxonomies.categories.some((category) => category.id === "strike" && category.color) ||
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "drone" && eventType.category === "air" && eventType.color) ||

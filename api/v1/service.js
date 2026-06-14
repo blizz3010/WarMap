@@ -2,6 +2,8 @@ import { DEFAULT_REGION_ID } from "../news-normalizer.js";
 
 export const V1_API_VERSION = "v1";
 export const V1_SCHEMA_VERSION = "warmap.public.v1";
+export const V1_DEFAULT_LOOKBACK = "30d";
+export const V1_DEFAULT_PUBLICATION = "published";
 
 export function buildV1EventsPayload(payload, context = {}) {
   const events = filteredResources(payload.events, context).map((event) => toEventResource(event, context));
@@ -91,8 +93,8 @@ export function buildV1StreamSnapshot(payload, context = {}) {
       schemaVersion: V1_SCHEMA_VERSION,
       generatedAt,
       region: payload.meta?.region ?? context.query?.region ?? DEFAULT_REGION_ID,
-      lookback: payload.meta?.lookback ?? context.query?.lookback ?? "30d",
-      publication: payload.meta?.publication ?? context.query?.publication ?? "published",
+      lookback: payload.meta?.lookback ?? context.query?.lookback ?? V1_DEFAULT_LOOKBACK,
+      publication: payload.meta?.publication ?? context.query?.publication ?? V1_DEFAULT_PUBLICATION,
       counts: {
         events: events.length,
         reviewOnly: events.filter((event) => event.review?.publicationStatus === "review_only").length,
@@ -115,6 +117,7 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
     schemaVersion: V1_SCHEMA_VERSION,
     kind: "Configuration",
     generatedAt: context.generatedAt ?? new Date().toISOString(),
+    defaults: configDefaults(regions),
     regions: regions.map(toRegionResource),
     taxonomies: {
       categories: taxonomyEntries(payload.categories, (category) => ({
@@ -210,6 +213,31 @@ function toRegionResource(region) {
       events: `/v1/events?region=${encodeURIComponent(region.id)}`,
       feed: `/v1/feed?region=${encodeURIComponent(region.id)}`,
       timeline: `/v1/timeline?region=${encodeURIComponent(region.id)}`
+    }
+  };
+}
+
+function configDefaults(regions) {
+  const defaultRegion = regions.find((region) => region.id === DEFAULT_REGION_ID) ?? null;
+  const params = new URLSearchParams({
+    region: DEFAULT_REGION_ID,
+    lookback: V1_DEFAULT_LOOKBACK,
+    publication: V1_DEFAULT_PUBLICATION
+  });
+  const query = params.toString();
+  return {
+    region: DEFAULT_REGION_ID,
+    regionName: defaultRegion?.name ?? DEFAULT_REGION_ID,
+    regionGroup: defaultRegion?.group ?? "Regions",
+    lookback: V1_DEFAULT_LOOKBACK,
+    publication: V1_DEFAULT_PUBLICATION,
+    links: {
+      map: `/?region=${encodeURIComponent(DEFAULT_REGION_ID)}`,
+      embed: `/embed?${query}`,
+      events: `/v1/events?${query}`,
+      feed: `/v1/feed?${query}`,
+      timeline: `/v1/timeline?${query}`,
+      stream: `/v1/stream/events?${query}`
     }
   };
 }
@@ -355,7 +383,7 @@ function visibleSources(event) {
 
 function eventLinks(event, context) {
   const region = context.query?.region ?? context.meta?.region ?? DEFAULT_REGION_ID;
-  const lookback = context.query?.lookback ?? context.meta?.lookback ?? "30d";
+  const lookback = context.query?.lookback ?? context.meta?.lookback ?? V1_DEFAULT_LOOKBACK;
   const encodedId = encodeURIComponent(event.id);
   const query = new URLSearchParams({ id: event.id, region, lookback });
   return {
@@ -392,8 +420,8 @@ function buildMeta(meta = {}, context = {}, returnedEvents = 0) {
   return {
     generatedAt: meta.generatedAt ?? new Date().toISOString(),
     region: meta.region ?? context.query?.region ?? DEFAULT_REGION_ID,
-    lookback: meta.lookback ?? context.query?.lookback ?? "30d",
-    publication: meta.publication ?? context.query?.publication ?? "published",
+    lookback: meta.lookback ?? context.query?.lookback ?? V1_DEFAULT_LOOKBACK,
+    publication: meta.publication ?? context.query?.publication ?? V1_DEFAULT_PUBLICATION,
     returnedEvents,
     source: meta.source ?? "WarMap event pipeline",
     verification: meta.verification ?? "public event API",
