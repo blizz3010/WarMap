@@ -203,10 +203,16 @@ if (
   !appSource.includes("eventTypeDisplay(item)") ||
   !appSource.includes("event-type-pill") ||
   !appSource.includes("Event type</dt>") ||
+  !archivePageSource.includes("function eventTypeDisplay(item)") ||
+  !archivePageSource.includes("Event type</dt>") ||
   !embedSource.includes("function eventTypeDisplay(event)") ||
-  !embedSource.includes("eventTypes")
+  !embedSource.includes("eventTypes") ||
+  !eventPageSource.includes("function eventTypeDisplay(item)") ||
+  !eventPageSource.includes("Event type</dt>") ||
+  !reviewPageSource.includes("function eventTypeDisplay(item)") ||
+  !reviewPageSource.includes("Event type</dt>")
 ) {
-  throw new Error("Expected map, feed, detail, and embed surfaces to display granular event types");
+  throw new Error("Expected map, feed, detail, archive, review, and embed surfaces to display granular event types");
 }
 
 if (!archivePageSource.includes("/api/archive?") || !archivePageSource.includes("archive-sources")) {

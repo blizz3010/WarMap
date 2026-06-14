@@ -1,4 +1,4 @@
-import { categories, regions, severities, sourceTypes } from "./data.js";
+import { categories, eventTypes, regions, severities, sourceTypes } from "./data.js";
 
 const params = new URLSearchParams(window.location.search);
 const stateNode = document.querySelector("[data-review-state]");
@@ -274,6 +274,7 @@ function storeModeLabel(mode) {
 
 function renderCandidate(item) {
   const category = categories[item.category] ?? categories.other;
+  const eventType = eventTypeDisplay(item);
   const severity = severities[item.severity] ?? severities.low;
   const review = reviewInfo(item);
   return `
@@ -289,6 +290,7 @@ function renderCandidate(item) {
 
       <dl class="archive-event-meta">
         <div><dt>Place</dt><dd>${escapeHtml(item.place)}, ${escapeHtml(item.province)}</dd></div>
+        <div><dt>Event type</dt><dd><span class="event-type-pill" style="--type-color:${eventType.color}">${escapeHtml(eventType.short)} ${escapeHtml(eventType.label)}</span></dd></div>
         <div><dt>Category</dt><dd style="color:${category.color}">${escapeHtml(category.label)}</dd></div>
         <div><dt>Severity</dt><dd style="color:${severity.color}">${escapeHtml(severity.label)}</dd></div>
         <div><dt>Status</dt><dd>${escapeHtml(review.statusLabel)}</dd></div>
@@ -569,6 +571,7 @@ function reviewGateChecks(item) {
   const review = reviewInfo(item);
   const sources = item.sources ?? [];
   const extraction = item.extraction ?? {};
+  const eventType = eventTypeDisplay(item);
   const hasSourceUrl = sources.some((source) => safeUrl(source.url));
   const lat = Number(item.location?.lat);
   const lon = Number(item.location?.lon);
@@ -597,7 +600,7 @@ function reviewGateChecks(item) {
     },
     {
       label: "Extraction",
-      detail: extractionComplete ? extraction.eventType || item.category : "needs manual fields",
+      detail: extractionComplete ? eventType.label : "needs manual fields",
       done: extractionComplete,
       required: false
     },
@@ -730,6 +733,25 @@ function extractionLabel(item) {
     return "not recorded";
   }
   return `${extraction.provider ?? "local"} / ${extraction.eventType ?? item.category}`;
+}
+
+function eventTypeDisplay(item) {
+  const eventTypeId = item.extraction?.eventType ?? item.eventType;
+  const eventType = eventTypes[eventTypeId];
+  const fallbackCategory = categories[item.category] ?? categories.other;
+  if (!eventType) {
+    return {
+      label: fallbackCategory.label,
+      short: fallbackCategory.short,
+      color: fallbackCategory.color
+    };
+  }
+  const eventTypeCategory = categories[eventType.category] ?? fallbackCategory;
+  return {
+    label: eventType.label,
+    short: eventType.short,
+    color: eventTypeCategory.color
+  };
 }
 
 function regionName(regionId) {

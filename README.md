@@ -9,8 +9,8 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - reverse-chronological feed synchronized with selected map events and visible original source links
 - filter rail for verification, source type, severity, category, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
-- shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
-- public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
+- shareable `/event?id=...&region=...` detail page with granular event type, source links, review status, map return link, archive link, and API link
+- public `/archive?region=...&lookback=...` page with approved records grouped by day, granular event types, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
 - Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/intake-store-health`, `/api/storage-readiness`, `/api/event-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, review actions, static decision exports, setup readiness, durable store checks, storage schema readiness, event-store DB checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
