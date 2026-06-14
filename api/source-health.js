@@ -35,7 +35,22 @@ export async function buildSourceHealthPayload({
   const sources = [...activeChecks, ...socialChecks, ...plannedRows];
   const checked = sources.filter((source) => source.checked);
   const failed = checked.filter((source) => !source.ok);
+  const reachable = checked.filter((source) => source.ok);
+  const retryableFailures = failed.filter((source) => source.diagnostic?.retryable);
+  const hardFailures = failed.filter((source) => !source.diagnostic?.retryable);
   const missingConfig = sources.filter((source) => source.status === "missing-config");
+  const strictReady = checked.length > 0 && failed.length === 0 && missingConfig.length === 0;
+  const operational = checked.length > 0 && reachable.length > 0 && hardFailures.length === 0 && missingConfig.length === 0;
+  const degraded = operational && !strictReady;
+  const resilience = sourceResilienceSummary({
+    strictReady,
+    operational,
+    degraded,
+    reachableCount: reachable.length,
+    retryableFailureCount: retryableFailures.length,
+    hardFailureCount: hardFailures.length,
+    missingConfigurationCount: missingConfig.length
+  });
 
   return {
     kind: "SourceHealth",
@@ -43,14 +58,19 @@ export async function buildSourceHealthPayload({
     generatedAt: now.toISOString(),
     region: normalizedRegion,
     lookback: normalizedLookback,
-    ready: checked.length > 0 && failed.length === 0 && missingConfig.length === 0,
+    ready: strictReady,
+    operational,
+    degraded,
+    resilience,
     summary: {
       activeSources: activeSources.length,
       plannedSources: plannedRows.length,
       configuredSocialApis: socialSources.length,
       checkedSources: checked.length,
-      reachableSources: checked.filter((source) => source.ok).length,
+      reachableSources: reachable.length,
       failedSources: failed.length,
+      retryableFailures: retryableFailures.length,
+      hardFailures: hardFailures.length,
       missingConfiguration: missingConfig.length
     },
     families: sourceFamilies(sources),
@@ -348,6 +368,51 @@ function errorDiagnostic(error, now) {
 
 function retryableStatus(status) {
   return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function sourceResilienceSummary({
+  strictReady,
+  operational,
+  degraded,
+  reachableCount,
+  retryableFailureCount,
+  hardFailureCount,
+  missingConfigurationCount
+}) {
+  const state = strictReady ? "ready" : operational ? "degraded" : "blocked";
+  return {
+    state,
+    strictReady,
+    operational,
+    degraded,
+    minimumReachableSources: 1,
+    reachableSources: reachableCount,
+    retryableFailures: retryableFailureCount,
+    hardFailures: hardFailureCount,
+    missingConfiguration: missingConfigurationCount,
+    message: sourceResilienceMessage(state, {
+      reachableCount,
+      retryableFailureCount,
+      hardFailureCount,
+      missingConfigurationCount
+    })
+  };
+}
+
+function sourceResilienceMessage(state, counts) {
+  if (state === "ready") {
+    return "All checked active collectors are reachable.";
+  }
+  if (state === "degraded") {
+    return `${counts.reachableCount} collector(s) are reachable; ${counts.retryableFailureCount} retryable failure(s) need monitoring.`;
+  }
+  if (counts.missingConfigurationCount > 0) {
+    return "One or more configured collectors are missing required non-public configuration.";
+  }
+  if (counts.hardFailureCount > 0) {
+    return "One or more active collectors returned a non-retryable error.";
+  }
+  return "No active collector returned reachable items.";
 }
 
 function cleanDiagnosticText(value) {

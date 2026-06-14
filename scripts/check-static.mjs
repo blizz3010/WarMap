@@ -355,8 +355,13 @@ const sourceHealth = await withTemporarySourceHealthEnv(async () => {
 if (
   sourceHealth.health.kind !== "SourceHealth" ||
   !sourceHealth.health.ready ||
+  !sourceHealth.health.operational ||
+  sourceHealth.health.degraded ||
+  sourceHealth.health.resilience?.state !== "ready" ||
   sourceHealth.health.summary.checkedSources < 4 ||
   sourceHealth.health.summary.configuredSocialApis !== 1 ||
+  sourceHealth.health.summary.retryableFailures !== 0 ||
+  sourceHealth.health.summary.hardFailures !== 0 ||
   !sourceHealth.health.sources.some((source) => source.id === "approved-osint" && source.ok && source.itemCount === 1 && source.diagnostic?.code === "social.items") ||
   !sourceHealth.health.sources.some((source) => source.id === "gdelt-doc" && source.ok && source.diagnostic?.code === "gdelt.article-list") ||
   !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned" && source.diagnostic?.category === "planned") ||
@@ -395,9 +400,38 @@ const missingSocialTokenHealth = await withTemporarySourceHealthEnv(async () => 
 });
 if (
   missingSocialTokenHealth.summary.missingConfiguration !== 1 ||
+  missingSocialTokenHealth.operational ||
+  missingSocialTokenHealth.resilience?.state !== "blocked" ||
   !missingSocialTokenHealth.sources.some((source) => source.id === "missing-token-api" && source.status === "missing-config" && source.diagnostic?.code === "config.missing-token-env")
 ) {
   throw new Error("Source health payload failed missing social API token checks");
+}
+
+const degradedSourceHealth = await withTemporarySourceHealthEnv(async () => {
+  return buildSourceHealthPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:03:48Z"),
+    maxSources: 2,
+    fetchImpl: async (url) => {
+      if (String(url).includes("api.gdeltproject.org")) {
+        return jsonResponse(200, { articles: [{ title: "fixture" }] });
+      }
+      const timeout = new Error("fixture timeout");
+      timeout.name = "AbortError";
+      throw timeout;
+    }
+  });
+});
+if (
+  degradedSourceHealth.ready ||
+  !degradedSourceHealth.operational ||
+  !degradedSourceHealth.degraded ||
+  degradedSourceHealth.resilience?.state !== "degraded" ||
+  degradedSourceHealth.summary.reachableSources !== 1 ||
+  degradedSourceHealth.summary.retryableFailures !== 1 ||
+  degradedSourceHealth.summary.hardFailures !== 0
+) {
+  throw new Error("Source health payload failed degraded retryable collector checks");
 }
 
 const failedSourceHealth = await withTemporarySourceHealthEnv(async () => {
@@ -410,6 +444,10 @@ const failedSourceHealth = await withTemporarySourceHealthEnv(async () => {
 });
 if (
   failedSourceHealth.summary.failedSources !== 1 ||
+  failedSourceHealth.summary.retryableFailures !== 1 ||
+  failedSourceHealth.summary.hardFailures !== 0 ||
+  failedSourceHealth.operational ||
+  failedSourceHealth.resilience?.state !== "blocked" ||
   !failedSourceHealth.sources.some(
     (source) =>
       source.id === "gdelt-doc" &&
