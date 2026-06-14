@@ -43,7 +43,8 @@ export default async function handler(request, response) {
     const filters = {
       status: request.query?.status,
       assignee: request.query?.assignee,
-      priority: request.query?.priority
+      priority: request.query?.priority,
+      duplicateKey: request.query?.duplicateKey
     };
     const queue = reviewQueueFromEvents(scopedEvents, filters);
     response.setHeader("Cache-Control", "s-maxage=180, stale-while-revalidate=300");

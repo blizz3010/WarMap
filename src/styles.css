@@ -3083,15 +3083,22 @@ dd {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.review-duplicate-list strong,
+.review-duplicate-list a,
 .review-duplicate-list small,
 .archive-event-meta dd small {
   overflow-wrap: anywhere;
 }
 
-.review-duplicate-list strong {
+.review-duplicate-list a {
   color: #e5e7eb;
   font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.review-duplicate-list a:hover,
+.review-duplicate-list a:focus-visible {
+  color: var(--accent);
 }
 
 .review-duplicate-list span,

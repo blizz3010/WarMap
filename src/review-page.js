@@ -13,6 +13,7 @@ const state = {
   statusFilter: clean(params.get("status") || "all").toLowerCase(),
   assigneeFilter: clean(params.get("assignee") || "all").toLowerCase(),
   priorityFilter: clean(params.get("priority") || "all").toLowerCase(),
+  duplicateKeyFilter: clean(params.get("duplicateKey") || "all").toLowerCase(),
   message: "",
   exportBundle: null,
   status: null,
@@ -130,6 +131,14 @@ function renderReviewQueue() {
           <select data-review-priority>
             ${priorityOptions(summary)
               .map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === state.priorityFilter ? "selected" : ""}>${escapeHtml(option.label)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label>
+          <span>Duplicate group</span>
+          <select data-review-duplicate-key>
+            ${duplicateGroupOptions(summary)
+              .map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === state.duplicateKeyFilter ? "selected" : ""}>${escapeHtml(option.label)}</option>`)
               .join("")}
           </select>
         </label>
@@ -448,7 +457,7 @@ function renderDuplicateGroups(summary = {}) {
 function renderDuplicateGroup(group) {
   return `
     <li>
-      <strong>${escapeHtml(group.duplicateKey)}</strong>
+      <a href="${escapeAttr(reviewFilterHref({ duplicateKey: group.duplicateKey }))}">${escapeHtml(group.duplicateKey)}</a>
       <span>${Number(group.count ?? 0)} candidates - ${Number(group.sourceCount ?? 0)} sources</span>
       <small>${escapeHtml((group.places ?? []).join(", ") || "Unknown place")}</small>
     </li>
@@ -487,6 +496,11 @@ function bindReviewControls() {
 
   stateNode.querySelector("[data-review-priority]")?.addEventListener("change", (event) => {
     state.priorityFilter = event.target.value;
+    updateReviewUrl();
+  });
+
+  stateNode.querySelector("[data-review-duplicate-key]")?.addEventListener("change", (event) => {
+    state.duplicateKeyFilter = event.target.value;
     updateReviewUrl();
   });
 
@@ -815,6 +829,9 @@ function reviewQueryParams() {
   if (state.priorityFilter && state.priorityFilter !== "all") {
     query.set("priority", state.priorityFilter);
   }
+  if (state.duplicateKeyFilter && state.duplicateKeyFilter !== "all") {
+    query.set("duplicateKey", state.duplicateKeyFilter);
+  }
   return query;
 }
 
@@ -829,6 +846,38 @@ function assigneeOptions(summary = {}) {
 
 function priorityOptions(summary = {}) {
   return optionRows(summary.candidateByPriority, ["urgent", "high", "normal", "low"], "All priorities");
+}
+
+function duplicateGroupOptions(summary = {}) {
+  const groups = summary.duplicateGroups ?? [];
+  const options = [
+    { value: "all", label: "All duplicate groups" },
+    ...groups.map((group) => ({
+      value: group.duplicateKey,
+      label: `${group.duplicateKey} (${Number(group.count ?? 0)})`
+    }))
+  ];
+  if (state.duplicateKeyFilter && state.duplicateKeyFilter !== "all" && !options.some((option) => option.value === state.duplicateKeyFilter)) {
+    options.push({ value: state.duplicateKeyFilter, label: `${state.duplicateKeyFilter} (active)` });
+  }
+  return options;
+}
+
+function reviewFilterHref(overrides = {}) {
+  const current = {
+    status: state.statusFilter,
+    assignee: state.assigneeFilter,
+    priority: state.priorityFilter,
+    duplicateKey: state.duplicateKeyFilter,
+    ...overrides
+  };
+  const query = new URLSearchParams({ region: state.region, lookback: state.lookback });
+  Object.entries(current).forEach(([key, value]) => {
+    if (value && value !== "all") {
+      query.set(key, value);
+    }
+  });
+  return `/review?${query.toString()}`;
 }
 
 function optionRows(counts = {}, preferred = [], allLabel = "All") {
