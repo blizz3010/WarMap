@@ -870,7 +870,7 @@ if (
       blocker.id === "official-site-adapters" &&
       blocker.sourceIds?.includes("ukraine-mod-news") &&
       blocker.sourceCount >= 1 &&
-      blocker.nextAction?.includes("official RSS/API/CAP")
+      blocker.nextAction?.includes("OFFICIAL_SITE_SOURCES")
   ) ||
   !productionReadiness.optionalBlockers?.some(
     (blocker) => blocker.id === "liveuamap-license" && blocker.sourceIds?.includes("liveuamap-api")
@@ -983,6 +983,7 @@ if (
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "github-contents-editorial" && profile.recommended && profile.variables.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-editorial" && profile.variables.some((item) => item.name === "DATABASE_URL or POSTGRES_URL" && item.secret)) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
+  !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_SITE_SOURCES")) ||
   !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||
   !editorialSetup.sourceActivation?.sources?.some((source) => source.id === "compliant-social-apis" && source.nextAction.includes("endpoint metadata")) ||
   editorialSetup.fallbackBridge.targetFile !== "api/editorial-decisions.js" ||
