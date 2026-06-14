@@ -1,19 +1,27 @@
+import { categories, eventTypes } from "../src/data.js";
+
 export const AI_EXTRACTION_SCHEMA_VERSION = "warmap-candidate-extraction-v1";
 const EXTERNAL_PROVIDER = "llm-http";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 2500;
-const VALID_EVENT_TYPES = new Set([
-  "military",
-  "strike",
-  "air",
-  "security",
-  "politics",
-  "protest",
-  "infrastructure",
-  "humanitarian",
-  "other"
-]);
+const VALID_EVENT_TYPES = new Set(Object.keys(eventTypes));
+const VALID_CATEGORIES = new Set(Object.keys(categories));
 const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low"]);
 const VALID_ACTOR_SIDES = new Set(["ukraine", "russia", "iran", "israel", "civilian", "regional", "unknown"]);
+const FALLBACK_EVENT_TYPE_BY_CATEGORY = {
+  air: "air-operations",
+  humanitarian: "aid",
+  infrastructure: "infrastructure-hit",
+  military: "ground-clash",
+  other: "claim",
+  politics: "official-statement",
+  protest: "protest",
+  security: "security-deployment",
+  strike: "strike"
+};
+const BROAD_EVENT_TYPES = new Set(["air-operations", "claim", "official-statement", "strike"]);
+const BROAD_EVENT_TYPE_SCORE_PENALTY = 5;
+const CONTEXT_SENSITIVE_EVENT_TYPES = new Set(["aid"]);
+const CONTEXT_MISMATCH_SCORE_PENALTY = 3;
 
 export function extractionRuntimeSummary() {
   const provider = cleanText(process.env.AI_EXTRACTION_PROVIDER) || "deterministic-local";
@@ -49,11 +57,12 @@ export function buildCandidateExtraction({
   const runtime = extractionRuntimeSummary();
   const text = `${title} ${article?.description ?? ""}`;
   const duplicateBucket = dateBucket(seenAt);
+  const classification = classifyEventType(text, category);
   const duplicateKey = duplicateKeyForFields({
     country: location.country,
     province: location.province,
     place: location.place,
-    category,
+    category: classification.eventType,
     firstSeenAt: seenAt
   });
 
@@ -62,7 +71,8 @@ export function buildCandidateExtraction({
     extractedAt: new Date().toISOString(),
     region,
     sourceName,
-    eventType: category,
+    eventType: classification.eventType,
+    category,
     severity,
     actorSide: side,
     summary,
@@ -79,12 +89,12 @@ export function buildCandidateExtraction({
     duplicateMatches: [],
     confidence,
     fieldConfidence: {
-      eventType: category === "other" ? 0.34 : 0.68,
+      eventType: classification.confidence,
       location: location.precision === "country" ? 0.42 : 0.72,
       summary: summary ? 0.64 : 0.28,
       duplicate: 0.58
     },
-    signals: keywordSignals(text)
+    signals: uniqueSignals([...classification.matchedHints, ...keywordSignals(text)])
   };
 }
 
@@ -177,7 +187,7 @@ async function requestExternalExtraction(extraction, context, runtime) {
         candidate: extractionCandidateForProvider(context.event, extraction),
         fallbackExtraction: extraction,
         requiredOutput:
-          "Return JSON with eventType, severity, actorSide, summary, location, duplicateKey, confidence, fieldConfidence, and signals. Keep unverified leads review-only."
+          "Return JSON with eventType, category, severity, actorSide, summary, location, duplicateKey, confidence, fieldConfidence, and signals. Keep unverified leads review-only."
       })
     });
 
@@ -203,7 +213,8 @@ function extractionCandidateForProvider(event, extraction) {
     place: event?.place,
     province: event?.province,
     country: event?.country,
-    eventType: event?.category || extraction.eventType,
+    eventType: extraction.eventType,
+    category: event?.category || extraction.category,
     severity: event?.severity || extraction.severity,
     actorSide: event?.side || extraction.actorSide
   };
@@ -212,7 +223,14 @@ function extractionCandidateForProvider(event, extraction) {
 function mergeExternalExtraction(fallback, payload, runtime) {
   const external = payload && typeof payload === "object" ? payload : {};
   const location = sanitizeExternalLocation(external.location, fallback.location);
-  const eventType = sanitizeEnum(external.eventType ?? external.category, VALID_EVENT_TYPES, fallback.eventType);
+  const requestedEventType = sanitizeEnum(external.eventType, VALID_EVENT_TYPES, "");
+  const legacyCategory = sanitizeEnum(external.eventType ?? external.category, VALID_CATEGORIES, "");
+  const eventType = requestedEventType || FALLBACK_EVENT_TYPE_BY_CATEGORY[legacyCategory] || fallback.eventType;
+  const category = sanitizeEnum(
+    external.category,
+    VALID_CATEGORIES,
+    legacyCategory || eventTypes[eventType]?.category || fallback.category || eventTypes[fallback.eventType]?.category || "other"
+  );
   const severity = sanitizeEnum(external.severity, VALID_SEVERITIES, fallback.severity);
   const actorSide = sanitizeEnum(external.actorSide ?? external.side, VALID_ACTOR_SIDES, fallback.actorSide);
   const summary = boundedText(external.summary, 280) || fallback.summary;
@@ -224,6 +242,7 @@ function mergeExternalExtraction(fallback, payload, runtime) {
     mode: "external-provider",
     model: runtime.model,
     eventType,
+    category,
     severity,
     actorSide,
     summary,
@@ -235,6 +254,42 @@ function mergeExternalExtraction(fallback, payload, runtime) {
       ...sanitizeFieldConfidence(external.fieldConfidence)
     },
     signals: sanitizeSignals(external.signals, fallback.signals)
+  };
+}
+
+function classifyEventType(value, category) {
+  const text = cleanText(value).toLowerCase();
+  const scored = Object.entries(eventTypes)
+    .map(([id, eventType]) => {
+      const matchedHints = (eventType.extractionHints ?? []).filter((hint) => hasTerm(text, hint));
+      const directMatch = hasTerm(text, id.replace(/-/g, " ")) || hasTerm(text, eventType.label);
+      const evidenceScore =
+        matchedHints.length * 3 +
+        (directMatch ? 2 : 0);
+      const score = evidenceScore > 0
+        ? evidenceScore +
+          (eventType.category === category ? 1 : 0) -
+          (BROAD_EVENT_TYPES.has(id) ? BROAD_EVENT_TYPE_SCORE_PENALTY : 0) -
+          (CONTEXT_SENSITIVE_EVENT_TYPES.has(id) && eventType.category !== category ? CONTEXT_MISMATCH_SCORE_PENALTY : 0)
+        : 0;
+      return { id, score, matchedHints };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || right.matchedHints.length - left.matchedHints.length);
+
+  const winner = scored[0];
+  if (winner) {
+    return {
+      eventType: winner.id,
+      matchedHints: winner.matchedHints,
+      confidence: Math.min(0.9, 0.52 + winner.score * 0.06)
+    };
+  }
+
+  return {
+    eventType: FALLBACK_EVENT_TYPE_BY_CATEGORY[category] ?? "claim",
+    matchedHints: [],
+    confidence: category === "other" ? 0.34 : 0.48
   };
 }
 
@@ -269,8 +324,12 @@ function sanitizeSignals(value, fallback = []) {
   if (!Array.isArray(value)) {
     return fallback;
   }
-  const signals = value.map((item) => boundedText(item, 40).toLowerCase()).filter(Boolean).slice(0, 12);
+  const signals = uniqueSignals(value.map((item) => boundedText(item, 40).toLowerCase()).filter(Boolean));
   return signals.length ? signals : fallback;
+}
+
+function uniqueSignals(values) {
+  return [...new Set(values.map((value) => boundedText(value, 40).toLowerCase()).filter(Boolean))].slice(0, 12);
 }
 
 function sanitizeEnum(value, allowed, fallback) {
@@ -328,4 +387,25 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function hasTerm(text, term) {
+  const normalizedText = cleanText(text).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedTerm = cleanText(term).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!normalizedText || !normalizedTerm) {
+    return false;
+  }
+
+  const pattern = normalizedTerm
+    .split(" ")
+    .map((token, index, tokens) => {
+      const suffix = index === tokens.length - 1 && token.length > 3 && !token.endsWith("s") ? "(?:s|es)?" : "";
+      return `${escapeRegExp(token)}${suffix}`;
+    })
+    .join("\\s+");
+  return new RegExp(`(?:^|\\s)${pattern}(?:\\s|$)`).test(normalizedText);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

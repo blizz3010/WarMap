@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { eventTypes } from "../src/data.js";
 import { STORAGE_SCHEMA_VERSION, STORAGE_TABLES, storageRuntimeSummary } from "./storage-readiness.js";
 
 export const EVENT_STORE_HEALTH_SCHEMA_VERSION = "event-store-health.v1";
@@ -253,7 +254,7 @@ export function deserializeStoredEvent(row, { now = new Date() } = {}) {
       lon,
       precision: clean(row.location_precision ?? extraction.location?.precision) || "approximate"
     },
-    category: clean(row.category) || clean(extraction.eventType) || "other",
+    category: clean(row.category) || clean(extraction.category) || eventTypes[clean(extraction.eventType)]?.category || "other",
     severity: clean(row.severity) || "low",
     verification: clean(metadata.verification) || (publicationStatus === "published" ? "verified" : "reported"),
     confidence: clampNumber(row.confidence, 0, 1, 0.5),

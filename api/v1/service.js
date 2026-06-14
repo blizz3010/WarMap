@@ -285,6 +285,7 @@ function toEventResource(event, context) {
           provider: event.extraction.provider,
           schemaVersion: event.extraction.schemaVersion,
           eventType: event.extraction.eventType,
+          category: event.extraction.category ?? event.category,
           duplicateKey: event.extraction.duplicateKey,
           confidence: event.extraction.confidence
         }
