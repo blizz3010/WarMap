@@ -9,6 +9,10 @@ const state = {
   region: clean(params.get("region") || "ukraine-east"),
   lookback: clean(params.get("lookback") || "30d"),
   token: readStoredValue("warmap.editorialToken", ""),
+  reviewer: readStoredValue("warmap.editorialReviewer", ""),
+  statusFilter: clean(params.get("status") || "all").toLowerCase(),
+  assigneeFilter: clean(params.get("assignee") || "all").toLowerCase(),
+  priorityFilter: clean(params.get("priority") || "all").toLowerCase(),
   message: "",
   exportBundle: null,
   status: null,
@@ -105,6 +109,34 @@ function renderReviewQueue() {
               .join("")}
           </select>
         </label>
+        <label>
+          <span>Status</span>
+          <select data-review-status>
+            ${reviewStatusOptions(summary)
+              .map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === state.statusFilter ? "selected" : ""}>${escapeHtml(option.label)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label>
+          <span>Assignee</span>
+          <select data-review-assignee>
+            ${assigneeOptions(summary)
+              .map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === state.assigneeFilter ? "selected" : ""}>${escapeHtml(option.label)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label>
+          <span>Priority</span>
+          <select data-review-priority>
+            ${priorityOptions(summary)
+              .map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === state.priorityFilter ? "selected" : ""}>${escapeHtml(option.label)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label>
+          <span>Reviewer</span>
+          <input type="text" value="${escapeAttr(state.reviewer)}" data-reviewer-name placeholder="Your desk name" />
+        </label>
         <label class="review-token-field">
           <span>Reviewer token</span>
           <input type="password" value="${escapeAttr(state.token)}" data-review-token placeholder="Optional for protected writes" />
@@ -125,6 +157,7 @@ function renderReviewQueue() {
             <dl class="event-page-facts archive-facts">
               <div><dt>Total</dt><dd>${Number(summary.total ?? 0)}</dd></div>
               <div><dt>Queue depth</dt><dd>${Number(summary.queueDepth ?? candidates.length)}</dd></div>
+              <div><dt>Filtered</dt><dd>${Number(summary.filteredQueueDepth ?? candidates.length)} / ${Number(summary.unfilteredQueueDepth ?? candidates.length)}</dd></div>
               <div><dt>Published</dt><dd>${Number(summary.published ?? 0)}</dd></div>
               <div><dt>Decisions</dt><dd>${Number(meta.editorialDecisions ?? 0)}</dd></div>
               <div><dt>Sources</dt><dd>${Number(meta.upstreamArticles ?? 0)}</dd></div>
@@ -257,6 +290,8 @@ function renderCandidate(item) {
         <div><dt>Category</dt><dd style="color:${category.color}">${escapeHtml(category.label)}</dd></div>
         <div><dt>Severity</dt><dd style="color:${severity.color}">${escapeHtml(severity.label)}</dd></div>
         <div><dt>Status</dt><dd>${escapeHtml(review.statusLabel)}</dd></div>
+        <div><dt>Assignee</dt><dd>${escapeHtml(review.assigneeLabel)}</dd></div>
+        <div><dt>Queue</dt><dd>${escapeHtml(review.queue)}</dd></div>
         <div><dt>Duplicate</dt><dd>${escapeHtml(review.duplicateKey)}</dd></div>
         <div><dt>Extraction</dt><dd>${escapeHtml(extractionLabel(item))}</dd></div>
       </dl>
@@ -322,6 +357,26 @@ function bindReviewControls() {
     updateReviewUrl();
   });
 
+  stateNode.querySelector("[data-review-status]")?.addEventListener("change", (event) => {
+    state.statusFilter = event.target.value;
+    updateReviewUrl();
+  });
+
+  stateNode.querySelector("[data-review-assignee]")?.addEventListener("change", (event) => {
+    state.assigneeFilter = event.target.value;
+    updateReviewUrl();
+  });
+
+  stateNode.querySelector("[data-review-priority]")?.addEventListener("change", (event) => {
+    state.priorityFilter = event.target.value;
+    updateReviewUrl();
+  });
+
+  stateNode.querySelector("[data-reviewer-name]")?.addEventListener("input", (event) => {
+    state.reviewer = event.target.value.trim();
+    writeStoredValue("warmap.editorialReviewer", state.reviewer);
+  });
+
   stateNode.querySelector("[data-review-token]")?.addEventListener("input", (event) => {
     state.token = event.target.value.trim();
     writeStoredValue("warmap.editorialToken", state.token);
@@ -360,6 +415,7 @@ async function submitReviewAction(button) {
     eventId: item.id,
     duplicateKey: reviewInfo(item).duplicateKey,
     sourceUrl: item.sources?.[0]?.url ?? "",
+    reviewer: state.reviewer || "editorial desk",
     correctedFields,
     eventSnapshot: eventSnapshotForDecision(item),
     targetDuplicateKey: action === "merge" ? reviewInfo(item).duplicateKey : "",
@@ -589,12 +645,12 @@ function renderEmptyQueue() {
 }
 
 function updateReviewUrl() {
-  const nextParams = new URLSearchParams({ region: state.region, lookback: state.lookback });
+  const nextParams = reviewQueryParams();
   window.location.href = `/review?${nextParams.toString()}`;
 }
 
 function reviewQueueUrl() {
-  return `/api/review-queue?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
+  return `/api/review-queue?${reviewQueryParams().toString()}`;
 }
 
 function sourceHealthUrl() {
@@ -615,11 +671,55 @@ function editorialAuthHeaders() {
 
 function reviewInfo(item) {
   const review = item.review ?? {};
+  const assignee = review.assignee ?? "editorial desk";
   return {
+    status: review.status ?? "candidate",
     statusLabel: review.statusLabel ?? titleCase(review.status ?? "candidate"),
+    assignee,
+    assigneeKey: slugify(assignee) || "editorial-desk",
+    assigneeLabel: assignee,
+    queue: review.queue ?? "open-source intake",
     priority: review.priority ?? "normal",
     duplicateKey: review.duplicateKey ?? `${item.country}-${item.province}-${item.place}-${item.category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-")
   };
+}
+
+function reviewQueryParams() {
+  const query = new URLSearchParams({ region: state.region, lookback: state.lookback });
+  if (state.statusFilter && state.statusFilter !== "all") {
+    query.set("status", state.statusFilter);
+  }
+  if (state.assigneeFilter && state.assigneeFilter !== "all") {
+    query.set("assignee", state.assigneeFilter);
+  }
+  if (state.priorityFilter && state.priorityFilter !== "all") {
+    query.set("priority", state.priorityFilter);
+  }
+  return query;
+}
+
+function reviewStatusOptions(summary = {}) {
+  const known = ["candidate", "needs-review", "split"];
+  return optionRows(summary.candidateByStatus, known, "All statuses");
+}
+
+function assigneeOptions(summary = {}) {
+  return optionRows(summary.candidateByAssignee, ["editorial-desk"], "All assignees");
+}
+
+function priorityOptions(summary = {}) {
+  return optionRows(summary.candidateByPriority, ["urgent", "high", "normal", "low"], "All priorities");
+}
+
+function optionRows(counts = {}, preferred = [], allLabel = "All") {
+  const keys = [...new Set([...preferred, ...Object.keys(counts ?? {})])].filter(Boolean);
+  return [
+    { value: "all", label: allLabel },
+    ...keys.map((key) => ({
+      value: key,
+      label: `${titleCase(key)}${Number.isFinite(Number(counts?.[key])) ? ` (${Number(counts[key])})` : ""}`
+    }))
+  ];
 }
 
 function extractionLabel(item) {
@@ -708,6 +808,13 @@ function titleCase(value) {
   return String(value ?? "")
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function slugify(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function safeUrl(value) {

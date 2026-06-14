@@ -231,8 +231,14 @@ if (
   throw new Error("Expected review surfaces to show operational/degraded source health");
 }
 
-if (!reviewPageSource.includes("warmap.editorialToken") || !reviewPageSource.includes("review-source-strip")) {
-  throw new Error("Expected standalone review page to persist reviewer token and render source links");
+if (
+  !reviewPageSource.includes("warmap.editorialToken") ||
+  !reviewPageSource.includes("warmap.editorialReviewer") ||
+  !reviewPageSource.includes("data-review-assignee") ||
+  !reviewPageSource.includes("data-review-status") ||
+  !reviewPageSource.includes("review-source-strip")
+) {
+  throw new Error("Expected standalone review page to persist reviewer identity, expose review filters, and render source links");
 }
 
 if (
@@ -243,8 +249,13 @@ if (
   throw new Error("Expected review surfaces to render per-candidate publication gate checks");
 }
 
-if (!appSource.includes("eventSnapshot: eventSnapshotForDecision(item)") || !reviewPageSource.includes("eventSnapshot: eventSnapshotForDecision(item)")) {
-  throw new Error("Expected review actions to include durable event snapshots");
+if (
+  !appSource.includes("eventSnapshot: eventSnapshotForDecision(item)") ||
+  !reviewPageSource.includes("eventSnapshot: eventSnapshotForDecision(item)") ||
+  !appSource.includes("reviewer: editorialReviewerName()") ||
+  !reviewPageSource.includes("reviewer: state.reviewer")
+) {
+  throw new Error("Expected review actions to include durable event snapshots and reviewer identity");
 }
 
 const ids = new Set();
@@ -1176,6 +1187,28 @@ if (
 }
 
 const queue = reviewQueueFromEvents(events);
+const filteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {
+  status: "candidate",
+  assignee: "editorial-desk"
+});
+if (
+  filteredSampleQueue.candidates.length !== 1 ||
+  filteredSampleQueue.filters.status !== "candidate" ||
+  filteredSampleQueue.summary.filteredQueueDepth !== 1 ||
+  filteredSampleQueue.summary.unfilteredQueueDepth !== 1 ||
+  filteredSampleQueue.summary.candidateByAssignee["editorial-desk"] !== 1
+) {
+  throw new Error("Review queue filters failed status, assignee, or summary checks");
+}
+
+const emptyFilteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {
+  status: "split",
+  assignee: "editorial-desk"
+});
+if (emptyFilteredSampleQueue.candidates.length !== 0 || emptyFilteredSampleQueue.summary.filteredQueueDepth !== 0) {
+  throw new Error("Review queue filters failed empty status filtering");
+}
+
 const published = publishedEventsFromEvents(events);
 const archive = archiveFromEvents(events);
 const approvedSampleDecision = normalizeDecisionPayload(
@@ -1261,6 +1294,28 @@ const correctedSampleDecision = normalizeDecisionPayload(
   },
   { now: new Date("2026-05-28T02:04:03Z") }
 );
+const assignedSampleDecision = normalizeDecisionPayload(
+  {
+    action: "needs-review",
+    eventId: sampleUkraineEvents[0].id,
+    duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+    sourceUrl: sampleUkraineEvents[0].sources[0].url,
+    reviewer: "night desk",
+    notes: "assign to night desk smoke test"
+  },
+  { now: new Date("2026-05-28T02:04:04Z") }
+);
+const assignedQueue = reviewQueueFromEvents(applyEditorialDecisions(sampleUkraineEvents, [assignedSampleDecision]), {
+  status: "needs-review",
+  assignee: "night-desk"
+});
+if (
+  assignedQueue.candidates.length !== 1 ||
+  assignedQueue.candidates[0].review.assignee !== "night desk" ||
+  assignedQueue.summary.candidateByAssignee["night-desk"] !== 1
+) {
+  throw new Error("Editorial reviewer assignment failed assignee filtering checks");
+}
 assertThrows(
   () =>
     normalizeDecisionPayload(

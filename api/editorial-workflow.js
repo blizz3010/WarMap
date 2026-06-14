@@ -57,18 +57,29 @@ export function eventsForPublication(events, publicationMode = "all") {
   return enriched;
 }
 
-export function reviewQueueFromEvents(events) {
-  const candidates = eventsForPublication(events, "review")
+export function reviewQueueFromEvents(events, filters = {}) {
+  const normalizedFilters = normalizeQueueFilters(filters);
+  const allCandidates = eventsForPublication(events, "review")
     .filter((event) => event.review.publicationStatus === "review_only")
     .sort((left, right) => {
       const priorityCompare = priorityRank(right.review.priority) - priorityRank(left.review.priority);
       if (priorityCompare) return priorityCompare;
       return timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt);
     });
+  const candidates = allCandidates.filter((event) => matchesQueueFilters(event, normalizedFilters));
 
   return {
     candidates,
-    summary: editorialSummary(events)
+    summary: {
+      ...editorialSummary(events),
+      unfilteredQueueDepth: allCandidates.length,
+      filteredQueueDepth: candidates.length,
+      candidateByStatus: countBy(allCandidates, (event) => event.review.status),
+      candidateByAssignee: countBy(allCandidates, (event) => normalizeAssignee(event.review.assignee)),
+      candidateByPriority: countBy(allCandidates, (event) => event.review.priority),
+      filters: normalizedFilters
+    },
+    filters: normalizedFilters
   };
 }
 
@@ -99,6 +110,8 @@ export function editorialSummary(events) {
   const byStatus = countBy(enriched, (event) => event.review.status);
   const byPublicationStatus = countBy(enriched, (event) => event.review.publicationStatus);
   const byQueue = countBy(enriched, (event) => event.review.queue);
+  const byAssignee = countBy(enriched, (event) => normalizeAssignee(event.review.assignee));
+  const byPriority = countBy(enriched, (event) => event.review.priority);
 
   return {
     total: enriched.length,
@@ -106,8 +119,39 @@ export function editorialSummary(events) {
     published: enriched.filter((event) => event.review.publicationStatus === "published").length,
     byStatus,
     byPublicationStatus,
-    byQueue
+    byQueue,
+    byAssignee,
+    byPriority
   };
+}
+
+function normalizeQueueFilters(filters = {}) {
+  return {
+    status: cleanFilter(filters.status),
+    assignee: cleanFilter(filters.assignee),
+    priority: cleanFilter(filters.priority)
+  };
+}
+
+function matchesQueueFilters(event, filters) {
+  if (filters.status && filters.status !== "all" && event.review.status !== filters.status) {
+    return false;
+  }
+  if (filters.priority && filters.priority !== "all" && event.review.priority !== filters.priority) {
+    return false;
+  }
+  if (filters.assignee && filters.assignee !== "all" && normalizeAssignee(event.review.assignee) !== filters.assignee) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeAssignee(value) {
+  return slugify(value || "editorial desk") || "editorial-desk";
+}
+
+function cleanFilter(value) {
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function inferReviewStatus(event) {

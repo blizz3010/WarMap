@@ -1851,6 +1851,7 @@ async function submitReviewAction(button) {
     eventId: item.id,
     duplicateKey: review.duplicateKey,
     sourceUrl: item.sources[0]?.url ?? "",
+    reviewer: editorialReviewerName(),
     correctedFields,
     eventSnapshot: eventSnapshotForDecision(item),
     targetDuplicateKey: action === "merge" ? review.duplicateKey : "",
@@ -2078,6 +2079,14 @@ function editorialAuthHeaders() {
     window.localStorage?.getItem("warmap.editorialToken") ||
     "";
   return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+function editorialReviewerName() {
+  return (
+    window.WARMAP_EDITORIAL_REVIEWER ||
+    window.localStorage?.getItem("warmap.editorialReviewer") ||
+    "editorial desk"
+  );
 }
 
 function renderKeyPanel() {
