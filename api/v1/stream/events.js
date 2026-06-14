@@ -1,6 +1,6 @@
 import { loadEventCollection, queryWithDefaults, rejectNonGet } from "../adapter.js";
 import { DEFAULT_REGION_ID } from "../../news-normalizer.js";
-import { buildV1StreamSnapshot, formatServerSentEvent } from "../service.js";
+import { V1_DEFAULT_LOOKBACK, buildV1StreamSnapshot, formatServerSentEvent } from "../service.js";
 
 export default async function handler(request, response) {
   if (rejectNonGet(request, response)) {
@@ -30,7 +30,7 @@ export default async function handler(request, response) {
         meta: {
           generatedAt: new Date().toISOString(),
           region: query.region ?? DEFAULT_REGION_ID,
-          lookback: query.lookback ?? "30d",
+          lookback: query.lookback ?? V1_DEFAULT_LOOKBACK,
           publication: query.publication,
           upstreamErrors: [error instanceof Error ? error.message : "Unknown upstream error"]
         }
