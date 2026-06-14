@@ -36,6 +36,7 @@ async function loadSetupPage() {
 function renderSetup(setup) {
   const current = setup.current ?? {};
   const requiredConfig = setup.requiredConfiguration ?? [];
+  const environmentProfiles = setup.environmentProfiles ?? [];
   const setupTargets = setup.setupTargets ?? [];
   const sourceActivation = setup.sourceActivation ?? {};
   const backlog = sourceActivation.backlog ?? {};
@@ -81,6 +82,13 @@ function renderSetup(setup) {
             <h2>Required Configuration</h2>
             <ul class="setup-target-list">
               ${requiredConfig.map(renderRequiredConfiguration).join("") || "<li><strong>No required configuration reported</strong></li>"}
+            </ul>
+          </section>
+
+          <section class="event-page-section">
+            <h2>Environment Profiles</h2>
+            <ul class="setup-profile-list">
+              ${environmentProfiles.map(renderEnvironmentProfile).join("") || "<li><strong>No environment profiles reported</strong></li>"}
             </ul>
           </section>
 
@@ -155,6 +163,38 @@ function renderSetupTarget(target) {
         ${(target.env ?? []).map((name) => `<code>${escapeHtml(name)}</code>`).join("")}
       </div>
       ${target.verification ? `<a href="${escapeAttr(target.verification)}">Verify</a>` : ""}
+    </li>
+  `;
+}
+
+function renderEnvironmentProfile(profile) {
+  return `
+    <li class="${profile.ready ? "is-ready" : profile.recommended ? "is-warning" : "is-blocked"}">
+      <header>
+        <strong>${escapeHtml(profile.label ?? profile.id)}</strong>
+        <span>${profile.ready ? "ready" : profile.recommended ? "recommended" : "optional"}</span>
+      </header>
+      <p>${escapeHtml(profile.purpose ?? "Configure this profile before production editorial writes.")}</p>
+      <ul class="setup-profile-vars">
+        ${(profile.variables ?? []).map(renderEnvironmentVariable).join("")}
+      </ul>
+      <nav class="setup-profile-links" aria-label="${escapeAttr(profile.label ?? profile.id)} verification links">
+        ${(profile.verification ?? []).map((href) => `<a href="${escapeAttr(href)}">Verify</a>`).join("")}
+      </nav>
+      <ul class="setup-requirements">
+        ${(profile.notes ?? []).map((note) => `<li>${escapeHtml(note)}</li>`).join("")}
+      </ul>
+    </li>
+  `;
+}
+
+function renderEnvironmentVariable(variable) {
+  return `
+    <li class="${variable.configured ? "is-ready" : "is-blocked"}">
+      <code>${escapeHtml(variable.name)}</code>
+      <span>${variable.configured ? "configured" : "needed"}</span>
+      <small>${escapeHtml(variable.secret ? "<secret>" : variable.value ?? "")}</small>
+      <p>${escapeHtml(variable.description ?? "")}</p>
     </li>
   `;
 }

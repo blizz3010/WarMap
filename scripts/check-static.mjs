@@ -324,17 +324,22 @@ if (
   !setupPageSource.includes("/api/editorial-setup?") ||
   !setupPageSource.includes("function renderSetup(setup)") ||
   !setupPageSource.includes("function renderSetupTarget(target)") ||
+  !setupPageSource.includes("function renderEnvironmentProfile(profile)") ||
+  !setupPageSource.includes("function renderEnvironmentVariable(variable)") ||
   !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("data-setup-region") ||
   !setupPageSource.includes("/sources?") ||
   !setupPageSource.includes("/readiness?") ||
+  !setupPageSource.includes("environmentProfiles") ||
   !setupPageSource.includes("sourceActivation.backlog") ||
   !stylesSource.includes(".setup-target-list") ||
+  !stylesSource.includes(".setup-profile-list") ||
+  !stylesSource.includes(".setup-profile-vars") ||
   !stylesSource.includes(".setup-source-list") ||
   !stylesSource.includes(".setup-link-list")
 ) {
-  throw new Error("Expected setup page to render editorial setup targets, source activation, fallback bridge, and readiness links");
+  throw new Error("Expected setup page to render editorial setup targets, environment profiles, source activation, fallback bridge, and readiness links");
 }
 
 if (
@@ -900,6 +905,8 @@ if (
   !editorialSetup.requiredConfiguration.some((item) => item.name === "EDITORIAL_STORE_PROVIDER=github" && !item.configured) ||
   !editorialSetup.requiredConfiguration.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && !item.configured) ||
   !editorialSetup.setupTargets.some((target) => target.id === "github-editorial-store" && !target.ready && target.env.includes("EDITORIAL_GITHUB_TOKEN")) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "github-contents-editorial" && profile.recommended && profile.variables.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && item.secret)) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-editorial" && profile.variables.some((item) => item.name === "DATABASE_URL or POSTGRES_URL" && item.secret)) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
   !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||
   !editorialSetup.sourceActivation?.sources?.some((source) => source.id === "compliant-social-apis" && source.nextAction.includes("endpoint metadata")) ||
