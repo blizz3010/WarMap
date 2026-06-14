@@ -13,6 +13,7 @@ import ingestionStatusHandler from "../api/ingestion-status.js";
 import notificationStatusHandler from "../api/notification-status.js";
 import platformConfigHandler from "../api/platform-config.js";
 import productionReadinessHandler from "../api/production-readiness.js";
+import publicationPreviewHandler from "../api/publication-preview.js";
 import publicationStatusHandler from "../api/publication-status.js";
 import reviewActionHandler from "../api/review-action.js";
 import reviewDossierHandler from "../api/review-dossier.js";
@@ -51,6 +52,7 @@ const apiHandlers = new Map([
   ["/api/notification-status", notificationStatusHandler],
   ["/api/platform-config", platformConfigHandler],
   ["/api/production-readiness", productionReadinessHandler],
+  ["/api/publication-preview", publicationPreviewHandler],
   ["/api/publication-status", publicationStatusHandler],
   ["/api/review-action", reviewActionHandler],
   ["/api/review-dossier", reviewDossierHandler],

@@ -272,6 +272,7 @@ function renderCandidate(item) {
         <a href="/?${new URLSearchParams({ region: state.region }).toString()}#event=${encodeURIComponent(item.id)}">Map</a>
         <a href="/event?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}">Detail</a>
         <a href="${escapeAttr(reviewDossierUrl(item))}">Dossier</a>
+        <a href="${escapeAttr(publicationPreviewUrl(item))}">Preview</a>
         <a href="/api/event?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}">API</a>
       </div>
 
@@ -602,6 +603,10 @@ function sourceHealthUrl() {
 
 function reviewDossierUrl(item) {
   return `/api/review-dossier?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function publicationPreviewUrl(item) {
+  return `/api/publication-preview?${new URLSearchParams({ id: item.id, region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function editorialAuthHeaders() {

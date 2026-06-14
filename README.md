@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, review actions, static decision exports, setup readiness, durable store checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, review actions, static decision exports, setup readiness, durable store checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -87,6 +87,7 @@ The embed header includes a theater selector, live/published count, source mode 
 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
 - `/api/review-dossier?id=...&region=ukraine-east` returns one candidate's source evidence, AI extraction confidence, duplicate context, publication checks, and safe decision payload templates for analyst review.
+- `/api/publication-preview?id=...&region=ukraine-east` builds a non-persisted approval dry run for one queue candidate, showing the exact map/feed/detail/archive/API record that a human approval would publish.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
 - `/api/editorial-setup?region=ukraine-east` returns the non-secret production setup contract: required editorial environment variables, GitHub store verification links, static export fallback path, current blockers, and review/publication links.
 - `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
@@ -104,7 +105,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/archive?region=iran&lookback=90d` renders the public approved-event archive backed by `/api/archive`.
 - `/review?region=ukraine-east&lookback=30d` renders the standalone editorial queue backed by `/api/review-queue` and `/api/review-action`.
 
-Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured. Until those secrets exist, the standalone review page calls `/api/review-export` after a blocked approval/correction and shows a static module that can be committed to `api/editorial-decisions.js`; committed static decisions are loaded by the same map, feed, detail, archive, and API publication path.
+Local development stores review decisions in `.data/editorial-decisions.json`, which is intentionally ignored by git. On Vercel, the action endpoint refuses anonymous writes unless a durable store and reviewer token are configured. Until those secrets exist, the standalone review page calls `/api/review-export` after a blocked approval/correction and shows a static module that can be committed to `api/editorial-decisions.js`; committed static decisions are loaded by the same map, feed, detail, archive, and API publication path. The preview links in the review surfaces are always dry-run only: they do not approve, store, or publish an event without a reviewer action/export.
 
 For the no-secret publishing bridge, place either the copied static module text or the JSON response from `/api/review-export` in a local file, then run:
 

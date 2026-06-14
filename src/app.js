@@ -1588,6 +1588,7 @@ function renderReviewPanel(visible) {
                     <a href="${escapeAttr(eventHashLink(item))}">Map</a>
                     <a href="${escapeAttr(eventPageLink(item))}">Detail</a>
                     <a href="${escapeAttr(reviewDossierLink(item))}" target="_blank" rel="noreferrer noopener">Dossier</a>
+                    <a href="${escapeAttr(publicationPreviewLink(item))}" target="_blank" rel="noreferrer noopener">Preview</a>
                     <a href="${escapeAttr(eventApiLink(item))}" target="_blank" rel="noreferrer noopener">API</a>
                   </div>
                   <div class="review-actions">
@@ -2986,6 +2987,15 @@ function reviewDossierLink(item) {
     lookback: lookbackForApi(state.timeRange)
   });
   return `/api/review-dossier?${params.toString()}`;
+}
+
+function publicationPreviewLink(item) {
+  const params = new URLSearchParams({
+    id: item.id,
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/api/publication-preview?${params.toString()}`;
 }
 
 function archivePageLink() {
