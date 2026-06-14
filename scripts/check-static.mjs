@@ -21,6 +21,7 @@ import {
   buildIngestionStatusPayload,
   runIngestionHeartbeat
 } from "../api/ingestion-service.js";
+import { intakeSnapshotStoreCapabilities, loadIntakeSnapshots } from "../api/intake-store.js";
 import { buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import {
   buildNotificationStatusPayload,
@@ -82,6 +83,7 @@ const requiredFiles = [
   "api/review-action.js",
   "api/ingestion-service.js",
   "api/ingestion-status.js",
+  "api/intake-store.js",
   "api/news-normalizer.js",
   "api/notification-service.js",
   "api/notification-status.js",
@@ -794,8 +796,10 @@ if (
   ingestionStatus.ready ||
   ingestionStatus.runtime.cronPath !== "/api/cron/ingest" ||
   ingestionStatus.runtime.schedule !== "17 2 * * *" ||
+  ingestionStatus.runtime.intakeStore.mode !== "disabled" ||
   !ingestionStatus.plan.regions.some((region) => region.id === "ukraine-east") ||
   !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-cron-secret") ||
+  !ingestionStatus.blockers.some((blocker) => blocker.id === "ingestion-snapshot-store" && blocker.status === "disabled") ||
   JSON.stringify(ingestionStatus).includes("topsecret123")
 ) {
   throw new Error("Ingestion status payload failed cron-readiness or secret-redaction checks");
@@ -865,11 +869,69 @@ if (
   ingestionRun.summary.regions !== 1 ||
   ingestionRun.summary.upstreamArticles !== 1 ||
   ingestionRun.summary.candidates !== 1 ||
+  ingestionRun.summary.persistedCandidates !== 0 ||
   !ingestionRun.regions[0].sourceSamples[0]?.sourceUrl ||
   ingestionRun.persistence.stored ||
+  ingestionRun.persistence.mode !== "disabled" ||
   JSON.stringify(ingestionRun).includes("topsecret123")
 ) {
   throw new Error("Ingestion heartbeat failed fixture run, source-link, or secret-redaction checks");
+}
+
+const intakeTempDir = mkdtempSync(join(tmpdir(), "warmap-intake-store-"));
+try {
+  const snapshotPath = join(intakeTempDir, "intake-snapshots.json");
+  const storedIntake = await withTemporaryIngestionEnvAsync(async () => {
+    delete process.env.VERCEL;
+    process.env.CRON_SECRET = "topsecret123";
+    process.env.INGESTION_STORE_PROVIDER = "local-file";
+    process.env.INGESTION_SNAPSHOTS_PATH = snapshotPath;
+
+    const run = await runIngestionHeartbeat({
+      regions: ["ukraine-east"],
+      lookback: "24h",
+      maxRecords: 5,
+      now: new Date("2026-05-28T02:03:46Z"),
+      collectImpl: async () => ({
+        articles: [
+          {
+            title: "Russian missile strike reported near Kharkiv",
+            url: "https://example.com/world/ukraine-kharkiv-missile-cron",
+            domain: "example.com",
+            sourcecountry: "United States",
+            language: "English",
+            seendate: "20260528T010204Z"
+          }
+        ],
+        lookback: "24h",
+        collectorStatus: {
+          fixture: "fulfilled"
+        },
+        upstreamErrors: [],
+        rssFeeds: ["https://example.com/rss"],
+        officialFeeds: [],
+        socialApiSources: []
+      })
+    });
+    const snapshots = await loadIntakeSnapshots({ now: new Date("2026-05-28T02:04:00Z") });
+    const capabilities = intakeSnapshotStoreCapabilities({ now: new Date("2026-05-28T02:04:00Z") });
+    return { run, snapshots, capabilities, fileText: readFileSync(snapshotPath, "utf8") };
+  });
+
+  if (
+    !storedIntake.run.persistence.stored ||
+    storedIntake.run.persistence.mode !== "local-file" ||
+    storedIntake.run.summary.persistedCandidates !== 1 ||
+    storedIntake.snapshots.length !== 1 ||
+    storedIntake.snapshots[0].id !== storedIntake.run.regions[0].sourceSamples[0].eventId ||
+    !storedIntake.snapshots[0].sources[0]?.url.includes("ukraine-kharkiv-missile-cron") ||
+    storedIntake.capabilities.mode !== "local-file" ||
+    storedIntake.fileText.includes("topsecret123")
+  ) {
+    throw new Error("Intake snapshot store failed local persistence, source-link, or secret-redaction checks");
+  }
+} finally {
+  rmSync(intakeTempDir, { recursive: true, force: true });
 }
 
 const ingestionReadyProduction = await withTemporaryEditorialEnvAsync(async () =>
@@ -888,7 +950,9 @@ const ingestionReadyProduction = await withTemporaryEditorialEnvAsync(async () =
 );
 if (
   !ingestionReadyProduction.sections.ingestion.ready ||
+  ingestionReadyProduction.sections.ingestion.intakeStore.mode !== "disabled" ||
   ingestionReadyProduction.blockers.some((blocker) => blocker.id === "ingestion-cron-secret") ||
+  !ingestionReadyProduction.blockers.some((blocker) => blocker.id === "ingestion-snapshot-store" && !blocker.required) ||
   JSON.stringify(ingestionReadyProduction).includes("topsecret123")
 ) {
   throw new Error("Production readiness did not reflect configured ingestion cron safely");
@@ -1624,10 +1688,21 @@ async function withTemporarySourceHealthEnv(callback) {
 
 function withTemporaryIngestionEnv(callback) {
   const keys = [
+    "VERCEL",
     "CRON_SECRET",
     "INGESTION_REGIONS",
     "INGESTION_LOOKBACK",
-    "INGESTION_MAX_RECORDS"
+    "INGESTION_MAX_RECORDS",
+    "INGESTION_STORE_PROVIDER",
+    "INGESTION_SNAPSHOTS_PATH",
+    "INGESTION_GITHUB_TOKEN",
+    "INGESTION_GITHUB_REPO",
+    "INGESTION_GITHUB_BRANCH",
+    "INGESTION_GITHUB_PATH",
+    "INGESTION_SNAPSHOT_RETENTION_DAYS",
+    "INGESTION_SNAPSHOT_LIMIT",
+    "EDITORIAL_GITHUB_TOKEN",
+    "GITHUB_TOKEN"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 
@@ -1646,10 +1721,21 @@ function withTemporaryIngestionEnv(callback) {
 
 async function withTemporaryIngestionEnvAsync(callback) {
   const keys = [
+    "VERCEL",
     "CRON_SECRET",
     "INGESTION_REGIONS",
     "INGESTION_LOOKBACK",
-    "INGESTION_MAX_RECORDS"
+    "INGESTION_MAX_RECORDS",
+    "INGESTION_STORE_PROVIDER",
+    "INGESTION_SNAPSHOTS_PATH",
+    "INGESTION_GITHUB_TOKEN",
+    "INGESTION_GITHUB_REPO",
+    "INGESTION_GITHUB_BRANCH",
+    "INGESTION_GITHUB_PATH",
+    "INGESTION_SNAPSHOT_RETENTION_DAYS",
+    "INGESTION_SNAPSHOT_LIMIT",
+    "EDITORIAL_GITHUB_TOKEN",
+    "GITHUB_TOKEN"
   ];
   const previous = new Map(keys.map((key) => [key, process.env[key]]));
 
