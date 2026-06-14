@@ -158,6 +158,8 @@ function renderReviewQueue() {
               <div><dt>Total</dt><dd>${Number(summary.total ?? 0)}</dd></div>
               <div><dt>Queue depth</dt><dd>${Number(summary.queueDepth ?? candidates.length)}</dd></div>
               <div><dt>Filtered</dt><dd>${Number(summary.filteredQueueDepth ?? candidates.length)} / ${Number(summary.unfilteredQueueDepth ?? candidates.length)}</dd></div>
+              <div><dt>Duplicate groups</dt><dd>${Number(summary.filteredDuplicateGroupCount ?? summary.duplicateGroupCount ?? 0)}</dd></div>
+              <div><dt>Duplicate candidates</dt><dd>${Number(summary.filteredDuplicateCandidateCount ?? summary.duplicateCandidateCount ?? 0)}</dd></div>
               <div><dt>Published</dt><dd>${Number(summary.published ?? 0)}</dd></div>
               <div><dt>Decisions</dt><dd>${Number(meta.editorialDecisions ?? 0)}</dd></div>
               <div><dt>Sources</dt><dd>${Number(meta.upstreamArticles ?? 0)}</dd></div>
@@ -178,6 +180,11 @@ function renderReviewQueue() {
                 .map(([collector, status]) => `<li><span>${escapeHtml(titleCase(collector))}</span><strong>${escapeHtml(status)}</strong></li>`)
                 .join("") || "<li><span>No collector status</span><strong>n/a</strong></li>"}
             </ul>
+          </section>
+
+          <section class="event-page-section">
+            <h2>Duplicate Groups</h2>
+            ${renderDuplicateGroups(summary)}
           </section>
 
           <section class="event-page-section">
@@ -371,7 +378,7 @@ function renderCandidate(item) {
         <div><dt>Status</dt><dd>${escapeHtml(review.statusLabel)}</dd></div>
         <div><dt>Assignee</dt><dd>${escapeHtml(review.assigneeLabel)}</dd></div>
         <div><dt>Queue</dt><dd>${escapeHtml(review.queue)}</dd></div>
-        <div><dt>Duplicate</dt><dd>${escapeHtml(review.duplicateKey)}</dd></div>
+        <div><dt>Duplicate</dt><dd>${renderDuplicateDetail(review)}</dd></div>
         <div><dt>Extraction</dt><dd>${escapeHtml(extractionLabel(item))}</dd></div>
       </dl>
 
@@ -423,6 +430,38 @@ function renderCandidate(item) {
       </div>
     </article>
   `;
+}
+
+function renderDuplicateGroups(summary = {}) {
+  const groups = summary.filteredDuplicateGroups ?? summary.duplicateGroups ?? [];
+  if (!groups.length) {
+    return '<p class="status-summary is-ready">No duplicate groups in this queue view.</p>';
+  }
+
+  return `
+    <ul class="review-duplicate-list">
+      ${groups.map(renderDuplicateGroup).join("")}
+    </ul>
+  `;
+}
+
+function renderDuplicateGroup(group) {
+  return `
+    <li>
+      <strong>${escapeHtml(group.duplicateKey)}</strong>
+      <span>${Number(group.count ?? 0)} candidates - ${Number(group.sourceCount ?? 0)} sources</span>
+      <small>${escapeHtml((group.places ?? []).join(", ") || "Unknown place")}</small>
+    </li>
+  `;
+}
+
+function renderDuplicateDetail(review) {
+  const group = review.duplicateGroup;
+  const duplicateKey = escapeHtml(review.duplicateKey);
+  if (!group?.count || group.count < 2) {
+    return duplicateKey;
+  }
+  return `${duplicateKey} <small>${Number(group.count)} candidates</small>`;
 }
 
 function bindReviewControls() {
@@ -760,7 +799,8 @@ function reviewInfo(item) {
     assigneeLabel: assignee,
     queue: review.queue ?? "open-source intake",
     priority: review.priority ?? "normal",
-    duplicateKey: review.duplicateKey ?? `${item.country}-${item.province}-${item.place}-${item.category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    duplicateKey: review.duplicateKey ?? `${item.country}-${item.province}-${item.place}-${item.category}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    duplicateGroup: review.duplicateGroup
   };
 }
 

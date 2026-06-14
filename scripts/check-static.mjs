@@ -275,7 +275,10 @@ if (
   !reviewPageSource.includes("/api/review-export") ||
   !reviewPageSource.includes("/api/editorial-status") ||
   !reviewPageSource.includes("/api/source-health?") ||
-  !reviewPageSource.includes("/api/publication-preview?")
+  !reviewPageSource.includes("/api/publication-preview?") ||
+  !reviewPageSource.includes("function renderDuplicateGroups(summary") ||
+  !reviewPageSource.includes("function renderDuplicateDetail(review)") ||
+  !stylesSource.includes(".review-duplicate-list")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
 }
@@ -1844,10 +1847,20 @@ if (
 }
 
 const queue = reviewQueueFromEvents(events);
+const duplicateSampleQueue = reviewQueueFromEvents([sampleUkraineEvents[0], duplicateUkraineCandidate]);
 const filteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {
   status: "candidate",
   assignee: "editorial-desk"
 });
+if (
+  duplicateSampleQueue.summary.duplicateGroupCount !== 1 ||
+  duplicateSampleQueue.summary.duplicateCandidateCount !== 2 ||
+  duplicateSampleQueue.summary.duplicateGroups?.[0]?.duplicateKey !== sampleUkraineEvents[0].review.duplicateKey ||
+  duplicateSampleQueue.candidates[0]?.review?.duplicateGroup?.count !== 2 ||
+  !duplicateSampleQueue.summary.duplicateGroups?.[0]?.eventIds?.includes(duplicateUkraineCandidate.id)
+) {
+  throw new Error("Review queue duplicate grouping failed duplicate-key summary checks");
+}
 if (
   filteredSampleQueue.candidates.length !== 1 ||
   filteredSampleQueue.filters.status !== "candidate" ||

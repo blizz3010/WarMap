@@ -66,7 +66,12 @@ export function reviewQueueFromEvents(events, filters = {}) {
       if (priorityCompare) return priorityCompare;
       return timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt);
     });
-  const candidates = allCandidates.filter((event) => matchesQueueFilters(event, normalizedFilters));
+  const duplicateIndex = duplicateGroupIndex(allCandidates);
+  const candidates = allCandidates
+    .filter((event) => matchesQueueFilters(event, normalizedFilters))
+    .map((event) => annotateDuplicateGroup(event, duplicateIndex));
+  const duplicateGroups = duplicateGroupsForCandidates(allCandidates);
+  const filteredDuplicateGroups = duplicateGroupsForCandidates(candidates);
 
   return {
     candidates,
@@ -77,6 +82,12 @@ export function reviewQueueFromEvents(events, filters = {}) {
       candidateByStatus: countBy(allCandidates, (event) => event.review.status),
       candidateByAssignee: countBy(allCandidates, (event) => normalizeAssignee(event.review.assignee)),
       candidateByPriority: countBy(allCandidates, (event) => event.review.priority),
+      duplicateGroupCount: duplicateGroups.length,
+      duplicateCandidateCount: duplicateGroups.reduce((count, group) => count + group.count, 0),
+      filteredDuplicateGroupCount: filteredDuplicateGroups.length,
+      filteredDuplicateCandidateCount: filteredDuplicateGroups.reduce((count, group) => count + group.count, 0),
+      duplicateGroups: duplicateGroups.slice(0, 8),
+      filteredDuplicateGroups: filteredDuplicateGroups.slice(0, 8),
       filters: normalizedFilters
     },
     filters: normalizedFilters
@@ -152,6 +163,80 @@ function normalizeAssignee(value) {
 
 function cleanFilter(value) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function annotateDuplicateGroup(event, duplicateIndex) {
+  const group = duplicateIndex.get(event.review?.duplicateKey);
+  if (!group) {
+    return event;
+  }
+  return {
+    ...event,
+    review: {
+      ...event.review,
+      duplicateGroup: group
+    }
+  };
+}
+
+function duplicateGroupsForCandidates(candidates = []) {
+  return [...duplicateGroupIndex(candidates).values()].sort((left, right) => {
+    const countCompare = right.count - left.count;
+    if (countCompare) return countCompare;
+    return timestamp(right.latestSeenAt) - timestamp(left.latestSeenAt);
+  });
+}
+
+function duplicateGroupIndex(candidates = []) {
+  const groups = new Map();
+  candidates.forEach((event) => {
+    const duplicateKey = event.review?.duplicateKey ?? "";
+    if (!duplicateKey) {
+      return;
+    }
+    const existing = groups.get(duplicateKey) ?? {
+      duplicateKey,
+      count: 0,
+      eventIds: [],
+      titles: [],
+      places: new Set(),
+      categories: new Set(),
+      severities: new Set(),
+      sourceCount: 0,
+      earliestSeenAt: event.firstSeenAt,
+      latestSeenAt: event.lastUpdatedAt ?? event.firstSeenAt
+    };
+    existing.count += 1;
+    existing.eventIds.push(event.id);
+    existing.titles.push(event.title);
+    if (event.place) existing.places.add(event.place);
+    if (event.category) existing.categories.add(event.category);
+    if (event.severity) existing.severities.add(event.severity);
+    existing.sourceCount += Number(event.sourceCount ?? event.sources?.length ?? 0);
+    existing.earliestSeenAt = minIsoDate(existing.earliestSeenAt, event.firstSeenAt);
+    existing.latestSeenAt = maxIsoDate(existing.latestSeenAt, event.lastUpdatedAt ?? event.firstSeenAt);
+    groups.set(duplicateKey, existing);
+  });
+
+  return new Map(
+    [...groups.entries()]
+      .filter(([, group]) => group.count > 1)
+      .map(([key, group]) => [
+        key,
+        {
+          duplicateKey: group.duplicateKey,
+          count: group.count,
+          eventIds: group.eventIds,
+          titles: group.titles.slice(0, 4),
+          places: [...group.places].sort(),
+          categories: [...group.categories].sort(),
+          severities: [...group.severities].sort(),
+          sourceCount: group.sourceCount,
+          earliestSeenAt: group.earliestSeenAt,
+          latestSeenAt: group.latestSeenAt
+        }
+      ])
+  );
 }
 
 function inferReviewStatus(event) {
@@ -267,6 +352,22 @@ function countBy(events, getter) {
 function timestamp(value) {
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function minIsoDate(left, right) {
+  const leftTime = timestamp(left);
+  const rightTime = timestamp(right);
+  if (!leftTime) return right || left;
+  if (!rightTime) return left || right;
+  return leftTime <= rightTime ? left : right;
+}
+
+function maxIsoDate(left, right) {
+  const leftTime = timestamp(left);
+  const rightTime = timestamp(right);
+  if (!leftTime) return right || left;
+  if (!rightTime) return left || right;
+  return leftTime >= rightTime ? left : right;
 }
 
 function titleCase(value) {

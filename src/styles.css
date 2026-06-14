@@ -3066,6 +3066,41 @@ dd {
   align-items: center;
 }
 
+.review-duplicate-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-duplicate-list li {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.review-duplicate-list strong,
+.review-duplicate-list small,
+.archive-event-meta dd small {
+  overflow-wrap: anywhere;
+}
+
+.review-duplicate-list strong {
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.review-duplicate-list span,
+.review-duplicate-list small,
+.archive-event-meta dd small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .review-source-strip > span {
   color: var(--dim);
   font-size: 11px;
