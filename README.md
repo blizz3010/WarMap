@@ -91,7 +91,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/review-dossier?id=...&region=ukraine-east` returns one candidate's source evidence, AI extraction confidence, duplicate context, publication checks, and safe decision payload templates for analyst review.
 - `/api/publication-preview?id=...&region=ukraine-east` builds a non-persisted approval dry run for one queue candidate, showing the exact map/feed/detail/archive/API record that a human approval would publish.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
-- `/setup?region=ukraine-east` renders the non-secret launch checklist for editorial environment variables, GitHub/Postgres store verification, source activation backlog targets, static export fallback, and review/publication/source links. `/api/editorial-setup?region=ukraine-east` returns the same setup contract as JSON.
+- `/setup?region=ukraine-east` renders the non-secret launch checklist for editorial environment variables, copy-safe Vercel env commands, GitHub/Postgres store verification, source activation backlog targets, static export fallback, and review/publication/source links. `/api/editorial-setup?region=ukraine-east` returns the same setup contract as JSON.
 - `/sources?region=ukraine-east&lookback=30d` renders the source operations view for collector health, active sources, planned activation backlog, Liveuamap-compatible curation boundaries, and source registry links.
 - `/api/editorial-store-health` runs a read-only GitHub Contents or Postgres health check for the durable editorial store, including repo/file or event-store table readability, without exposing tokens.
 - `/api/intake-store-health` runs a read-only GitHub Contents or local-file health check for optional cron candidate snapshots, including repo, branch, path, snapshot-file readability, and secret redaction.
@@ -233,7 +233,7 @@ With those variables configured, send `Authorization: Bearer <NOTIFICATION_ADMIN
 
 ## Editorial launch profiles
 
-`/setup?region=ukraine-east` includes copy-safe environment profiles for the two durable editorial-store paths. The recommended short path is `EDITORIAL_STORE_PROVIDER=github` with a fine-grained GitHub token, repo/branch/path settings, and `EDITORIAL_REVIEW_TOKEN`. The Postgres path uses `EDITORIAL_STORE_PROVIDER=postgres`, `DATABASE_URL` or `POSTGRES_URL`, `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, and the same reviewer token. Secret values are shown only as placeholders; verify the active production state with `/readiness?region=ukraine-east&lookback=30d` after setting Vercel environment variables.
+`/setup?region=ukraine-east` includes copy-safe environment profiles and Vercel CLI commands for the two durable editorial-store paths. The recommended short path is `EDITORIAL_STORE_PROVIDER=github` with a fine-grained GitHub token, repo/branch/path settings, and `EDITORIAL_REVIEW_TOKEN`. The Postgres path uses `EDITORIAL_STORE_PROVIDER=postgres`, `DATABASE_URL` or `POSTGRES_URL`, `WARMAP_STORAGE_SCHEMA_VERSION=event-store-schema.v1`, and the same reviewer token. Secret values are shown only as placeholders; verify the active production state with `/readiness?region=ukraine-east&lookback=30d` after setting Vercel environment variables and redeploying production.
 
 ## Collector configuration
 

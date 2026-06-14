@@ -326,6 +326,9 @@ if (
   !setupPageSource.includes("function renderSetupTarget(target)") ||
   !setupPageSource.includes("function renderEnvironmentProfile(profile)") ||
   !setupPageSource.includes("function renderEnvironmentVariable(variable)") ||
+  !setupPageSource.includes("function renderVercelEnvironment(runbook") ||
+  !setupPageSource.includes("function renderVercelCommand(command)") ||
+  !setupPageSource.includes("data-copy-text") ||
   !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("data-setup-region") ||
@@ -336,10 +339,12 @@ if (
   !stylesSource.includes(".setup-target-list") ||
   !stylesSource.includes(".setup-profile-list") ||
   !stylesSource.includes(".setup-profile-vars") ||
+  !stylesSource.includes(".setup-command-profile-list") ||
+  !stylesSource.includes(".setup-command-list") ||
   !stylesSource.includes(".setup-source-list") ||
   !stylesSource.includes(".setup-link-list")
 ) {
-  throw new Error("Expected setup page to render editorial setup targets, environment profiles, source activation, fallback bridge, and readiness links");
+  throw new Error("Expected setup page to render editorial setup targets, environment profiles, Vercel env commands, source activation, fallback bridge, and readiness links");
 }
 
 if (
@@ -982,6 +987,18 @@ if (
   !editorialSetup.setupTargets.some((target) => target.id === "github-editorial-store" && !target.ready && target.env.includes("EDITORIAL_GITHUB_TOKEN")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "github-contents-editorial" && profile.recommended && profile.variables.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-editorial" && profile.variables.some((item) => item.name === "DATABASE_URL or POSTGRES_URL" && item.secret)) ||
+  editorialSetup.vercelEnvironment?.target !== "production" ||
+  editorialSetup.vercelEnvironment?.cli?.pull !== "vercel pull --environment=production" ||
+  editorialSetup.vercelEnvironment?.cli?.redeploy !== "vercel deploy --prod" ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "github-contents-editorial" &&
+    profile.commands.some((command) => command.name === "EDITORIAL_REVIEW_TOKEN" && command.addCommand === "vercel env add EDITORIAL_REVIEW_TOKEN production" && command.secret)
+  ) ||
+  !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
+    profile.id === "postgres-editorial" &&
+    profile.commands.some((command) => command.name === "DATABASE_URL" && command.addCommand === "vercel env add DATABASE_URL production") &&
+    profile.commands.some((command) => command.name === "POSTGRES_URL" && command.addCommand === "vercel env add POSTGRES_URL production")
+  ) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_SITE_SOURCES")) ||
   !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||

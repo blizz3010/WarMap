@@ -37,6 +37,7 @@ function renderSetup(setup) {
   const current = setup.current ?? {};
   const requiredConfig = setup.requiredConfiguration ?? [];
   const environmentProfiles = setup.environmentProfiles ?? [];
+  const vercelEnvironment = setup.vercelEnvironment ?? {};
   const setupTargets = setup.setupTargets ?? [];
   const sourceActivation = setup.sourceActivation ?? {};
   const backlog = sourceActivation.backlog ?? {};
@@ -90,6 +91,11 @@ function renderSetup(setup) {
             <ul class="setup-profile-list">
               ${environmentProfiles.map(renderEnvironmentProfile).join("") || "<li><strong>No environment profiles reported</strong></li>"}
             </ul>
+          </section>
+
+          <section class="event-page-section">
+            <h2>Vercel Env Commands</h2>
+            ${renderVercelEnvironment(vercelEnvironment)}
           </section>
 
           <section class="event-page-section">
@@ -199,6 +205,62 @@ function renderEnvironmentVariable(variable) {
   `;
 }
 
+function renderVercelEnvironment(runbook = {}) {
+  const profiles = runbook.profiles ?? [];
+  const cli = runbook.cli ?? {};
+  return `
+    <ul class="setup-command-utility-list">
+      ${renderUtilityCommand("List", cli.list)}
+      ${renderUtilityCommand("Pull", cli.pull)}
+      ${renderUtilityCommand("Redeploy", cli.redeploy)}
+    </ul>
+    <ul class="setup-command-profile-list">
+      ${profiles.map(renderVercelProfile).join("") || "<li><strong>No Vercel environment runbook reported</strong></li>"}
+    </ul>
+  `;
+}
+
+function renderUtilityCommand(label, command) {
+  if (!command) {
+    return "";
+  }
+  return `
+    <li>
+      <strong>${escapeHtml(label)}</strong>
+      <code>${escapeHtml(command)}</code>
+      <button type="button" data-copy-text="${escapeAttr(command)}" aria-label="Copy ${escapeAttr(label)} command">Copy</button>
+    </li>
+  `;
+}
+
+function renderVercelProfile(profile) {
+  return `
+    <li class="${profile.ready ? "is-ready" : profile.recommended ? "is-warning" : "is-blocked"}">
+      <header>
+        <strong>${escapeHtml(profile.label ?? profile.id)}</strong>
+        <span>${profile.ready ? "ready" : profile.recommended ? "recommended" : "optional"}</span>
+      </header>
+      <ul class="setup-command-list">
+        ${(profile.commands ?? []).map(renderVercelCommand).join("")}
+      </ul>
+      <nav class="setup-profile-links" aria-label="${escapeAttr(profile.label ?? profile.id)} verification links">
+        ${(profile.verification ?? []).map((href) => `<a href="${escapeAttr(href)}">Verify</a>`).join("")}
+      </nav>
+    </li>
+  `;
+}
+
+function renderVercelCommand(command) {
+  return `
+    <li class="${command.configured ? "is-ready" : "is-blocked"}">
+      <code>${escapeHtml(command.addCommand)}</code>
+      <button type="button" data-copy-text="${escapeAttr(command.addCommand)}" aria-label="Copy command for ${escapeAttr(command.name)}">Copy</button>
+      <span>${command.configured ? "configured" : "needed"}</span>
+      <small>${escapeHtml(command.secret ? "<secret>" : command.valueHint ?? "")}</small>
+    </li>
+  `;
+}
+
 function renderSourceActivation(sourceActivation) {
   const backlog = sourceActivation.backlog ?? {};
   const byCollector = sourceActivation.byCollector ?? [];
@@ -300,6 +362,23 @@ function bindSetupControls() {
     const nextUrl = `/setup?${new URLSearchParams({ region: state.region }).toString()}`;
     history.replaceState(null, "", nextUrl);
     loadSetupPage();
+  });
+  document.querySelectorAll("[data-copy-text]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const command = button.getAttribute("data-copy-text") ?? "";
+      try {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error("Clipboard unavailable");
+        }
+        await navigator.clipboard.writeText(command);
+        button.textContent = "Copied";
+        setTimeout(() => {
+          button.textContent = "Copy";
+        }, 1200);
+      } catch {
+        button.textContent = "Copy";
+      }
+    });
   });
 }
 

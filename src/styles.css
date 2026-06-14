@@ -2118,6 +2118,8 @@ dd {
 .setup-primary,
 .setup-target-list,
 .setup-profile-list,
+.setup-command-profile-list,
+.setup-command-utility-list,
 .setup-collector-list,
 .setup-source-list,
 .setup-link-list {
@@ -2128,6 +2130,9 @@ dd {
 .setup-target-list,
 .setup-profile-list,
 .setup-profile-vars,
+.setup-command-profile-list,
+.setup-command-utility-list,
+.setup-command-list,
 .setup-collector-list,
 .setup-source-list,
 .setup-requirements {
@@ -2138,6 +2143,7 @@ dd {
 
 .setup-target-list > li,
 .setup-profile-list > li,
+.setup-command-profile-list > li,
 .setup-collector-list > li,
 .setup-source-list > li {
   display: grid;
@@ -2159,12 +2165,27 @@ dd {
   background: rgba(34, 197, 94, 0.08);
 }
 
+.setup-command-profile-list > li.is-ready {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.08);
+}
+
 .setup-profile-list > li.is-warning {
   border-color: rgba(250, 204, 21, 0.25);
   background: rgba(250, 204, 21, 0.07);
 }
 
+.setup-command-profile-list > li.is-warning {
+  border-color: rgba(250, 204, 21, 0.25);
+  background: rgba(250, 204, 21, 0.07);
+}
+
 .setup-profile-list > li.is-blocked {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.setup-command-profile-list > li.is-blocked {
   border-color: rgba(239, 68, 68, 0.3);
   background: rgba(239, 68, 68, 0.08);
 }
@@ -2176,14 +2197,20 @@ dd {
 
 .setup-target-list strong,
 .setup-profile-list strong,
+.setup-command-profile-list strong,
+.setup-command-utility-list strong,
 .setup-collector-list strong,
 .setup-source-list strong,
 .setup-target-list span,
 .setup-profile-list span,
+.setup-command-profile-list span,
+.setup-command-utility-list span,
 .setup-collector-list span,
 .setup-source-list span,
 .setup-target-list small,
 .setup-profile-list small,
+.setup-command-profile-list small,
+.setup-command-utility-list small,
 .setup-collector-list small,
 .setup-source-list small,
 .setup-profile-list p,
@@ -2193,6 +2220,8 @@ dd {
 
 .setup-target-list strong,
 .setup-profile-list strong,
+.setup-command-profile-list strong,
+.setup-command-utility-list strong,
 .setup-collector-list strong,
 .setup-source-list strong {
   color: var(--text);
@@ -2201,6 +2230,7 @@ dd {
 
 .setup-target-list span,
 .setup-profile-list span,
+.setup-command-profile-list span,
 .setup-collector-list span,
 .setup-source-list span {
   color: var(--muted);
@@ -2211,6 +2241,8 @@ dd {
 
 .setup-target-list small,
 .setup-profile-list small,
+.setup-command-profile-list small,
+.setup-command-utility-list small,
 .setup-collector-list small,
 .setup-source-list small,
 .setup-profile-list p,
@@ -2246,6 +2278,12 @@ dd {
 }
 
 .setup-profile-list header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.setup-command-profile-list header {
   display: flex;
   justify-content: space-between;
   gap: 10px;
@@ -2294,6 +2332,77 @@ dd {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.4;
+}
+
+.setup-command-utility-list li,
+.setup-command-list li {
+  display: grid;
+  gap: 6px 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.setup-command-utility-list li {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.setup-command-list li {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.setup-command-list {
+  display: grid;
+  gap: 7px;
+}
+
+.setup-command-list li.is-ready {
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.setup-command-list li.is-blocked {
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.setup-command-utility-list code,
+.setup-command-list code {
+  min-width: 0;
+  color: #e5e7eb;
+  font-size: 11px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.setup-command-utility-list button,
+.setup-command-list button {
+  align-self: start;
+  min-height: 30px;
+  min-width: 72px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.setup-command-utility-list span,
+.setup-command-list span,
+.setup-command-utility-list small,
+.setup-command-list small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.setup-command-list span,
+.setup-command-list small {
+  grid-column: 1 / -1;
 }
 
 .setup-profile-links {
@@ -3416,8 +3525,17 @@ dd {
   }
 
   .setup-source-list header,
-  .setup-profile-list header {
+  .setup-profile-list header,
+  .setup-command-profile-list header {
     flex-direction: column;
+  }
+
+  .setup-command-utility-list li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .setup-command-utility-list strong {
+    grid-column: 1 / -1;
   }
 
   .source-registry-list header,
