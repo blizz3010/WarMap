@@ -442,9 +442,14 @@ if (
   !ukraineCuration.liveuamapReferences.some((reference) => reference.url === "https://liveuamap.com/promo/api") ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "ukraine-mod-news") ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api") ||
+  ukraineCuration.sourceRegistry.activationBacklog?.summary?.count !== ukraineCuration.sourceRegistry.planned ||
+  !ukraineCuration.sourceRegistry.activationBacklog?.summary?.sourceIds?.includes("ukraine-mod-news") ||
+  !ukraineCuration.sourceRegistry.activationBacklog?.byCollector?.some((group) => group.collector === "official-site" && group.sourceIds.includes("ukraine-mod-news")) ||
+  !ukraineCuration.sourceRegistry.activationBacklog?.sources?.some((source) => source.id === "liveuamap-api" && source.nextAction.includes("licensed-api adapter")) ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "liveuamap-api" && source.activation?.requiredBeforeActivation?.some((item) => item.includes("licensed-api adapter"))) ||
   !ukraineCuration.sourceRegistry.plannedBacklog.some((source) => source.id === "russia-mod-en" && source.activation?.reviewPolicy === "claim-label-required") ||
   !ukraineCuration.readiness.canPublishFromCollectors ||
+  !ukraineCuration.readiness.activationBacklogSummary?.sourceIds?.includes("compliant-social-apis") ||
   !ukraineCuration.endpoints.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
   !ukraineCuration.readiness.needsOfficialSiteAdapters ||
   !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages")) ||
@@ -697,6 +702,17 @@ if (
   !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "ai-provider" && !blocker.required) ||
   productionReadiness.sections.sourceCuration.activeSources < 1 ||
+  !productionReadiness.sections.sourceCuration.activationBacklog?.summary?.sourceIds?.includes("ukraine-mod-news") ||
+  !productionReadiness.optionalBlockers?.some(
+    (blocker) =>
+      blocker.id === "official-site-adapters" &&
+      blocker.sourceIds?.includes("ukraine-mod-news") &&
+      blocker.sourceCount >= 1 &&
+      blocker.nextAction?.includes("official RSS/API/CAP")
+  ) ||
+  !productionReadiness.optionalBlockers?.some(
+    (blocker) => blocker.id === "liveuamap-license" && blocker.sourceIds?.includes("liveuamap-api")
+  ) ||
   !productionReadiness.sections.sourceCuration.sourceHealth?.includes("/api/source-health?region=ukraine-east") ||
   productionReadiness.sections.ingestion.ready ||
   productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||

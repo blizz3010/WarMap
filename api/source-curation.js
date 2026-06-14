@@ -142,6 +142,7 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
   const sources = sourcesForRegion(normalizedRegion);
   const active = sources.filter((source) => source.status === "active");
   const planned = plannedSourcesForRegion(normalizedRegion);
+  const activationBacklog = sourceActivationBacklog(planned);
 
   return {
     kind: "SourceCuration",
@@ -165,13 +166,15 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
       planned: planned.length,
       activeSources: active.map(sourceSummary),
       plannedBacklog: planned.map(sourceSummary),
+      activationBacklog,
       collectorFamilies: collectorFamilies(sources)
     },
     readiness: {
       canPublishFromCollectors: active.length > 0,
       needsLicensedLiveuamapApi: planned.some((source) => source.id === "liveuamap-api"),
       needsOfficialSiteAdapters: planned.some((source) => source.collector === "official-site"),
-      needsCompliantSocialConfig: planned.some((source) => source.collector === "social-api")
+      needsCompliantSocialConfig: planned.some((source) => source.collector === "social-api"),
+      activationBacklogSummary: activationBacklog.summary
     }
   };
 }
@@ -219,6 +222,67 @@ function activationProfile(source) {
     reviewPolicy: reviewPolicyForSource(source),
     notes: "Planned sources stay visible in readiness output but are not fetched until these requirements are met."
   };
+}
+
+function sourceActivationBacklog(plannedSources) {
+  const sources = plannedSources.map((source) => ({
+    id: source.id,
+    name: source.name,
+    collector: source.collector,
+    sourceType: source.sourceType,
+    trustTier: source.trustTier,
+    access: source.access ?? null,
+    url: source.url ?? null,
+    reviewPolicy: reviewPolicyForSource(source),
+    nextAction: activationNextActionForSource(source),
+    requirements: activationRequirementsForSource(source)
+  }));
+  const byCollector = Object.values(
+    sources.reduce((groups, source) => {
+      groups[source.collector] ??= {
+        collector: source.collector,
+        count: 0,
+        sourceIds: [],
+        nextActions: new Set()
+      };
+      groups[source.collector].count += 1;
+      groups[source.collector].sourceIds.push(source.id);
+      groups[source.collector].nextActions.add(source.nextAction);
+      return groups;
+    }, {})
+  )
+    .map((group) => ({
+      ...group,
+      nextActions: [...group.nextActions].sort()
+    }))
+    .sort((left, right) => left.collector.localeCompare(right.collector));
+
+  return {
+    schemaVersion: "source-activation-backlog.v1",
+    summary: {
+      count: sources.length,
+      sourceIds: sources.map((source) => source.id),
+      collectorCounts: byCollector.reduce((counts, group) => {
+        counts[group.collector] = group.count;
+        return counts;
+      }, {})
+    },
+    byCollector,
+    sources
+  };
+}
+
+function activationNextActionForSource(source) {
+  if (source.collector === "licensed-api") {
+    return "Secure API license and implement a licensed-api adapter.";
+  }
+  if (source.collector === "official-site") {
+    return "Confirm automated-use terms and add an official RSS/API/CAP adapter.";
+  }
+  if (source.collector === "social-api") {
+    return "Configure approved API endpoint metadata and token environment names.";
+  }
+  return "Confirm permission, parser coverage, and review routing before activation.";
 }
 
 function activationRequirementsForSource(source) {
