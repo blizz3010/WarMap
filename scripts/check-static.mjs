@@ -288,6 +288,8 @@ if (
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("function renderSourceHealthSummary()") ||
+  !appSource.includes("function renderSourceActivationBacklog(sourceCuration)") ||
+  !appSource.includes("sourceCuration.activationBacklog?.summary") ||
   !appSource.includes("function sourceHealthStatusClass(health)") ||
   !appSource.includes("inline-review-source-strip") ||
   !appSource.includes("function renderReviewGateChecklist(item)") ||
@@ -298,6 +300,10 @@ if (
   !appSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected inline review panel to expose static decision exports when writes are blocked");
+}
+
+if (!stylesSource.includes(".source-activation-backlog") || !stylesSource.includes("overflow-wrap: anywhere")) {
+  throw new Error("Expected inline review readiness panel to style the source activation backlog");
 }
 
 if (

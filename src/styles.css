@@ -1599,6 +1599,47 @@ dd {
   margin-bottom: 8px;
 }
 
+.source-activation-backlog {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.source-activation-backlog > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.source-activation-backlog strong {
+  color: var(--text);
+}
+
+.source-activation-backlog .status-list {
+  gap: 5px;
+}
+
+.source-activation-backlog .status-list li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 8px;
+  min-height: 0;
+}
+
+.source-activation-backlog .status-list small {
+  grid-column: 1 / -1;
+  color: var(--dim);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
 .inline-review-source-strip,
 .inline-review-links {
   gap: 5px;
