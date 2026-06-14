@@ -28,6 +28,8 @@ const state = {
   platformMessage: "",
   productionReadiness: null,
   readinessMessage: "",
+  sourceHealth: null,
+  sourceHealthMessage: "",
   paused: false,
   streamConnected: false,
   streamMessage: "Realtime stream idle",
@@ -932,9 +934,26 @@ async function loadProductionReadiness(options = {}) {
 
   try {
     const params = new URLSearchParams({ region });
-    const response = await fetch(`/api/production-readiness?${params.toString()}`, {
+    const healthParams = new URLSearchParams({ region, lookback: lookbackForApi(state.timeRange) });
+    const healthResult = fetch(`/api/source-health?${healthParams.toString()}`, {
       headers: { Accept: "application/json" }
-    });
+    })
+      .then(async (healthResponse) => {
+        const healthPayload = await healthResponse.json().catch(() => null);
+        if (!healthResponse.ok || healthPayload?.kind !== "SourceHealth") {
+          throw new Error(healthPayload?.message || healthPayload?.error || `Source health returned ${healthResponse.status}`);
+        }
+        return healthPayload;
+      })
+      .then((healthPayload) => ({ healthPayload }))
+      .catch((healthError) => ({ healthError }));
+
+    const [response, health] = await Promise.all([
+      fetch(`/api/production-readiness?${params.toString()}`, {
+        headers: { Accept: "application/json" }
+      }),
+      healthResult
+    ]);
     const payload = await response.json();
     if (!response.ok || payload.kind !== "ProductionReadiness") {
       throw new Error(payload.message || payload.error || `Production readiness returned ${response.status}`);
@@ -944,12 +963,16 @@ async function loadProductionReadiness(options = {}) {
     }
     state.productionReadiness = payload;
     state.readinessMessage = "";
+    state.sourceHealth = health.healthPayload ?? null;
+    state.sourceHealthMessage = health.healthError instanceof Error ? health.healthError.message : "";
   } catch (error) {
     if (requestId !== readinessRequestId) {
       return;
     }
     state.productionReadiness = null;
     state.readinessMessage = error instanceof Error ? error.message : "Production readiness unavailable";
+    state.sourceHealth = null;
+    state.sourceHealthMessage = "";
   }
 
   if (!quiet || state.activePanel === "review") {
@@ -1650,6 +1673,7 @@ function renderReviewReadinessPanel() {
         <div><dt>Published</dt><dd>${Number(publication.published ?? 0)}</dd></div>
         <div><dt>Sources</dt><dd>${Number(sourceCuration.activeSources ?? 0)} active</dd></div>
       </dl>
+      ${renderSourceHealthSummary()}
       <ul class="status-list readiness-blockers">
         ${
           requiredBlockers
@@ -1662,10 +1686,52 @@ function renderReviewReadinessPanel() {
         <a href="${escapeAttr(productionReadinessLink())}" target="_blank" rel="noreferrer noopener">Readiness</a>
         <a href="/api/editorial-status" target="_blank" rel="noreferrer noopener">Editorial</a>
         <a href="/api/editorial-store-health" target="_blank" rel="noreferrer noopener">Store</a>
+        <a href="${escapeAttr(sourceHealthLink())}" target="_blank" rel="noreferrer noopener">Sources</a>
         <a href="${escapeAttr(publicationStatusLink())}" target="_blank" rel="noreferrer noopener">Publication</a>
       </nav>
     </section>
   `;
+}
+
+function renderSourceHealthSummary() {
+  const health = state.sourceHealth;
+  if (!health) {
+    return state.sourceHealthMessage
+      ? `<p class="status-summary is-blocked">${escapeHtml(state.sourceHealthMessage)}</p>`
+      : "";
+  }
+
+  const resilience = health.resilience ?? {};
+  return `
+    <div class="source-health-summary">
+      <p class="status-summary ${sourceHealthStatusClass(health)}">
+        Collector health ${escapeHtml(titleCase(resilience.state ?? "unknown"))}. ${escapeHtml(resilience.message ?? sourceHealthFallbackMessage(health))}
+      </p>
+      <dl class="readiness-facts source-health-facts">
+        <div><dt>Reachable</dt><dd>${Number(health.summary?.reachableSources ?? 0)}</dd></div>
+        <div><dt>Retryable</dt><dd>${Number(health.summary?.retryableFailures ?? 0)}</dd></div>
+        <div><dt>Hard</dt><dd>${Number(health.summary?.hardFailures ?? 0)}</dd></div>
+        <div><dt>Missing config</dt><dd>${Number(health.summary?.missingConfiguration ?? 0)}</dd></div>
+      </dl>
+    </div>
+  `;
+}
+
+function sourceHealthStatusClass(health) {
+  if (health?.ready) {
+    return "is-ready";
+  }
+  if (health?.operational) {
+    return "is-warning";
+  }
+  return "is-blocked";
+}
+
+function sourceHealthFallbackMessage(health) {
+  if (health?.operational) {
+    return "Collectors are serving candidates with warnings.";
+  }
+  return "Collectors need attention before publication.";
 }
 
 function renderInlineReviewExportBundle() {
@@ -2903,6 +2969,14 @@ function editorialSetupLink() {
 function publicationStatusLink() {
   const params = new URLSearchParams({ region: state.regionId });
   return `/api/publication-status?${params.toString()}`;
+}
+
+function sourceHealthLink() {
+  const params = new URLSearchParams({
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/api/source-health?${params.toString()}`;
 }
 
 function reviewDossierLink(item) {
