@@ -56,7 +56,7 @@ The check validates the static app files and the event, region, category, severi
 - verification state: `reported` by default, because these are source leads
 - lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
-The browser map fetches `/api/events?region=iran&publication=all` and keeps the static data as a safe fallback. The embed view uses the public `/v1/events` contract so it can be dropped into dashboard surfaces without depending on legacy internal response shapes. `publication=published` returns only approved events when a persistent editorial store is added.
+The browser map fetches `/api/events?region=iran&publication=all` and keeps the static data as a safe fallback. Theater, publication, and non-default lookback selections stay in the URL so Liveuamap-style region switches can be shared directly, including event hash links. The embed view uses the public `/v1/events` contract so it can be dropped into dashboard surfaces without depending on legacy internal response shapes. `publication=published` returns only approved events when a persistent editorial store is added.
 
 The browser map also opens `/v1/stream/events` with `EventSource` when available. Stream snapshots invalidate events and trigger a quiet refresh that preserves filters and the selected detail card; the Pause button closes the stream and Resume reconnects it.
 
