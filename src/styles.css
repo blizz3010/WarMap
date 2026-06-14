@@ -2233,6 +2233,177 @@ dd {
   border-left: 2px solid var(--line);
 }
 
+.sources-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(160px, 220px) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sources-toolbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sources-toolbar span {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.sources-toolbar select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #0d1117;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.sources-toolbar a,
+.source-registry-list a,
+.source-health-list a,
+.source-link-list a,
+.source-reference-list a {
+  display: inline-grid;
+  place-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.sources-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 22px;
+  align-items: start;
+}
+
+.sources-primary,
+.source-family-list,
+.source-registry-list,
+.source-health-list,
+.source-link-list,
+.source-reference-list {
+  display: grid;
+  gap: 12px;
+}
+
+.source-family-list,
+.source-registry-list,
+.source-health-list,
+.source-requirement-list,
+.source-reference-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source-family-list > li,
+.source-registry-list > li,
+.source-health-list > li,
+.source-reference-list > li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.source-registry-list > li.is-active,
+.source-health-list > li.is-ready {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.source-registry-list > li.is-planned,
+.source-health-list > li.is-planned {
+  border-color: rgba(250, 204, 21, 0.25);
+  background: rgba(250, 204, 21, 0.07);
+}
+
+.source-health-list > li.is-blocked {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.source-registry-list header,
+.source-health-list header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.source-family-list strong,
+.source-registry-list strong,
+.source-health-list strong,
+.source-reference-list strong,
+.source-registry-list span,
+.source-health-list span,
+.source-family-list small,
+.source-registry-list small,
+.source-health-list small,
+.source-reference-list small,
+.source-registry-list p,
+.source-health-list p {
+  overflow-wrap: anywhere;
+}
+
+.source-family-list strong,
+.source-registry-list strong,
+.source-health-list strong,
+.source-reference-list strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.source-registry-list span,
+.source-health-list span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.source-family-list small,
+.source-registry-list small,
+.source-health-list small,
+.source-reference-list small,
+.source-registry-list p,
+.source-health-list p,
+.source-requirement-list li {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-requirement-list {
+  display: grid;
+  gap: 5px;
+}
+
+.source-requirement-list li {
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+.source-link-list {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
 .archive-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
@@ -2981,6 +3152,8 @@ dd {
   .archive-layout,
   .setup-toolbar,
   .setup-layout,
+  .sources-toolbar,
+  .sources-layout,
   .archive-event header,
   .archive-event-meta,
   .review-toolbar,
@@ -2992,6 +3165,11 @@ dd {
   }
 
   .setup-source-list header {
+    flex-direction: column;
+  }
+
+  .source-registry-list header,
+  .source-health-list header {
     flex-direction: column;
   }
 

@@ -1740,7 +1740,7 @@ function renderReviewReadinessPanel() {
         <a href="${escapeAttr(editorialSetupApiLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
         <a href="/api/editorial-status" target="_blank" rel="noreferrer noopener">Editorial</a>
         <a href="/api/editorial-store-health" target="_blank" rel="noreferrer noopener">Store</a>
-        <a href="${escapeAttr(sourceHealthLink())}" target="_blank" rel="noreferrer noopener">Sources</a>
+        <a href="${escapeAttr(sourcesPageLink())}" target="_blank" rel="noreferrer noopener">Sources</a>
         <a href="${escapeAttr(publicationStatusLink())}" target="_blank" rel="noreferrer noopener">Publication</a>
       </nav>
     </section>
@@ -3235,6 +3235,14 @@ function setupPageLink() {
 function editorialSetupApiLink() {
   const params = new URLSearchParams({ region: state.regionId });
   return `/api/editorial-setup?${params.toString()}`;
+}
+
+function sourcesPageLink() {
+  const params = new URLSearchParams({
+    region: state.regionId,
+    lookback: lookbackForApi(state.timeRange)
+  });
+  return `/sources?${params.toString()}`;
 }
 
 function publicationStatusLink() {
