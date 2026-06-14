@@ -1,6 +1,7 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { enrichEditorialEvents } from "./editorial-workflow.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
+import { loadIntakeSnapshots } from "./intake-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { events as seedEvents } from "../src/data.js";
@@ -48,6 +49,23 @@ export default async function handler(request, response) {
         region,
         source: "editorial snapshot store",
         snapshotEvents: scopedSnapshotEvents.length,
+        editorialDecisions: decisions.length
+      }
+    });
+    return;
+  }
+
+  const scopedIntakeEvents = detailEventsForRegion(await loadIntakeSnapshots(), decisions, region);
+  const intakeMatch = findEvent(scopedIntakeEvents, id);
+  if (intakeMatch) {
+    response.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=300");
+    response.status(200).json({
+      event: intakeMatch,
+      meta: {
+        generatedAt: new Date().toISOString(),
+        region,
+        source: "intake snapshot store",
+        intakeSnapshots: scopedIntakeEvents.length,
         editorialDecisions: decisions.length
       }
     });

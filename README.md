@@ -134,7 +134,7 @@ For the browser review panel or standalone review page, editors can provide the 
 
 ## Scheduled ingestion heartbeat
 
-`vercel.json` includes one daily production cron job at `/api/cron/ingest` (`17 2 * * *`). It exercises the permitted source collectors, AI extraction, region scoping, editorial queue counts, published snapshot counts, and source-link sampling for the configured theaters. It does not persist events yet; PostgreSQL/PostGIS remains the durable storage target.
+`vercel.json` includes one daily production cron job at `/api/cron/ingest` (`17 2 * * *`). It exercises the permitted source collectors, AI extraction, region scoping, editorial queue counts, optional intake snapshot storage, published snapshot counts, and source-link sampling for the configured theaters. PostgreSQL/PostGIS remains the durable storage target for production event documents, but the optional snapshot bridge can preserve review candidates between live collector windows.
 
 Configure the cron secret before expecting the scheduled run to execute:
 
@@ -146,6 +146,20 @@ INGESTION_MAX_RECORDS=35
 ```
 
 Vercel should call `GET /api/cron/ingest` with `Authorization: Bearer <CRON_SECRET>`. Without that token, the endpoint fails closed and `/api/ingestion-status` reports the missing configuration.
+
+Optional candidate snapshot storage uses the same no-dependency GitHub Contents pattern as editorial decisions:
+
+```bash
+INGESTION_STORE_PROVIDER=github
+INGESTION_GITHUB_TOKEN=github_pat_with_contents_read_write
+INGESTION_GITHUB_REPO=blizz3010/WarMap
+INGESTION_GITHUB_BRANCH=main
+INGESTION_GITHUB_PATH=editorial/intake-snapshots.json
+INGESTION_SNAPSHOT_RETENTION_DAYS=14
+INGESTION_SNAPSHOT_LIMIT=500
+```
+
+When enabled, cron stores sanitized review-candidate snapshots with original source links. `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, and `/api/event` read those snapshots back so an editor can review a candidate after it falls out of the current RSS/GDELT/social window. This is still a bridge, not a queue-backed event database.
 
 ## Platform capability registry
 

@@ -2,6 +2,7 @@ import { collectOpenWebArticles } from "./collectors.js";
 import { extractionRuntimeSummary } from "./ai-extractor.js";
 import { editorialSummary, eventsForPublication } from "./editorial-workflow.js";
 import { applyEditorialDecisions, eventsFromEditorialSnapshots, loadEditorialDecisions } from "./editorial-store.js";
+import { intakeSnapshotStoreCapabilities, loadIntakeSnapshots } from "./intake-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { activeOfficialFeedsForRegion, activeRssFeedsForRegion, registrySummary } from "./source-registry.js";
@@ -35,11 +36,12 @@ export default async function handler(request, response) {
     const decisions = await loadEditorialDecisions();
     const decidedEvents = applyEditorialDecisions(normalizedEvents, decisions);
     const scopedLiveEvents = eventsForRegionScope(decidedEvents, region);
+    const intakeEvents = eventsForRegionScope(applyEditorialDecisions(await loadIntakeSnapshots({ now: generatedAt }), decisions), region);
     const snapshotEvents = eventsForRegionScope(eventsFromEditorialSnapshots(decisions), region);
-    const scopedEvents = dedupeEvents([...scopedLiveEvents, ...snapshotEvents]);
+    const scopedEvents = dedupeEvents([...intakeEvents, ...scopedLiveEvents, ...snapshotEvents]);
     const events = eventsForPublication(scopedEvents, publication);
 
-    if (!normalizedEvents.length && !snapshotEvents.length && collection.upstreamErrors.length >= 2) {
+    if (!normalizedEvents.length && !intakeEvents.length && !snapshotEvents.length && collection.upstreamErrors.length >= 2) {
       throw new Error(collection.upstreamErrors.join("; "));
     }
 
@@ -58,6 +60,8 @@ export default async function handler(request, response) {
         officialFeeds: activeOfficialFeedsForRegion(region).map((feed) => feed.url),
         socialApiSources: collection.socialApiSources,
         upstreamArticles: collection.articles.length,
+        intakeSnapshots: intakeEvents.length,
+        intakeStore: intakeSnapshotStoreCapabilities({ now: generatedAt }),
         snapshotEvents: snapshotEvents.length,
         scopedEvents: scopedEvents.length,
         returnedEvents: events.length,

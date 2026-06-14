@@ -6,6 +6,7 @@ import {
   loadEditorialDecisions
 } from "./editorial-store.js";
 import { publishedEventsFromEvents, reviewQueueFromEvents } from "./editorial-workflow.js";
+import { intakeSnapshotStoreCapabilities, saveIntakeSnapshots } from "./intake-store.js";
 import { normalizeArticlesToEventsAsync, normalizeLookback } from "./news-normalizer.js";
 import { eventsForRegionScope } from "./region-scope.js";
 import { registrySummary } from "./source-registry.js";
@@ -37,14 +38,18 @@ export function buildIngestionStatusPayload({ env = process.env, now = new Date(
       })),
       lookback: runtime.lookback,
       maxRecords: runtime.maxRecords,
+      intakeStore: runtime.intakeStore,
       outputs: [
         "collector reachability and article counts",
         "AI extraction candidate counts",
         "editorial queue depth",
+        "optional intake snapshot persistence",
         "published snapshot counts",
         "visible source-link samples"
       ],
-      persistence: "This heartbeat does not replace PostgreSQL/PostGIS event storage; it exercises the intake pipeline until durable storage exists."
+      persistence: runtime.intakeStore.enabled
+        ? "Configured intake snapshot storage preserves review candidates between live collector windows; PostgreSQL/PostGIS remains the long-term event store."
+        : "This heartbeat does not replace PostgreSQL/PostGIS event storage; set INGESTION_STORE_PROVIDER to preserve review candidates between live collector windows."
     },
     endpoints: {
       status: INGESTION_STATUS_PATH,
@@ -62,6 +67,7 @@ export function ingestionRuntimeSummary({ env = process.env, now = new Date() } 
   const lookback = normalizeLookback(cleanEnv(env.INGESTION_LOOKBACK) || DEFAULT_INGESTION_LOOKBACK);
   const maxRecords = clampNumber(env.INGESTION_MAX_RECORDS ?? DEFAULT_INGESTION_MAX_RECORDS, 1, 100);
   const cronSecretConfigured = Boolean(cleanEnv(env.CRON_SECRET));
+  const intakeStore = intakeSnapshotStoreCapabilities({ env, now });
 
   return {
     schemaVersion: "ingestion-runtime.v1",
@@ -74,23 +80,39 @@ export function ingestionRuntimeSummary({ env = process.env, now = new Date() } 
     scheduledOnProduction: true,
     regions,
     lookback,
-    maxRecords
+    maxRecords,
+    intakeStore
   };
 }
 
 export function ingestionReadinessBlockers(runtime = ingestionRuntimeSummary()) {
-  if (runtime.cronSecretConfigured) {
-    return [];
-  }
-
-  return [
-    {
+  const blockers = [];
+  if (!runtime.cronSecretConfigured) {
+    blockers.push({
       id: "ingestion-cron-secret",
       required: false,
       status: "missing",
       message: "Set CRON_SECRET so Vercel can invoke the scheduled source-ingestion heartbeat without exposing it publicly."
-    }
-  ];
+    });
+  }
+
+  if (!runtime.intakeStore?.enabled) {
+    blockers.push({
+      id: "ingestion-snapshot-store",
+      required: false,
+      status: "disabled",
+      message: "Set INGESTION_STORE_PROVIDER=github after terms and plan review to preserve review candidates between collector runs."
+    });
+  } else if (!runtime.intakeStore?.canWrite) {
+    blockers.push({
+      id: "ingestion-snapshot-store",
+      required: false,
+      status: runtime.intakeStore?.mode ?? "unconfigured",
+      message: "Intake snapshot storage is enabled but missing repository/path/token configuration."
+    });
+  }
+
+  return blockers;
 }
 
 export async function runIngestionHeartbeat({
@@ -116,12 +138,14 @@ export async function runIngestionHeartbeat({
         maxRecords: runMaxRecords,
         decisions,
         now,
+        env,
         collectImpl
       })
     );
   }
 
   const summary = summarizeRegionResults(regionResults);
+  const persistence = summarizePersistence(regionResults);
   return {
     kind: "IngestionRun",
     schemaVersion: INGESTION_RUN_SCHEMA_VERSION,
@@ -140,10 +164,7 @@ export async function runIngestionHeartbeat({
     },
     summary,
     regions: regionResults,
-    persistence: {
-      stored: false,
-      message: "Cron heartbeat validates intake and candidate generation; approved events still need durable editorial/event storage."
-    }
+    persistence
   };
 }
 
@@ -210,7 +231,7 @@ function parseRegionText(value) {
   return text.split(",").map((region) => region.trim());
 }
 
-async function runRegionIngestion({ region, lookback, maxRecords, decisions, now, collectImpl }) {
+async function runRegionIngestion({ region, lookback, maxRecords, decisions, now, env, collectImpl }) {
   try {
     const collection = await collectImpl({
       region,
@@ -228,6 +249,7 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
     const scopedEvents = dedupeEvents([...scopedLiveEvents, ...snapshotEvents]);
     const queue = reviewQueueFromEvents(scopedEvents);
     const published = publishedEventsFromEvents(scopedEvents);
+    const persistence = await saveIntakeSnapshots(queue.candidates, { region, env, now });
 
     return {
       region,
@@ -249,6 +271,7 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
         official: collection.officialFeeds ?? [],
         socialApi: collection.socialApiSources ?? []
       },
+      persistence,
       sourceSamples: sourceSamples(scopedEvents)
     };
   } catch (error) {
@@ -272,6 +295,13 @@ async function runRegionIngestion({ region, lookback, maxRecords, decisions, now
         official: [],
         socialApi: []
       },
+      persistence: {
+        stored: false,
+        mode: intakeSnapshotStoreCapabilities({ env, now }).mode,
+        candidates: 0,
+        snapshots: 0,
+        message: "Ingestion failed before intake snapshots could be stored."
+      },
       sourceSamples: []
     };
   }
@@ -288,7 +318,8 @@ function summarizeRegionResults(results) {
       scopedEvents: summary.scopedEvents + result.counts.scopedEvents,
       candidates: summary.candidates + result.counts.candidates,
       published: summary.published + result.counts.published,
-      upstreamErrors: summary.upstreamErrors + result.upstreamErrors.length
+      upstreamErrors: summary.upstreamErrors + result.upstreamErrors.length,
+      persistedCandidates: summary.persistedCandidates + (result.persistence?.stored ? result.persistence.candidates ?? 0 : 0)
     }),
     {
       regions: 0,
@@ -299,9 +330,25 @@ function summarizeRegionResults(results) {
       scopedEvents: 0,
       candidates: 0,
       published: 0,
-      upstreamErrors: 0
+      upstreamErrors: 0,
+      persistedCandidates: 0
     }
   );
+}
+
+function summarizePersistence(results) {
+  const storedRegions = results.filter((result) => result.persistence?.stored);
+  const first = results.find((result) => result.persistence)?.persistence;
+  return {
+    stored: storedRegions.length > 0,
+    mode: first?.mode ?? "disabled",
+    regionsStored: storedRegions.length,
+    candidates: results.reduce((total, result) => total + (result.persistence?.candidates ?? 0), 0),
+    snapshots: results.reduce((total, result) => Math.max(total, result.persistence?.snapshots ?? 0), 0),
+    message: storedRegions.length
+      ? "Cron heartbeat stored review candidate snapshots for configured regions."
+      : first?.message ?? "Cron heartbeat validated intake without durable candidate snapshot storage."
+  };
 }
 
 function sourceSamples(events) {

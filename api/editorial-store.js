@@ -280,6 +280,10 @@ export function eventsFromEditorialSnapshots(decisions = []) {
   });
 }
 
+export function sanitizeEditorialEventSnapshot(value) {
+  return sanitizeEventSnapshot(value);
+}
+
 export function normalizeDecisionPayload(payload, context = {}) {
   const action = String(payload?.action ?? "").trim().toLowerCase();
   if (!EDITORIAL_ACTIONS.has(action)) {

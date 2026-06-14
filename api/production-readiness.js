@@ -47,7 +47,8 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
         schedule: ingestion.runtime.schedule,
         regions: ingestion.runtime.regions,
         lookback: ingestion.runtime.lookback,
-        maxRecords: ingestion.runtime.maxRecords
+        maxRecords: ingestion.runtime.maxRecords,
+        intakeStore: ingestion.runtime.intakeStore
       },
       publication: {
         ready: publication.ready,

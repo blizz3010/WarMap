@@ -1,5 +1,6 @@
 import { collectOpenWebArticles } from "./collectors.js";
 import { applyEditorialDecisions, loadEditorialDecisions, normalizeDecisionPayload } from "./editorial-store.js";
+import { loadIntakeSnapshots } from "./intake-store.js";
 import { DEFAULT_REGION_ID, normalizeArticlesToEventsAsync } from "./news-normalizer.js";
 import { buildPublicationStatusFromDecisions } from "./publication-service.js";
 import { eventsForRegionScope } from "./region-scope.js";
@@ -134,7 +135,9 @@ export default async function handler(request, response) {
       limit: 75
     });
     const decisions = await loadEditorialDecisions();
-    const scopedEvents = eventsForRegionScope(applyEditorialDecisions(events, decisions), region);
+    const intakeEvents = eventsForRegionScope(applyEditorialDecisions(await loadIntakeSnapshots({ now: generatedAt }), decisions), region);
+    const liveEvents = eventsForRegionScope(applyEditorialDecisions(events, decisions), region);
+    const scopedEvents = dedupeEvents([...intakeEvents, ...liveEvents]);
     const queue = reviewQueueFromEvents(scopedEvents);
     const preview = await buildPublicationPreviewPayload({
       candidateId,
@@ -168,4 +171,15 @@ export default async function handler(request, response) {
       message: error instanceof Error ? error.message : "Unknown upstream error"
     });
   }
+}
+
+function dedupeEvents(events) {
+  const byId = new Map();
+  events.forEach((event) => byId.set(event.id, event));
+  return [...byId.values()].sort((left, right) => timestamp(right.firstSeenAt) - timestamp(left.firstSeenAt));
+}
+
+function timestamp(value) {
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }

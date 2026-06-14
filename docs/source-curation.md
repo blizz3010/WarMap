@@ -39,4 +39,5 @@ Before moving a planned source to `active`:
 - Add a parser test or fixture in `scripts/check-static.mjs`.
 - Route all items through AI extraction and the editorial queue.
 - Make sure source URLs survive into `/api/events`, `/api/review-queue`, `/api/event`, `/api/archive`, and `/v1/events`.
+- If using scheduled ingestion, verify the optional intake snapshot store keeps source-linked candidates available after the live feed window changes.
 - If the source is a conflict-party official claim, require an explicit claim label or high-scrutiny review path before publication.
