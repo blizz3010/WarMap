@@ -1695,7 +1695,7 @@ function renderReviewReadinessPanel() {
       <section class="intel-section readiness-card">
         <header>
           <h3>Launch Readiness</h3>
-          <a href="${escapeAttr(editorialSetupLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
+          <a href="${escapeAttr(setupPageLink())}" target="_blank" rel="noreferrer noopener">Setup</a>
         </header>
         <p class="status-summary is-blocked">${escapeHtml(state.readinessMessage || "Checking production readiness.")}</p>
       </section>
@@ -1712,7 +1712,7 @@ function renderReviewReadinessPanel() {
     <section class="intel-section readiness-card">
       <header>
         <h3>Launch Readiness</h3>
-        <a href="${escapeAttr(editorialSetupLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
+        <a href="${escapeAttr(setupPageLink())}" target="_blank" rel="noreferrer noopener">Setup</a>
       </header>
       <p class="status-summary ${readiness.ready ? "is-ready" : "is-blocked"}">
         ${readiness.ready ? "Required gates are ready." : `${requiredBlockers.length} required gate${requiredBlockers.length === 1 ? "" : "s"} blocked.`}
@@ -1735,7 +1735,9 @@ function renderReviewReadinessPanel() {
         <li><span>Optional follow-ups</span><strong>${optionalBlockerCount}</strong></li>
       </ul>
       <nav class="readiness-links" aria-label="Launch readiness links">
+        <a href="${escapeAttr(setupPageLink())}" target="_blank" rel="noreferrer noopener">Setup</a>
         <a href="${escapeAttr(productionReadinessLink())}" target="_blank" rel="noreferrer noopener">Readiness</a>
+        <a href="${escapeAttr(editorialSetupApiLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
         <a href="/api/editorial-status" target="_blank" rel="noreferrer noopener">Editorial</a>
         <a href="/api/editorial-store-health" target="_blank" rel="noreferrer noopener">Store</a>
         <a href="${escapeAttr(sourceHealthLink())}" target="_blank" rel="noreferrer noopener">Sources</a>
@@ -3225,7 +3227,12 @@ function productionReadinessLink() {
   return `/api/production-readiness?${params.toString()}`;
 }
 
-function editorialSetupLink() {
+function setupPageLink() {
+  const params = new URLSearchParams({ region: state.regionId });
+  return `/setup?${params.toString()}`;
+}
+
+function editorialSetupApiLink() {
   const params = new URLSearchParams({ region: state.regionId });
   return `/api/editorial-setup?${params.toString()}`;
 }
