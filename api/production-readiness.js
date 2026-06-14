@@ -29,6 +29,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
   ].map((blocker) => enrichBlockerWithSetupLinks(blocker, { region }));
   const requiredBlockers = blockers.filter((item) => item.required);
   const optionalBlockers = blockers.filter((item) => !item.required);
+  const launchPlan = readinessLaunchPlan({ blockers });
 
   return {
     kind: "ProductionReadiness",
@@ -36,7 +37,8 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
     generatedAt: now.toISOString(),
     region,
     ready: requiredBlockers.length === 0,
-    summary: readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers }),
+    summary: readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers, launchPlan }),
+    launchPlan,
     sections: {
       editorial,
       extraction,
@@ -281,12 +283,156 @@ function slug(value) {
     .replace(/^-+|-+$/g, "") || "setup";
 }
 
-function readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers }) {
+const LAUNCH_ACTION_COPY = {
+  "editorial-store": {
+    priority: 10,
+    category: "editorial",
+    label: "Configure durable editorial writes",
+    action: "Set the recommended GitHub Contents editorial profile or the Postgres editorial profile, then redeploy production."
+  },
+  "editorial-review-token": {
+    priority: 20,
+    category: "editorial",
+    label: "Set reviewer authorization",
+    action: "Create EDITORIAL_REVIEW_TOKEN in Vercel and give trusted editors the same token in the review UI."
+  },
+  "no-published-events": {
+    priority: 30,
+    category: "publication",
+    label: "Publish the first reviewed event",
+    action: "Approve or correct at least one source-linked candidate so public map, feed, archive, detail, and v1 consumers receive published records."
+  },
+  "ingestion-cron-secret": {
+    priority: 40,
+    category: "ingestion",
+    label: "Protect scheduled ingestion",
+    action: "Set CRON_SECRET before enabling the Vercel ingestion heartbeat."
+  },
+  "ingestion-snapshot-store": {
+    priority: 45,
+    category: "ingestion",
+    label: "Persist ingestion snapshots",
+    action: "Enable the GitHub snapshot bridge when collected candidates need to survive feed churn."
+  },
+  "event-store-candidate-writes": {
+    priority: 50,
+    category: "storage",
+    label: "Enable candidate event writes",
+    action: "Apply the Postgres/PostGIS schema and set EVENT_STORE_WRITE_MODE=candidates only after storage health passes."
+  },
+  "postgres-event-store": {
+    priority: 55,
+    category: "storage",
+    label: "Configure Postgres event storage",
+    action: "Set DATABASE_URL or POSTGRES_URL and confirm the event-store schema version."
+  },
+  "official-site-adapters": {
+    priority: 60,
+    category: "sources",
+    label: "Activate official-source adapters",
+    action: "Confirm automated-use terms, prefer RSS/API/CAP feeds, and configure only reviewed official-site scopes."
+  },
+  "social-api-config": {
+    priority: 65,
+    category: "sources",
+    label: "Configure compliant social APIs",
+    action: "Add approved API endpoint metadata and token env names without exposing token values."
+  },
+  "liveuamap-license": {
+    priority: 70,
+    category: "sources",
+    label: "Resolve Liveuamap licensing",
+    action: "Use Liveuamap data only through a paid or written API/data agreement."
+  },
+  "ai-provider": {
+    priority: 80,
+    category: "extraction",
+    label: "Connect external AI extraction",
+    action: "Keep deterministic extraction until an HTTP model endpoint and timeout policy are configured."
+  },
+  "server-notifications": {
+    priority: 90,
+    category: "platform",
+    label: "Enable signed server notifications",
+    action: "Configure webhook URL, signing secret, and admin token before server-side alert dispatch."
+  },
+  "language-catalogs": {
+    priority: 100,
+    category: "platform",
+    label: "Plan reviewed language catalogs",
+    action: "Add catalog storage, translation policy, and editorial review before translated event content is active."
+  },
+  "paid-layer-entitlements": {
+    priority: 110,
+    category: "platform",
+    label: "Plan paid layer entitlements",
+    action: "Add billing, entitlement checks, and licensed datasets before enabling paid map layers."
+  }
+};
+
+function readinessLaunchPlan({ blockers }) {
+  const actions = blockers
+    .map((blocker) => launchActionFromBlocker(blocker))
+    .sort((left, right) => Number(left.required ? 0 : 1) - Number(right.required ? 0 : 1) || left.priority - right.priority)
+    .map((action, index) => ({ ...action, rank: index + 1 }));
+  const requiredActions = actions.filter((action) => action.required);
+  const optionalActions = actions.filter((action) => !action.required);
+
+  return {
+    schemaVersion: "launch-action-plan.v1",
+    total: actions.length,
+    required: requiredActions.length,
+    optional: optionalActions.length,
+    nextRequiredAction: requiredActions[0] ?? null,
+    nextOptionalAction: optionalActions[0] ?? null,
+    actions
+  };
+}
+
+function launchActionFromBlocker(blocker) {
+  const copy = LAUNCH_ACTION_COPY[blocker.id] ?? {};
+  return {
+    id: `action-${slug(blocker.id)}`,
+    blockerId: blocker.id,
+    priority: copy.priority ?? 999,
+    required: Boolean(blocker.required),
+    status: blocker.status ?? "planned",
+    category: copy.category ?? "operations",
+    label: copy.label ?? titleCase(blocker.id),
+    action: blocker.nextAction || copy.action || blocker.message || "Review this launch blocker.",
+    message: blocker.message ?? null,
+    sourceCount: blocker.sourceCount ?? null,
+    sourceIds: blocker.sourceIds ?? [],
+    setupProfileId: blocker.setupProfileId ?? null,
+    setupSectionId: blocker.setupSectionId ?? null,
+    links: actionLinksForBlocker(blocker)
+  };
+}
+
+function actionLinksForBlocker(blocker) {
+  return {
+    setup: blocker.setupHref ?? null,
+    commands: blocker.setupCommandHref ?? null,
+    sources: blocker.sourcesHref ?? null,
+    review: blocker.reviewHref ?? null,
+    publication: blocker.publicationHref ?? null
+  };
+}
+
+function titleCase(value) {
+  return String(value ?? "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers, launchPlan }) {
   return {
     blockerCount: blockers.length,
     requiredBlockerCount: requiredBlockers.length,
     optionalBlockerCount: optionalBlockers.length,
     requiredBlockerIds: requiredBlockers.map((blocker) => blocker.id),
-    optionalBlockerIds: optionalBlockers.map((blocker) => blocker.id)
+    optionalBlockerIds: optionalBlockers.map((blocker) => blocker.id),
+    nextRequiredActionId: launchPlan.nextRequiredAction?.id ?? null,
+    nextOptionalActionId: launchPlan.nextOptionalAction?.id ?? null
   };
 }

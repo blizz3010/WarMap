@@ -134,6 +134,7 @@ function renderReadinessPage() {
   const notifications = checkPayload("notification-status") ?? {};
   const requiredBlockers = production.requiredBlockers ?? (production.blockers ?? []).filter((blocker) => blocker.required);
   const optionalBlockers = production.optionalBlockers ?? (production.blockers ?? []).filter((blocker) => !blocker.required);
+  const launchActions = production.launchPlan?.actions ?? [];
   const failedChecks = state.checks.filter((check) => !check.ok);
   const regionLabel = regionName(state.region);
 
@@ -191,6 +192,13 @@ function renderReadinessPage() {
               <div><dt>Required</dt><dd>${Number(requiredBlockers?.length ?? 0)}</dd></div>
               <div><dt>Optional</dt><dd>${Number(optionalBlockers?.length ?? 0)}</dd></div>
             </dl>
+          </section>
+
+          <section class="event-page-section">
+            <h2>Next Actions</h2>
+            <ul class="readiness-blocker-list readiness-action-list">
+              ${renderLaunchActions(launchActions)}
+            </ul>
           </section>
 
           <section class="event-page-section">
@@ -290,6 +298,24 @@ function renderBlockerRows(blockers = [], emptyLabel) {
     : `<li class="is-ready"><strong>${escapeHtml(emptyLabel)}</strong><span>ready</span></li>`;
 }
 
+function renderLaunchActions(actions = []) {
+  return actions.length
+    ? actions.slice(0, 6).map(renderLaunchAction).join("")
+    : '<li class="is-ready"><strong>Launch actions</strong><span>ready</span></li>';
+}
+
+function renderLaunchAction(action) {
+  return `
+    <li class="${action.required ? "is-blocked" : "is-warning"}">
+      <strong>${Number(action.rank ?? 0)}. ${escapeHtml(action.label ?? action.blockerId)}</strong>
+      <span>${escapeHtml(action.required ? "required" : action.category ?? "optional")}</span>
+      <p>${escapeHtml(action.action || action.message || "Review this launch action.")}</p>
+      ${Array.isArray(action.sourceIds) && action.sourceIds.length ? `<small>${escapeHtml(action.sourceIds.join(", "))}</small>` : ""}
+      ${renderActionLinks(action.links)}
+    </li>
+  `;
+}
+
 function renderBlocker(blocker) {
   return `
     <li class="${blocker.required ? "is-blocked" : "is-warning"}">
@@ -300,6 +326,19 @@ function renderBlocker(blocker) {
       ${renderBlockerLinks(blocker)}
     </li>
   `;
+}
+
+function renderActionLinks(links = {}) {
+  const rows = [
+    ["Setup", links.setup],
+    ["Commands", links.commands],
+    ["Sources", links.sources],
+    ["Review", links.review],
+    ["Publication", links.publication]
+  ].filter(([, href]) => href);
+  return rows.length
+    ? `<nav class="setup-profile-links readiness-blocker-links" aria-label="Launch action links">${rows.map(([label, href]) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`).join("")}</nav>`
+    : "";
 }
 
 function renderBlockerLinks(blocker) {

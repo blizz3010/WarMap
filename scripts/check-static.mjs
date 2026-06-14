@@ -346,6 +346,8 @@ if (
   !setupPageSource.includes("function renderVercelCommand(command)") ||
   !setupPageSource.includes("data-copy-text") ||
   !setupPageSource.includes("function renderSourceActivation(sourceActivation)") ||
+  !setupPageSource.includes("function renderLaunchActions(actions") ||
+  !setupPageSource.includes("setup-action-list") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("function renderBlockerLinks(blocker)") ||
   !setupPageSource.includes("function setupProfileAnchor(profileId)") ||
@@ -403,7 +405,9 @@ if (
   !readinessPageSource.includes("/api/notification-status?") ||
   !readinessPageSource.includes("function renderReadinessPage()") ||
   !readinessPageSource.includes("function renderCheckRow(check)") ||
+  !readinessPageSource.includes("function renderLaunchActions(actions") ||
   !readinessPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !readinessPageSource.includes("readiness-action-list") ||
   !readinessPageSource.includes("setupCommandHref") ||
   !readinessPageSource.includes("data-readiness-region") ||
   !stylesSource.includes(".readiness-check-list") ||
@@ -912,6 +916,17 @@ if (
   productionReadiness.summary?.requiredBlockerCount !== productionReadiness.requiredBlockers?.length ||
   productionReadiness.summary?.optionalBlockerCount !== productionReadiness.optionalBlockers?.length ||
   !productionReadiness.summary?.requiredBlockerIds?.includes("editorial-store") ||
+  productionReadiness.summary?.nextRequiredActionId !== "action-editorial-store" ||
+  productionReadiness.launchPlan?.schemaVersion !== "launch-action-plan.v1" ||
+  productionReadiness.launchPlan?.nextRequiredAction?.blockerId !== "editorial-store" ||
+  productionReadiness.launchPlan?.nextRequiredAction?.links?.commands?.includes("#setup-command-profile-github-contents-editorial") !== true ||
+  productionReadiness.launchPlan?.nextOptionalAction?.blockerId !== "no-published-events" ||
+  !productionReadiness.launchPlan?.actions?.some(
+    (action) =>
+      action.blockerId === "liveuamap-license" &&
+      action.label.includes("Liveuamap") &&
+      action.links?.sources?.includes("/sources?region=ukraine-east")
+  ) ||
   !productionReadiness.requiredBlockers?.some((blocker) => blocker.id === "editorial-store") ||
   !productionReadiness.optionalBlockers?.some((blocker) => blocker.id === "ai-provider") ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
@@ -1120,6 +1135,10 @@ if (
   editorialSetup.links.eventStoreHealth !== "/api/event-store-health" ||
   !editorialSetup.links.notificationStatus.includes("/api/notification-status?region=ukraine-east") ||
   !editorialSetup.links.reviewDesk.includes("/review?region=ukraine-east") ||
+  editorialSetup.launchPlan?.nextRequiredAction?.blockerId !== "editorial-store" ||
+  !editorialSetup.launchPlan?.actions?.some(
+    (action) => action.blockerId === "editorial-review-token" && action.links?.commands?.includes("#setup-command-profile-github-contents-editorial")
+  ) ||
   !editorialSetup.blockers?.some(
     (blocker) => blocker.id === "editorial-store" && blocker.setupHref?.includes("#setup-profile-github-contents-editorial")
   ) ||

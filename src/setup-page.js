@@ -44,6 +44,7 @@ function renderSetup(setup) {
   const blockers = setup.blockers ?? [];
   const requiredBlockers = blockers.filter((blocker) => blocker.required);
   const optionalBlockers = blockers.filter((blocker) => !blocker.required);
+  const launchActions = setup.launchPlan?.actions ?? [];
   const regionLabel = regionName(state.region);
 
   document.title = `${regionLabel} Launch Setup | WarMap Live`;
@@ -124,6 +125,13 @@ function renderSetup(setup) {
               <div><dt>Required</dt><dd>${Number(current.requiredBlockers ?? requiredBlockers.length)}</dd></div>
               <div><dt>Optional</dt><dd>${Number(current.optionalBlockers ?? optionalBlockers.length)}</dd></div>
             </dl>
+          </section>
+
+          <section class="event-page-section">
+            <h2>Launch Plan</h2>
+            <ul class="status-list setup-blocker-list setup-action-list">
+              ${renderLaunchActions(launchActions)}
+            </ul>
           </section>
 
           <section class="event-page-section">
@@ -310,6 +318,23 @@ function renderActivationSource(source) {
   `;
 }
 
+function renderLaunchActions(actions = []) {
+  return actions.length
+    ? actions.slice(0, 6).map(renderLaunchAction).join("")
+    : "<li><span>Launch actions</span><strong>ready</strong></li>";
+}
+
+function renderLaunchAction(action) {
+  return `
+    <li>
+      <span>${Number(action.rank ?? 0)}. ${escapeHtml(action.category ?? "operations")}</span>
+      <strong>${escapeHtml(action.label ?? action.blockerId)}</strong>
+      <small>${escapeHtml(action.action || action.message || "Review this launch action.")}</small>
+      ${renderActionLinks(action.links)}
+    </li>
+  `;
+}
+
 function renderBlocker(blocker) {
   return `
     <li>
@@ -319,6 +344,19 @@ function renderBlocker(blocker) {
       ${renderBlockerLinks(blocker)}
     </li>
   `;
+}
+
+function renderActionLinks(links = {}) {
+  const rows = [
+    ["Setup", links.setup],
+    ["Commands", links.commands],
+    ["Sources", links.sources],
+    ["Review", links.review],
+    ["Publication", links.publication]
+  ].filter(([, href]) => href);
+  return rows.length
+    ? `<nav class="setup-profile-links" aria-label="Launch action links">${rows.map(([label, href]) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`).join("")}</nav>`
+    : "";
 }
 
 function renderBlockerLinks(blocker) {
