@@ -1560,6 +1560,7 @@ function renderReviewPanel(visible) {
                     <span>Sources</span>
                     ${(item.sources ?? []).slice(0, 3).map(renderReviewSourceLink).join("") || "<small>No public source link</small>"}
                   </div>
+                  ${renderReviewGateChecklist(item)}
                   <div class="review-candidate-links inline-review-links">
                     <a href="${escapeAttr(eventHashLink(item))}">Map</a>
                     <a href="${escapeAttr(eventPageLink(item))}">Detail</a>
@@ -1694,6 +1695,74 @@ function renderReviewSourceLink(source) {
   return url
     ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${label}<small>${escapeHtml(sourceProvenanceLabel(source))}</small></a>`
     : `<small>${label}</small>`;
+}
+
+function renderReviewGateChecklist(item) {
+  return `
+    <ul class="review-gate-checklist" aria-label="Publication gate checks">
+      ${reviewGateChecks(item)
+        .map(
+          (check) => `
+            <li class="${check.done ? "is-ready" : check.required ? "is-blocked" : "is-warning"}">
+              <strong>${escapeHtml(check.label)}</strong>
+              <span>${escapeHtml(check.detail)}</span>
+            </li>
+          `
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function reviewGateChecks(item) {
+  const review = reviewInfo(item);
+  const sources = item.sources ?? [];
+  const extraction = item.extraction ?? {};
+  const hasSourceUrl = sources.some((source) => safeUrl(source.url));
+  const lat = Number(item.location?.lat);
+  const lon = Number(item.location?.lon);
+  const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon);
+  const duplicateKey = review.duplicateKey || extraction.duplicateKey;
+  const extractionComplete = Boolean(
+    (extraction.eventType || item.category) &&
+      (extraction.location?.place || item.place) &&
+      (extraction.summary || item.summary) &&
+      duplicateKey
+  );
+  const snapshotReady = Boolean(item.id && item.title && hasSourceUrl && hasCoordinates);
+
+  return [
+    {
+      label: "Source URL",
+      detail: hasSourceUrl ? `${sources.length} visible` : "missing original link",
+      done: hasSourceUrl,
+      required: true
+    },
+    {
+      label: "Map point",
+      detail: hasCoordinates ? item.location?.precision || "coordinates set" : "missing coordinates",
+      done: hasCoordinates,
+      required: true
+    },
+    {
+      label: "Extraction",
+      detail: extractionComplete ? extraction.eventType || item.category : "needs manual fields",
+      done: extractionComplete,
+      required: false
+    },
+    {
+      label: "Duplicate key",
+      detail: duplicateKey || "not generated",
+      done: Boolean(duplicateKey),
+      required: false
+    },
+    {
+      label: "Approval snapshot",
+      detail: snapshotReady ? "export ready" : "source or map point needed",
+      done: snapshotReady,
+      required: true
+    }
+  ];
 }
 
 function clearInlineReviewExport() {

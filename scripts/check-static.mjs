@@ -195,6 +195,7 @@ if (
   !appSource.includes("/api/review-dossier?") ||
   !appSource.includes("function renderReviewReadinessPanel()") ||
   !appSource.includes("inline-review-source-strip") ||
+  !appSource.includes("function renderReviewGateChecklist(item)") ||
   !appSource.includes("function renderReviewSourceLink(source)") ||
   !appSource.includes("renderInlineReviewExportBundle") ||
   !appSource.includes("data-copy-review-export") ||
@@ -210,6 +211,14 @@ if (!reviewPageSource.includes("status-summary") || !reviewPageSource.includes("
 
 if (!reviewPageSource.includes("warmap.editorialToken") || !reviewPageSource.includes("review-source-strip")) {
   throw new Error("Expected standalone review page to persist reviewer token and render source links");
+}
+
+if (
+  !reviewPageSource.includes("function renderReviewGateChecklist(item)") ||
+  !appSource.includes("review-gate-checklist") ||
+  !reviewPageSource.includes("Approval snapshot")
+) {
+  throw new Error("Expected review surfaces to render per-candidate publication gate checks");
 }
 
 if (!appSource.includes("eventSnapshot: eventSnapshotForDecision(item)") || !reviewPageSource.includes("eventSnapshot: eventSnapshotForDecision(item)")) {
