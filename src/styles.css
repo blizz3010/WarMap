@@ -1598,6 +1598,59 @@ dd {
   color: #bfdbfe;
 }
 
+.review-gate-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-gate-checklist li {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.review-gate-checklist li.is-ready {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.review-gate-checklist li.is-warning {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.review-gate-checklist li.is-blocked {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.review-gate-checklist strong,
+.review-gate-checklist span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.review-gate-checklist strong {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.review-gate-checklist span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
 .review-queue-list strong,
 .review-queue-list span,
 .review-queue-list small {
