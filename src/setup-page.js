@@ -86,14 +86,14 @@ function renderSetup(setup) {
             </ul>
           </section>
 
-          <section class="event-page-section">
+          <section class="event-page-section" id="setup-environment-profiles">
             <h2>Environment Profiles</h2>
             <ul class="setup-profile-list">
               ${environmentProfiles.map(renderEnvironmentProfile).join("") || "<li><strong>No environment profiles reported</strong></li>"}
             </ul>
           </section>
 
-          <section class="event-page-section">
+          <section class="event-page-section" id="setup-vercel-env">
             <h2>Vercel Env Commands</h2>
             ${renderVercelEnvironment(vercelEnvironment)}
           </section>
@@ -105,7 +105,7 @@ function renderSetup(setup) {
             </ul>
           </section>
 
-          <section class="event-page-section">
+          <section class="event-page-section" id="setup-source-activation">
             <h2>Source Activation</h2>
             ${renderSourceActivation(sourceActivation)}
           </section>
@@ -175,7 +175,7 @@ function renderSetupTarget(target) {
 
 function renderEnvironmentProfile(profile) {
   return `
-    <li class="${profile.ready ? "is-ready" : profile.recommended ? "is-warning" : "is-blocked"}">
+    <li id="${escapeAttr(setupProfileAnchor(profile.id))}" class="${profile.ready ? "is-ready" : profile.recommended ? "is-warning" : "is-blocked"}">
       <header>
         <strong>${escapeHtml(profile.label ?? profile.id)}</strong>
         <span>${profile.ready ? "ready" : profile.recommended ? "recommended" : "optional"}</span>
@@ -235,7 +235,7 @@ function renderUtilityCommand(label, command) {
 
 function renderVercelProfile(profile) {
   return `
-    <li class="${profile.ready ? "is-ready" : profile.recommended ? "is-warning" : "is-blocked"}">
+    <li id="${escapeAttr(setupCommandProfileAnchor(profile.id))}" class="${profile.ready ? "is-ready" : profile.recommended ? "is-warning" : "is-blocked"}">
       <header>
         <strong>${escapeHtml(profile.label ?? profile.id)}</strong>
         <span>${profile.ready ? "ready" : profile.recommended ? "recommended" : "optional"}</span>
@@ -316,8 +316,22 @@ function renderBlocker(blocker) {
       <span>${escapeHtml(blocker.id)}</span>
       <strong>${escapeHtml(blocker.status)}</strong>
       <small>${escapeHtml(blocker.message ?? blocker.nextAction ?? "")}</small>
+      ${renderBlockerLinks(blocker)}
     </li>
   `;
+}
+
+function renderBlockerLinks(blocker) {
+  const links = [
+    ["Setup", blocker.setupHref],
+    ["Commands", blocker.setupCommandHref],
+    ["Sources", blocker.sourcesHref],
+    ["Review", blocker.reviewHref],
+    ["Publication", blocker.publicationHref]
+  ].filter(([, href]) => href);
+  return links.length
+    ? `<nav class="setup-profile-links" aria-label="${escapeAttr(blocker.id)} action links">${links.map(([label, href]) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`).join("")}</nav>`
+    : "";
 }
 
 function renderFallbackBridge(bridge) {
@@ -473,6 +487,21 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function setupProfileAnchor(profileId) {
+  return `setup-profile-${slug(profileId)}`;
+}
+
+function setupCommandProfileAnchor(profileId) {
+  return `setup-command-profile-${slug(profileId)}`;
+}
+
+function slug(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "setup";
 }
 
 function titleCase(value) {

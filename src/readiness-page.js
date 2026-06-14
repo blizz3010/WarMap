@@ -297,8 +297,22 @@ function renderBlocker(blocker) {
       <span>${escapeHtml(blocker.status ?? "planned")}</span>
       <p>${escapeHtml(blocker.nextAction || blocker.message || "Review this blocker before launch.")}</p>
       ${Array.isArray(blocker.sourceIds) && blocker.sourceIds.length ? `<small>${escapeHtml(blocker.sourceIds.join(", "))}</small>` : ""}
+      ${renderBlockerLinks(blocker)}
     </li>
   `;
+}
+
+function renderBlockerLinks(blocker) {
+  const links = [
+    ["Setup", blocker.setupHref],
+    ["Commands", blocker.setupCommandHref],
+    ["Sources", blocker.sourcesHref],
+    ["Review", blocker.reviewHref],
+    ["Publication", blocker.publicationHref]
+  ].filter(([, href]) => href);
+  return links.length
+    ? `<nav class="setup-profile-links readiness-blocker-links" aria-label="${escapeAttr(blocker.id)} action links">${links.map(([label, href]) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`).join("")}</nav>`
+    : "";
 }
 
 function renderFailedCheck(check) {

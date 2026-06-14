@@ -26,7 +26,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
     ...storageReadinessBlockers(storage.runtime),
     ...publicationReadinessBlockers(publication.records),
     ...platformBlockers(platform)
-  ];
+  ].map((blocker) => enrichBlockerWithSetupLinks(blocker, { region }));
   const requiredBlockers = blockers.filter((item) => item.required);
   const optionalBlockers = blockers.filter((item) => !item.required);
 
@@ -210,6 +210,73 @@ function platformBlockers(platform) {
     });
   }
   return blockers;
+}
+
+function enrichBlockerWithSetupLinks(blocker, { region }) {
+  const regionQuery = new URLSearchParams({ region: String(region || DEFAULT_REGION_ID) }).toString();
+  const profileId = setupProfileIdForBlocker(blocker);
+  if (profileId) {
+    return {
+      ...blocker,
+      setupProfileId: profileId,
+      setupHref: `/setup?${regionQuery}#${setupProfileAnchor(profileId)}`,
+      setupCommandHref: `/setup?${regionQuery}#${setupCommandProfileAnchor(profileId)}`
+    };
+  }
+
+  if (["official-site-adapters", "social-api-config", "liveuamap-license"].includes(blocker.id)) {
+    return {
+      ...blocker,
+      setupSectionId: "setup-source-activation",
+      setupHref: `/setup?${regionQuery}#setup-source-activation`,
+      sourcesHref: `/sources?${regionQuery}&lookback=30d`
+    };
+  }
+
+  if (["no-published-events", "published-source-links", "published-map-coordinates", "published-surface-targets"].includes(blocker.id)) {
+    return {
+      ...blocker,
+      reviewHref: `/review?${regionQuery}`,
+      publicationHref: `/api/publication-status?${regionQuery}`
+    };
+  }
+
+  return blocker;
+}
+
+function setupProfileIdForBlocker(blocker) {
+  if (blocker.id === "editorial-store") {
+    return String(blocker.status || "").includes("postgres") ? "postgres-editorial" : "github-contents-editorial";
+  }
+
+  const profileByBlockerId = {
+    "editorial-review-token": "github-contents-editorial",
+    "ai-provider": "ai-extraction-provider",
+    "ingestion-cron-secret": "scheduled-ingestion",
+    "ingestion-snapshot-store": "scheduled-ingestion",
+    "event-store-candidate-writes": "postgres-event-store-candidates",
+    "postgres-event-store": "postgres-event-store-candidates",
+    "server-notifications": "server-notifications",
+    "notification-webhook-url": "server-notifications",
+    "notification-webhook-secret": "server-notifications",
+    "notification-admin-token": "server-notifications"
+  };
+  return profileByBlockerId[blocker.id] ?? "";
+}
+
+function setupProfileAnchor(profileId) {
+  return `setup-profile-${slug(profileId)}`;
+}
+
+function setupCommandProfileAnchor(profileId) {
+  return `setup-command-profile-${slug(profileId)}`;
+}
+
+function slug(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "setup";
 }
 
 function readinessBlockerSummary({ blockers, requiredBlockers, optionalBlockers }) {
