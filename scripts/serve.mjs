@@ -7,6 +7,7 @@ import eventHandler from "../api/event.js";
 import eventsHandler from "../api/events.js";
 import cronIngestHandler from "../api/cron/ingest.js";
 import editorialStoreHealthHandler from "../api/editorial-store-health.js";
+import editorialSetupHandler from "../api/editorial-setup.js";
 import editorialStatusHandler from "../api/editorial-status.js";
 import ingestionStatusHandler from "../api/ingestion-status.js";
 import notificationStatusHandler from "../api/notification-status.js";
@@ -44,6 +45,7 @@ const apiHandlers = new Map([
   ["/api/event", eventHandler],
   ["/api/events", eventsHandler],
   ["/api/editorial-store-health", editorialStoreHealthHandler],
+  ["/api/editorial-setup", editorialSetupHandler],
   ["/api/editorial-status", editorialStatusHandler],
   ["/api/ingestion-status", ingestionStatusHandler],
   ["/api/notification-status", notificationStatusHandler],

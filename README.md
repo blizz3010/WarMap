@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/review-action`, `/api/review-export`, `/api/editorial-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, review actions, static decision exports, durable store checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, review actions, static decision exports, setup readiness, durable store checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -88,6 +88,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/review-queue?region=ukraine-east` returns candidates that still need verification, merge/split, location correction, or approval.
 - `/api/review-dossier?id=...&region=ukraine-east` returns one candidate's source evidence, AI extraction confidence, duplicate context, publication checks, and safe decision payload templates for analyst review.
 - `/api/editorial-status` returns the current editorial store mode, decision count, publish readiness, and missing production configuration without exposing secrets.
+- `/api/editorial-setup?region=ukraine-east` returns the non-secret production setup contract: required editorial environment variables, GitHub store verification links, static export fallback path, current blockers, and review/publication links.
 - `/api/editorial-store-health` runs a read-only GitHub Contents health check for the durable editorial store, including repo, branch, and decision-file readability, without exposing tokens.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, and redacts tokens.
@@ -128,7 +129,7 @@ When enabled, approved/rejected/corrected/retracted decisions are loaded by `/ap
 
 Use `/api/editorial-store-health` after configuring those variables on Vercel. A missing `editorial/decisions.json` file is reported as acceptable because the first approved write can create it; repo, branch, token, and malformed existing decision JSON are reported as blockers.
 
-For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions. The standalone review page also reads `/api/editorial-status` and shows whether durable writes and the reviewer token are ready before editors submit publish actions.
+For the browser review panel or standalone review page, editors can provide the same token through `window.WARMAP_EDITORIAL_TOKEN`, `localStorage.setItem("warmap.editorialToken", token)`, or the review page token field before using approval actions. The standalone review page reads `/api/editorial-status`, and the map review panel reads `/api/production-readiness`, so editors can see durable-store, reviewer-token, source, and publication blockers before submitting publish actions.
 
 ## Scheduled ingestion heartbeat
 

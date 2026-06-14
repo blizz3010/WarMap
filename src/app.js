@@ -26,6 +26,8 @@ const state = {
   notifiedEventIds: new Set(readNotifiedEventIds()),
   platformConfig: null,
   platformMessage: "",
+  productionReadiness: null,
+  readinessMessage: "",
   paused: false,
   streamConnected: false,
   streamMessage: "Realtime stream idle",
@@ -88,6 +90,7 @@ const els = {
 
 let map;
 let liveRequestId = 0;
+let readinessRequestId = 0;
 const streamController = {
   source: null,
   fallbackTimer: null
@@ -508,6 +511,7 @@ function init() {
   render();
   loadPlatformConfig();
   loadLiveEvents();
+  loadProductionReadiness();
   startEventStream();
 }
 
@@ -790,6 +794,7 @@ function changeRegion(regionId) {
   fitToRegion(true);
   render();
   loadLiveEvents();
+  loadProductionReadiness();
   restartEventStream();
 }
 
@@ -917,6 +922,38 @@ async function loadLiveEvents(options = {}) {
     bindFilterInputControls();
     render();
     updateStreamStatusLabel("Prototype fallback - live feed unavailable");
+  }
+}
+
+async function loadProductionReadiness(options = {}) {
+  const { quiet = false } = options;
+  const region = state.regionId;
+  const requestId = (readinessRequestId += 1);
+
+  try {
+    const params = new URLSearchParams({ region });
+    const response = await fetch(`/api/production-readiness?${params.toString()}`, {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.kind !== "ProductionReadiness") {
+      throw new Error(payload.message || payload.error || `Production readiness returned ${response.status}`);
+    }
+    if (requestId !== readinessRequestId) {
+      return;
+    }
+    state.productionReadiness = payload;
+    state.readinessMessage = "";
+  } catch (error) {
+    if (requestId !== readinessRequestId) {
+      return;
+    }
+    state.productionReadiness = null;
+    state.readinessMessage = error instanceof Error ? error.message : "Production readiness unavailable";
+  }
+
+  if (!quiet || state.activePanel === "review") {
+    renderIntelPanel(filteredEvents(true));
   }
 }
 
@@ -1498,6 +1535,7 @@ function renderReviewPanel(visible) {
       <div><strong>${visible.length}</strong><span>Visible</span></div>
     </section>
     ${state.editorialMessage ? `<p class="editorial-message">${escapeHtml(state.editorialMessage)}</p>` : ""}
+    ${renderReviewReadinessPanel()}
     ${state.editorialExportBundle ? renderInlineReviewExportBundle() : ""}
     ${
       extraction
@@ -1563,6 +1601,58 @@ function renderReviewPanel(visible) {
         <li><strong>Approve</strong><span>Only approved records publish to map, feed, detail, archive, and API</span></li>
         <li><strong>Refine</strong><span>Editors can correct, merge duplicates, split bundled facts, or retract later</span></li>
       </ul>
+    </section>
+  `;
+}
+
+function renderReviewReadinessPanel() {
+  const readiness = state.productionReadiness;
+  if (!readiness) {
+    return `
+      <section class="intel-section readiness-card">
+        <header>
+          <h3>Launch Readiness</h3>
+          <a href="${escapeAttr(editorialSetupLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
+        </header>
+        <p class="status-summary is-blocked">${escapeHtml(state.readinessMessage || "Checking production readiness.")}</p>
+      </section>
+    `;
+  }
+
+  const requiredBlockers = readiness.blockers.filter((blocker) => blocker.required);
+  const optionalBlockerCount = readiness.blockers.length - requiredBlockers.length;
+  const editorial = readiness.sections?.editorial ?? {};
+  const publication = readiness.sections?.publication ?? {};
+  const sourceCuration = readiness.sections?.sourceCuration ?? {};
+  return `
+    <section class="intel-section readiness-card">
+      <header>
+        <h3>Launch Readiness</h3>
+        <a href="${escapeAttr(editorialSetupLink())}" target="_blank" rel="noreferrer noopener">Setup API</a>
+      </header>
+      <p class="status-summary ${readiness.ready ? "is-ready" : "is-blocked"}">
+        ${readiness.ready ? "Required gates are ready." : `${requiredBlockers.length} required gate${requiredBlockers.length === 1 ? "" : "s"} blocked.`}
+      </p>
+      <dl class="readiness-facts">
+        <div><dt>Store</dt><dd>${escapeHtml(storeModeLabel(editorial.store?.mode))}</dd></div>
+        <div><dt>Token</dt><dd>${editorial.readiness?.reviewTokenReady ? "Ready" : "Missing"}</dd></div>
+        <div><dt>Published</dt><dd>${Number(publication.published ?? 0)}</dd></div>
+        <div><dt>Sources</dt><dd>${Number(sourceCuration.activeSources ?? 0)} active</dd></div>
+      </dl>
+      <ul class="status-list readiness-blockers">
+        ${
+          requiredBlockers
+            .map((blocker) => `<li><span>${escapeHtml(blocker.id)}</span><strong>${escapeHtml(blocker.status)}</strong></li>`)
+            .join("") || "<li><span>Required gates</span><strong>ready</strong></li>"
+        }
+        <li><span>Optional follow-ups</span><strong>${optionalBlockerCount}</strong></li>
+      </ul>
+      <nav class="readiness-links" aria-label="Launch readiness links">
+        <a href="${escapeAttr(productionReadinessLink())}" target="_blank" rel="noreferrer noopener">Readiness</a>
+        <a href="/api/editorial-status" target="_blank" rel="noreferrer noopener">Editorial</a>
+        <a href="/api/editorial-store-health" target="_blank" rel="noreferrer noopener">Store</a>
+        <a href="${escapeAttr(publicationStatusLink())}" target="_blank" rel="noreferrer noopener">Publication</a>
+      </nav>
     </section>
   `;
 }
@@ -1648,6 +1738,7 @@ async function submitReviewAction(button) {
       ? `${titleCase(action)} saved`
       : `${titleCase(action)} accepted for this runtime`;
     render();
+    loadProductionReadiness({ quiet: true });
   } catch (error) {
     state.editorialMessage = error instanceof Error ? error.message : "Review action failed";
     renderIntelPanel(filteredEvents(true));
@@ -2456,6 +2547,15 @@ function statusLabel(status) {
   return titleCase(String(status ?? "planned").replace("local-ready", "local ready").replace("planned-paid", "planned paid"));
 }
 
+function storeModeLabel(mode) {
+  return {
+    "github-contents": "GitHub",
+    "github-contents-unconfigured": "GitHub config",
+    "local-file": "Local file",
+    "static-readonly": "Read only"
+  }[mode] ?? titleCase(mode || "unknown");
+}
+
 function fitToRegion(animated) {
   const region = currentRegion();
   updateRegionFocus();
@@ -2701,6 +2801,21 @@ function eventApiLink(item) {
     lookback: lookbackForApi(state.timeRange)
   });
   return `/api/event?${params.toString()}`;
+}
+
+function productionReadinessLink() {
+  const params = new URLSearchParams({ region: state.regionId });
+  return `/api/production-readiness?${params.toString()}`;
+}
+
+function editorialSetupLink() {
+  const params = new URLSearchParams({ region: state.regionId });
+  return `/api/editorial-setup?${params.toString()}`;
+}
+
+function publicationStatusLink() {
+  const params = new URLSearchParams({ region: state.regionId });
+  return `/api/publication-status?${params.toString()}`;
 }
 
 function archivePageLink() {
