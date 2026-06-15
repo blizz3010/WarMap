@@ -149,6 +149,7 @@ export function publicationCandidateProfile(event) {
 function publicationGateChecks(event) {
   const sources = event.sources ?? [];
   const extraction = event.extraction ?? {};
+  const claimPolicy = claimLabelPolicyForEvent(event, sources);
   const lat = Number(event.location?.lat);
   const lon = Number(event.location?.lon);
   const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lon);
@@ -169,6 +170,19 @@ function publicationGateChecks(event) {
       done: hasVisibleSourceUrl,
       required: true
     },
+    ...(claimPolicy.required
+      ? [
+          {
+            key: "claim-label",
+            label: "Claim label",
+            detail: claimPolicy.done
+              ? "conflict-party source explicitly labeled as claim"
+              : "conflict-party official source needs claim event type",
+            done: claimPolicy.done,
+            required: true
+          }
+        ]
+      : []),
     {
       key: "map-point",
       label: "Map point",
@@ -198,6 +212,49 @@ function publicationGateChecks(event) {
       required: false
     }
   ];
+}
+
+export function claimLabelPolicyForEvent(event, sources = event?.sources ?? []) {
+  const conflictPartySources = sources.filter(isConflictPartyClaimSource);
+  const eventType = normalizeText(event?.extraction?.eventType || event?.eventType);
+  const category = normalizeText(event?.extraction?.category || event?.category);
+  const title = normalizeText(`${event?.title ?? ""} ${event?.summary ?? ""}`);
+  const claimLabeled = eventType === "claim" || category === "claim";
+
+  return {
+    required: conflictPartySources.length > 0,
+    done: conflictPartySources.length === 0 || claimLabeled,
+    claimLabeled,
+    conflictPartySourceCount: conflictPartySources.length,
+    sourceIds: conflictPartySources.map((source) => source.registryId || source.id || source.name).filter(Boolean),
+    reasons: conflictPartySources.length
+      ? [
+          "conflict-party official source",
+          ...(claimLabeled ? ["explicit claim event type"] : []),
+          ...(!claimLabeled && /\b(claim|claimed|claims|says|said|statement)\b/.test(title) ? ["claim language detected"] : [])
+        ]
+      : []
+  };
+}
+
+function isConflictPartyClaimSource(source = {}) {
+  const text = normalizeText(
+    [
+      source.registryId,
+      source.id,
+      source.name,
+      source.collector,
+      source.trustTier,
+      source.collectorUrl,
+      source.url
+    ].join(" ")
+  );
+  return (
+    text.includes("russia-mod") ||
+    text.includes("russian defence ministry") ||
+    text.includes("russian defense ministry") ||
+    text.includes("official claim requiring high editorial scrutiny")
+  );
 }
 
 export function publishedEventsFromEvents(events) {
@@ -488,6 +545,10 @@ function titleCase(value) {
   return String(value ?? "")
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function slugify(value) {

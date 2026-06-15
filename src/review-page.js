@@ -901,6 +901,7 @@ function reviewGateChecks(item) {
   const sources = item.sources ?? [];
   const extraction = item.extraction ?? {};
   const eventType = eventTypeDisplay(item);
+  const claimPolicy = claimLabelPolicyForItem(item, sources);
   const hasSourceUrl = sources.some((source) => safeUrl(source.url));
   const lat = Number(item.location?.lat);
   const lon = Number(item.location?.lon);
@@ -921,6 +922,18 @@ function reviewGateChecks(item) {
       done: hasSourceUrl,
       required: true
     },
+    ...(claimPolicy.required
+      ? [
+          {
+            label: "Claim label",
+            detail: claimPolicy.done
+              ? "conflict-party source explicitly labeled as claim"
+              : "conflict-party official source needs claim event type",
+            done: claimPolicy.done,
+            required: true
+          }
+        ]
+      : []),
     {
       label: "Map point",
       detail: hasCoordinates ? item.location?.precision || "coordinates set" : "missing coordinates",
@@ -946,6 +959,37 @@ function reviewGateChecks(item) {
       required: true
     }
   ];
+}
+
+function claimLabelPolicyForItem(item, sources = []) {
+  const conflictPartySources = sources.filter(isConflictPartyClaimSource);
+  const eventType = clean(item.extraction?.eventType || item.eventType).toLowerCase();
+  const category = clean(item.extraction?.category || item.category).toLowerCase();
+  const claimLabeled = eventType === "claim" || category === "claim";
+  return {
+    required: conflictPartySources.length > 0,
+    done: conflictPartySources.length === 0 || claimLabeled
+  };
+}
+
+function isConflictPartyClaimSource(source = {}) {
+  const text = [
+    source.registryId,
+    source.id,
+    source.name,
+    source.collector,
+    source.trustTier,
+    source.collectorUrl,
+    source.url
+  ]
+    .map((value) => clean(value).toLowerCase())
+    .join(" ");
+  return (
+    text.includes("russia-mod") ||
+    text.includes("russian defence ministry") ||
+    text.includes("russian defense ministry") ||
+    text.includes("official claim requiring high editorial scrutiny")
+  );
 }
 
 function sourceProvenanceLabel(source) {
