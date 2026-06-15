@@ -294,6 +294,7 @@ function buildEnvironmentProfiles({ editorial, extraction, ingestion, storage, p
       provider: "localization",
       variables: [],
       verification: [
+        "/api/localization-status",
         "/api/platform-config",
         `/api/production-readiness?${regionQuery}`
       ],
