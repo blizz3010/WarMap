@@ -243,6 +243,17 @@ if (
   throw new Error("Expected map theater, publication, and lookback controls to stay synchronized with the URL");
 }
 
+if (
+  !appSource.includes("data-feed-event-id") ||
+  !appSource.includes("function scrollSelectedFeedCardIntoView(eventId)") ||
+  !appSource.includes("card.scrollIntoView({ block: \"nearest\", behavior: \"smooth\" })") ||
+  !appSource.includes("selectEvent(eventId, panTo, { syncFeed: true })") ||
+  !stylesSource.includes(".feed-card.is-synced") ||
+  !stylesSource.includes("@keyframes feedSyncPulse")
+) {
+  throw new Error("Expected map marker and hash selection to keep the feed synchronized with the active event");
+}
+
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
   throw new Error("Expected stream refreshes to preserve user context and current data on transient failures");
 }

@@ -1464,7 +1464,11 @@ function renderFeed(visible) {
       const side = actorSides[item.side] ?? actorSides.unknown;
       const eventType = eventTypeDisplay(item);
       return `
-        <article class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}" style="--card-color:${category.color}">
+        <article
+          class="feed-card ${item.id === state.selectedEventId ? "is-active" : ""}"
+          data-feed-event-id="${escapeAttr(item.id)}"
+          style="--card-color:${category.color}"
+        >
           <button type="button" data-event-id="${escapeAttr(item.id)}" class="feed-card-button">
             <time>${escapeHtml(item.timeLabel)}<span>${escapeHtml(item.relativeTime)}</span></time>
             <div class="feed-card-body">
@@ -2720,7 +2724,8 @@ function bindPlatformPanelControls() {
   els.intelPanel.querySelector("[data-request-notification-permission]")?.addEventListener("click", requestNotificationPermission);
 }
 
-function selectEvent(eventId, panTo) {
+function selectEvent(eventId, panTo, options = {}) {
+  const { syncFeed = !panTo } = options;
   state.selectedEventId = eventId;
   state.detailOpen = true;
   const item = state.events.find((eventItem) => eventItem.id === eventId);
@@ -2733,6 +2738,23 @@ function selectEvent(eventId, panTo) {
   }
   syncEventHash(eventId);
   render();
+  if (syncFeed) {
+    scrollSelectedFeedCardIntoView(eventId);
+  }
+}
+
+function scrollSelectedFeedCardIntoView(eventId) {
+  const card = [...els.feedList.querySelectorAll("[data-feed-event-id]")]
+    .find((node) => node.dataset.feedEventId === eventId);
+  if (!card) {
+    return;
+  }
+
+  card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  card.classList.remove("is-synced");
+  window.requestAnimationFrame(() => {
+    card.classList.add("is-synced");
+  });
 }
 
 function closeDetail() {
@@ -3618,7 +3640,7 @@ function selectHashEventIfAvailable(panTo) {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const eventId = params.get("event");
   if (eventId && state.events.some((item) => item.id === eventId)) {
-    selectEvent(eventId, panTo);
+    selectEvent(eventId, panTo, { syncFeed: true });
   }
 }
 
