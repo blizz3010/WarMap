@@ -3300,7 +3300,13 @@ function eventTypeFilterMatch(eventType) {
 }
 
 function sourceProvenanceLabel(source) {
-  const parts = [sourceTypes[source.type] ?? source.type, source.trustTier, collectorLabel(source.collector)]
+  const parts = [
+    sourceTypes[source.type] ?? source.type,
+    source.trustTier,
+    collectorLabel(source.collector),
+    source.country,
+    source.language
+  ]
     .filter(Boolean);
   return parts.join(" - ");
 }

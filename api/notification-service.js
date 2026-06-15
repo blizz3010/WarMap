@@ -338,6 +338,8 @@ function toNotificationEvent(event, { region, lookback }) {
       collector: source.collector ?? "",
       type: source.type,
       trustTier: source.trustTier,
+      country: source.country ?? "",
+      language: source.language ?? "",
       url: source.url,
       originalTitle: source.originalTitle ?? "",
       publishedAt: source.publishedAt ?? "",

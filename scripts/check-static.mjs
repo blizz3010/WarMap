@@ -172,6 +172,7 @@ const sourcesPageSource = readFileSync(new URL("src/sources-page.js", `file:///$
 const readinessPageSource = readFileSync(new URL("src/readiness-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const archiveApiSource = readFileSync(new URL("api/archive.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const collectorsSource = readFileSync(new URL("api/collectors.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventsApiSource = readFileSync(new URL("api/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const publicationPackageSource = readFileSync(new URL("api/publication-package.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
@@ -252,6 +253,23 @@ if (
   !stylesSource.includes("@keyframes feedSyncPulse")
 ) {
   throw new Error("Expected map marker and hash selection to keep the feed synchronized with the active event");
+}
+
+if (
+  !collectorsSource.includes("sourceCountry: feed.country") ||
+  !collectorsSource.includes("sourcecountry: feed.country") ||
+  !collectorsSource.includes("sourceCountry: source.country")
+) {
+  throw new Error("Expected collectors to emit canonical and legacy source-country fields");
+}
+
+if (
+  !appSource.includes("source.country") ||
+  !reviewPageSource.includes("source.language") ||
+  !eventPageSource.includes("source.country") ||
+  !archivePageSource.includes("source.language")
+) {
+  throw new Error("Expected source provenance labels to include country and language metadata");
 }
 
 if (!appSource.includes("preserveSelection: true") || !appSource.includes("keepExistingOnError: true")) {
@@ -1468,7 +1486,7 @@ const sampleLiveEvents = normalizeArticlesToEvents(
       title: "Drone explosion reported near Isfahan military site",
       url: "https://example.com/world/iran-isfahan-drone",
       domain: "example.com",
-      sourcecountry: "United States",
+      sourceCountry: "United States",
       language: "English",
       seendate: "20260528T010203Z",
       socialimage: "https://example.com/image.jpg"
@@ -1551,6 +1569,8 @@ if (responderContextEvents[0]?.extraction?.eventType !== "strike") {
 
 if (
   sampleLiveEvents[0].sources[0].collector !== "open-web" ||
+  sampleLiveEvents[0].sources[0].country !== "United States" ||
+  sampleLiveEvents[0].sources[0].language !== "English" ||
   !sampleLiveEvents[0].sources[0].originalTitle ||
   !sampleLiveEvents[0].sources[0].capturedAt ||
   !sampleLiveEvents[0].sources[0].publishedAt
@@ -1762,6 +1782,8 @@ const storedEventRow = {
     type: serializedEvent.sources[0]?.sourceType,
     collector: serializedEvent.sources[0]?.collector,
     trustTier: serializedEvent.sources[0]?.trustTier,
+    country: serializedEvent.sources[0]?.metadata?.country,
+    language: serializedEvent.sources[0]?.metadata?.language,
     url: document.url,
     collectorUrl: serializedEvent.sources[0]?.url,
     originalTitle: document.title,
@@ -1802,7 +1824,11 @@ if (
   !eventStoreStatus.checks.some((check) => check.id === "tables" && check.ok && check.found?.includes("warmap_events")) ||
   eventStoreCapabilities({ env: eventStoreEnv }).writeMode !== "candidates" ||
   !serializedEvent?.documents[0]?.url.includes("ukraine-kharkiv-drone") ||
+  serializedEvent?.sources[0]?.metadata?.country !== "United States" ||
+  serializedEvent?.sources[0]?.metadata?.language !== "English" ||
   deserializedEvent?.sources[0]?.url !== sampleUkraineEvents[0].sources[0].url ||
+  deserializedEvent?.sources[0]?.country !== "United States" ||
+  deserializedEvent?.sources[0]?.language !== "English" ||
   deserializedEvent?.review?.duplicateKey !== sampleUkraineEvents[0].review.duplicateKey ||
   deserializedEvent?.province !== sampleUkraineEvents[0].province ||
   loadedEventStoreEvents[0]?.id !== sampleUkraineEvents[0].id ||
@@ -2246,6 +2272,8 @@ if (
   reviewDossier?.kind !== "ReviewDossier" ||
   reviewDossier.candidate.id !== sampleUkraineEvents[0].id ||
   !reviewDossier.evidence.sources[0]?.url ||
+  reviewDossier.evidence.sources[0]?.country !== "United States" ||
+  reviewDossier.evidence.sources[0]?.language !== "English" ||
   reviewDossier.evidence.extraction.eventType !== "drone" ||
   reviewDossier.evidence.extraction.category !== "strike" ||
   !reviewDossier.evidence.duplicateContext.relatedCandidates.some((candidate) => candidate.id === duplicateUkraineCandidate.id) ||
@@ -2688,6 +2716,8 @@ if (
   publicationPreview.publication.summary.published !== 1 ||
   !publicationPreview.publication.ready ||
   !publicationPreview.publication.record?.sources?.[0]?.url ||
+  publicationPreview.publication.record?.sources?.[0]?.country !== "United States" ||
+  publicationPreview.publication.record?.sources?.[0]?.language !== "English" ||
   !publicationPreview.publication.record?.links?.detail?.startsWith("/event?") ||
   !publicationPreview.publication.record?.links?.api?.startsWith("/v1/events?") ||
   !publicationPreview.publication.wouldPublishTo.includes("map") ||
@@ -3251,7 +3281,13 @@ const v1NonMatchingEventType = buildV1EventsPayload(v1DronePayload, {
   }
 });
 
-if (!v1LiveSource?.collector || !v1LiveSource.originalTitle || !v1LiveSource.capturedAt) {
+if (
+  !v1LiveSource?.collector ||
+  !v1LiveSource.originalTitle ||
+  !v1LiveSource.capturedAt ||
+  v1LiveSource.country !== "United States" ||
+  v1LiveSource.language !== "English"
+) {
   throw new Error("V1 events must preserve source provenance metadata");
 }
 

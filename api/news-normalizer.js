@@ -156,13 +156,15 @@ function normalizeArticle(article, now, seenUrls, region) {
   }
   seenUrls.add(url);
 
-  const text = `${title} ${article.domain ?? ""} ${article.sourcecountry ?? ""}`.toLowerCase();
+  const sourceCountry = articleSourceCountry(article);
+  const sourceLanguage = articleLanguage(article);
+  const text = `${title} ${article.domain ?? ""} ${sourceCountry}`.toLowerCase();
   const location = matchLocation(text, region);
   const category = inferCategory(text);
   const severity = inferSeverity(text, category);
   const side = inferActorSide(text, location);
   const seenAt = parseArticleDate(article.seendate ?? article.pubDate ?? article.isoDate) ?? now;
-  const sourceName = cleanText(article.sourceName) || humanizeDomain(article.domain, article.sourcecountry);
+  const sourceName = cleanText(article.sourceName) || humanizeDomain(article.domain, sourceCountry);
   const sourceRegistryId = cleanText(article.sourceRegistryId);
   const collector = cleanText(article.collector) || "open-web";
   const collectorUrl = safeUrl(article.collectorUrl);
@@ -214,6 +216,8 @@ function normalizeArticle(article, now, seenUrls, region) {
         collector,
         type: sourceType,
         trustTier,
+        country: sourceCountry,
+        language: sourceLanguage,
         url,
         collectorUrl,
         originalTitle: title,
@@ -463,6 +467,14 @@ function relativeMinutes(date, now) {
 
 function cleanText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function articleSourceCountry(article) {
+  return cleanText(article.sourceCountry ?? article.sourcecountry);
+}
+
+function articleLanguage(article) {
+  return cleanText(article.language ?? article.sourceLanguage);
 }
 
 function humanizeDomain(domain, fallback = "Open web source") {

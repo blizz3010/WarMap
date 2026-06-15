@@ -117,6 +117,8 @@ function visibleSources(candidate) {
     collector: source.collector ?? "",
     type: source.type ?? "unknown",
     trustTier: source.trustTier ?? "",
+    country: source.country ?? "",
+    language: source.language ?? "",
     url: source.url ?? "",
     collectorUrl: source.collectorUrl ?? "",
     originalTitle: source.originalTitle ?? "",
