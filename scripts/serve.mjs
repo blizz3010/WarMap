@@ -35,6 +35,7 @@ import v1EventsHandler from "../api/v1/events.js";
 import v1FeedHandler from "../api/v1/feed.js";
 import v1SearchHandler from "../api/v1/search.js";
 import v1StreamEventsHandler from "../api/v1/stream/events.js";
+import v1TheaterStatusHandler from "../api/v1/theater-status.js";
 import v1TimelineHandler from "../api/v1/timeline.js";
 
 const root = normalize(join(fileURLToPath(new URL("..", import.meta.url))));
@@ -83,12 +84,14 @@ const apiHandlers = new Map([
   ["/api/v1/feed", v1FeedHandler],
   ["/api/v1/search", v1SearchHandler],
   ["/api/v1/stream/events", v1StreamEventsHandler],
+  ["/api/v1/theater-status", v1TheaterStatusHandler],
   ["/api/v1/timeline", v1TimelineHandler],
   ["/v1/config", v1ConfigHandler],
   ["/v1/events", v1EventsHandler],
   ["/v1/feed", v1FeedHandler],
   ["/v1/search", v1SearchHandler],
   ["/v1/stream/events", v1StreamEventsHandler],
+  ["/v1/theater-status", v1TheaterStatusHandler],
   ["/v1/timeline", v1TimelineHandler]
 ]);
 

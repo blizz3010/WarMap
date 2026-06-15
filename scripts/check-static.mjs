@@ -149,6 +149,7 @@ const requiredFiles = [
   "api/v1/search.js",
   "api/v1/service.js",
   "api/v1/stream/events.js",
+  "api/v1/theater-status.js",
   "api/v1/timeline.js"
 ];
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -179,11 +180,16 @@ const reviewQueueApiSource = readFileSync(new URL("api/review-queue.js", `file:/
 const theaterStatusApiSource = readFileSync(new URL("api/theater-status.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const v1ServiceSource = readFileSync(new URL("api/v1/service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const v1StreamSource = readFileSync(new URL("api/v1/stream/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const v1TheaterStatusSource = readFileSync(new URL("api/v1/theater-status.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const packageConfig = JSON.parse(readFileSync(new URL("package.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 const vercelConfig = JSON.parse(readFileSync(new URL("vercel.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
 
 if (!vercelConfig.crons?.some((job) => job.path === "/api/cron/ingest" && job.schedule === "17 2 * * *")) {
   throw new Error("Expected Vercel cron configuration for the ingestion heartbeat");
+}
+
+if (!vercelConfig.rewrites?.some((rewrite) => rewrite.source === "/v1/theater-status" && rewrite.destination === "/api/v1/theater-status")) {
+  throw new Error("Expected Vercel rewrite for the public v1 theater status endpoint");
 }
 
 if (packageConfig.scripts?.["apply-storage-migration"] !== "node scripts/apply-storage-migration.mjs") {
@@ -420,6 +426,9 @@ if (
   !theaterStatusApiSource.includes('THEATER_STATUS_SCHEMA_VERSION = "theater-status.v1"') ||
   !theaterStatusApiSource.includes("buildTheaterStatusPayload") ||
   !theaterStatusApiSource.includes("registrySummary(theater.id)") ||
+  !v1TheaterStatusSource.includes('apiVersion: "v1"') ||
+  !v1TheaterStatusSource.includes("buildTheaterStatusPayload") ||
+  !v1TheaterStatusSource.includes("/v1/theater-status?") ||
   !stylesSource.includes(".theater-count") ||
   !stylesSource.includes(".theater-switch button.has-theater-status") ||
   !appSource.includes("inline-review-source-strip") ||
@@ -3075,9 +3084,9 @@ if (
   v1Config.defaults?.regionName !== "Ukraine - East" ||
   !v1Config.defaults?.links?.events.includes(`region=${DEFAULT_REGION_ID}`) ||
   !v1Config.defaults?.links?.stream.includes(`publication=${V1_DEFAULT_PUBLICATION}`) ||
-  !v1Config.defaults?.links?.theaterStatus.includes("/api/theater-status?") ||
+  !v1Config.defaults?.links?.theaterStatus.includes("/v1/theater-status?") ||
   !v1Config.defaults?.links?.embed.startsWith("/embed?") ||
-  !v1Config.regions.some((region) => region.id === "ukraine-east" && region.links.theaterStatus === "/api/theater-status?region=ukraine-east") ||
+  !v1Config.regions.some((region) => region.id === "ukraine-east" && region.links.theaterStatus === "/v1/theater-status?region=ukraine-east") ||
   !v1Config.taxonomies.categories.some((category) => category.id === "strike" && category.color) ||
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "drone" && eventType.category === "air" && eventType.color) ||
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "claim" && eventType.reviewCue) ||
@@ -3086,7 +3095,7 @@ if (
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
   v1Config.platform.localization?.eventContentStatus !== "planned" ||
   v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
-  v1Config.links.theaterStatus !== "/api/theater-status" ||
+  v1Config.links.theaterStatus !== "/v1/theater-status" ||
   v1Config.links.publicationStatus !== "/api/publication-status" ||
   v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
