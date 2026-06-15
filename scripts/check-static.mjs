@@ -20,6 +20,7 @@ import {
   savePostgresEditorialDecision
 } from "../api/editorial-store.js";
 import { buildEditorialSetupPayload } from "../api/editorial-setup.js";
+import { buildExtractionStatusPayload } from "../api/extraction-status.js";
 import {
   buildCandidateEventStoreOperations,
   deserializeStoredEvent,
@@ -107,6 +108,7 @@ const requiredFiles = [
   "api/editorial-status.js",
   "api/editorial-store.js",
   "api/editorial-workflow.js",
+  "api/extraction-status.js",
   "api/event.js",
   "api/event-store.js",
   "api/event-store-health.js",
@@ -430,6 +432,7 @@ if (
   !setupPageSource.includes("function renderSetupTarget(target)") ||
   !setupPageSource.includes("function renderEnvironmentProfile(profile)") ||
   !setupPageSource.includes("function renderEnvironmentVariable(variable)") ||
+  !setupPageSource.includes('["Extraction", links.extractionStatus]') ||
   !setupPageSource.includes("function renderReviewerTokenHelper(setup)") ||
   !setupPageSource.includes("data-generate-review-token") ||
   !setupPageSource.includes("data-copy-review-token") ||
@@ -499,6 +502,7 @@ if (
 if (
   !readinessPageSource.includes("/api/production-readiness?") ||
   !readinessPageSource.includes("/api/editorial-store-health") ||
+  !readinessPageSource.includes("/api/extraction-status") ||
   !readinessPageSource.includes("/api/source-curation?") ||
   !readinessPageSource.includes("/api/source-activation-package?") ||
   !readinessPageSource.includes("/api/source-health?") ||
@@ -1060,6 +1064,9 @@ const productionReadiness = await withTemporaryStorageEnvAsync(async () =>
     });
   })
 );
+const extractionStatus = buildExtractionStatusPayload({
+  now: new Date("2026-05-28T02:04:00Z")
+});
 if (
   productionReadiness.kind !== "ProductionReadiness" ||
   productionReadiness.ready ||
@@ -1082,6 +1089,7 @@ if (
   ) ||
   !productionReadiness.requiredBlockers?.some((blocker) => blocker.id === "editorial-store") ||
   !productionReadiness.optionalBlockers?.some((blocker) => blocker.id === "ai-provider") ||
+  productionReadiness.sections.extraction.status !== "/api/extraction-status" ||
   !productionReadiness.optionalBlockers?.some(
     (blocker) =>
       blocker.id === "no-published-events" &&
@@ -1154,6 +1162,26 @@ if (
   )
 ) {
   throw new Error("Production readiness payload failed required blocker or platform checks");
+}
+
+if (
+  extractionStatus.kind !== "ExtractionStatus" ||
+  extractionStatus.schemaVersion !== "extraction-status.v1" ||
+  extractionStatus.ready ||
+  !extractionStatus.operational ||
+  extractionStatus.runtime?.provider !== "deterministic-local" ||
+  extractionStatus.runtime?.mode !== "local-fallback" ||
+  extractionStatus.runtime?.tokenConfigured ||
+  extractionStatus.runtime?.timeoutMs !== 2500 ||
+  extractionStatus.runtime?.maxArticles !== 12 ||
+  extractionStatus.contract?.schemaVersion !== "warmap-candidate-extraction-v1" ||
+  !extractionStatus.contract?.providerOutputFields?.includes("duplicateKey") ||
+  !extractionStatus.contract?.taxonomy?.eventTypes?.includes("/v1/config") ||
+  !extractionStatus.capabilities?.reviewOnlyUntilApproved ||
+  !extractionStatus.blockers?.some((blocker) => blocker.id === "ai-provider" && blocker.env.includes("AI_EXTRACTION_ENDPOINT")) ||
+  extractionStatus.links.setupCommands !== "/setup?region=ukraine-east#setup-command-profile-ai-extraction-provider"
+) {
+  throw new Error("Extraction status payload failed runtime or provider contract checks");
 }
 
 const missingStorageReadiness = buildStorageReadinessPayload({
@@ -1244,7 +1272,12 @@ if (
   !editorialSetup.setupTargets.some((target) => target.id === "github-editorial-store" && !target.ready && target.env.includes("EDITORIAL_GITHUB_TOKEN")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "github-contents-editorial" && profile.recommended && profile.variables.some((item) => item.name === "EDITORIAL_REVIEW_TOKEN" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-editorial" && profile.variables.some((item) => item.name === "DATABASE_URL or POSTGRES_URL" && item.secret)) ||
-  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "ai-extraction-provider" && profile.variables.some((item) => item.name === "AI_EXTRACTION_ENDPOINT")) ||
+  !editorialSetup.environmentProfiles?.some(
+    (profile) =>
+      profile.id === "ai-extraction-provider" &&
+      profile.variables.some((item) => item.name === "AI_EXTRACTION_ENDPOINT") &&
+      profile.verification.includes("/api/extraction-status")
+  ) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "scheduled-ingestion" && profile.recommended && profile.variables.some((item) => item.name === "CRON_SECRET" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-event-store-candidates" && profile.variables.some((item) => item.name === "EVENT_STORE_WRITE_MODE" && item.value === "candidates")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "server-notifications" && profile.variables.some((item) => item.name === "NOTIFICATION_ADMIN_TOKEN" && item.secret)) ||
@@ -1303,6 +1336,7 @@ if (
   !editorialSetup.sourceActivation?.sources?.some((source) => source.id === "compliant-social-apis" && source.nextAction.includes("endpoint metadata")) ||
   editorialSetup.fallbackBridge.targetFile !== "api/editorial-decisions.js" ||
   !editorialSetup.links.productionReadiness.includes("/api/production-readiness?region=ukraine-east") ||
+  editorialSetup.links.extractionStatus !== "/api/extraction-status" ||
   !editorialSetup.links.sourceActivationPackage.includes("/api/source-activation-package?region=ukraine-east") ||
   !editorialSetup.links.sourceCuration.includes("/api/source-curation?region=ukraine-east") ||
   !editorialSetup.links.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
@@ -2876,6 +2910,7 @@ if (
   v1Config.links.publicationStatus !== "/api/publication-status" ||
   v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
+  v1Config.links.extractionStatus !== "/api/extraction-status" ||
   v1Config.links.sourceActivationPackage !== "/api/source-activation-package" ||
   v1Config.links.notificationStatus !== "/api/notification-status" ||
   v1Config.links.localizationStatus !== "/api/localization-status" ||

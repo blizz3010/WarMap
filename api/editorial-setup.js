@@ -110,6 +110,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       productionReadiness: `/api/production-readiness?${regionQuery}`,
       editorialStatus: "/api/editorial-status",
       editorialStoreHealth: "/api/editorial-store-health",
+      extractionStatus: "/api/extraction-status",
       ingestionStatus: "/api/ingestion-status",
       storageReadiness: "/api/storage-readiness",
       eventStoreHealth: "/api/event-store-health",
@@ -202,6 +203,7 @@ function buildEnvironmentProfiles({ editorial, extraction, ingestion, storage, p
         envItem("AI_EXTRACTION_MAX_ARTICLES", "12", Boolean(process.env.AI_EXTRACTION_MAX_ARTICLES), false, "Caps external extraction calls per collection run.")
       ],
       verification: [
+        "/api/extraction-status",
         `/api/production-readiness?${regionQuery}`,
         `/api/events?${regionQuery}&lookback=24h`
       ],
