@@ -63,6 +63,21 @@ export async function buildSourceHealthPayload({
     missingConfigurationCount: missingConfig.length
   });
 
+  const summary = {
+    activeSources: activeSources.length,
+    plannedSources: plannedRows.length,
+    configuredOfficialFeeds: officialFeedSources.length,
+    configuredOfficialSites: officialSiteSources.length,
+    configuredSocialApis: socialSources.length,
+    checkedSources: checked.length,
+    reachableSources: reachable.length,
+    failedSources: failed.length,
+    retryableFailures: retryableFailures.length,
+    hardFailures: hardFailures.length,
+    missingConfiguration: missingConfig.length
+  };
+  const attention = sourceAttentionQueue(sources, { resilience, summary });
+
   return {
     kind: "SourceHealth",
     schemaVersion: "source-health.v1",
@@ -73,19 +88,8 @@ export async function buildSourceHealthPayload({
     operational,
     degraded,
     resilience,
-    summary: {
-      activeSources: activeSources.length,
-      plannedSources: plannedRows.length,
-      configuredOfficialFeeds: officialFeedSources.length,
-      configuredOfficialSites: officialSiteSources.length,
-      configuredSocialApis: socialSources.length,
-      checkedSources: checked.length,
-      reachableSources: reachable.length,
-      failedSources: failed.length,
-      retryableFailures: retryableFailures.length,
-      hardFailures: hardFailures.length,
-      missingConfiguration: missingConfig.length
-    },
+    summary,
+    attention,
     families: sourceFamilies(sources),
     sources,
     links: {
@@ -303,6 +307,8 @@ async function fetchWithTimeout(fetchImpl, url, options) {
 }
 
 function sourceHealthRow(source, state = {}) {
+  const diagnostic = sourceHealthDiagnostic(state);
+  const severity = sourceHealthSeverity(state, diagnostic);
   return {
     id: source.id,
     name: source.name,
@@ -314,12 +320,54 @@ function sourceHealthRow(source, state = {}) {
     checked: Boolean(state.checked),
     ok: Boolean(state.ok),
     status: state.status,
+    severity,
     message: state.message,
+    nextAction: cleanActionText(state.nextAction || sourceHealthNextAction(source, state, diagnostic, severity)),
     itemCount: Number.isFinite(state.itemCount) ? state.itemCount : null,
     url: state.url ?? source.url ?? null,
     regions: source.regions ?? ["*"],
-    diagnostic: sourceHealthDiagnostic(state)
+    diagnostic
   };
+}
+
+function sourceHealthSeverity(state = {}, diagnostic = {}) {
+  if (state.ok) return "ready";
+  if (state.status === "planned") return "planned";
+  if (state.status === "missing-config") return "blocker";
+  if (diagnostic.retryable || diagnostic.category === "empty") return "warning";
+  return "blocker";
+}
+
+function sourceHealthNextAction(source, state = {}, diagnostic = {}, severity = "blocker") {
+  if (severity === "ready") {
+    return "Continue collecting source-linked items and route candidates through editorial review.";
+  }
+  if (state.status === "planned") {
+    return plannedSourceNextAction(source);
+  }
+  if (state.status === "missing-config") {
+    return source.tokenEnv
+      ? `Set ${source.tokenEnv} in Vercel before enabling this configured source.`
+      : "Set the required source configuration before enabling this collector.";
+  }
+  if (diagnostic.retryable || diagnostic.category === "network") {
+    if (source.collector === "gdelt-doc") {
+      return "Retry the GDELT probe and keep RSS or official-feed fallbacks active while this source is degraded.";
+    }
+    return "Retry the probe and monitor source availability before treating this collector as healthy.";
+  }
+  if (diagnostic.category === "empty") {
+    return "Confirm the feed still publishes matching items or tune the region/query before relying on it.";
+  }
+  if (diagnostic.category === "schema" || diagnostic.category === "parse") {
+    return "Update the collector parser or source adapter before trusting this source.";
+  }
+  if (diagnostic.category === "http") {
+    return diagnostic.httpStatus
+      ? `Review the HTTP ${diagnostic.httpStatus} response, permissions, and rate limits before activation.`
+      : "Review the HTTP response, permissions, and rate limits before activation.";
+  }
+  return "Review source configuration, permissions, and adapter behavior before activation.";
 }
 
 function sourceHealthDiagnostic(state = {}) {
@@ -486,6 +534,134 @@ function plannedSourceMessage(source) {
     return "Configure approved API endpoints through COMPLIANT_SOCIAL_API_SOURCES.";
   }
   return source.access ?? "Planned source is not active yet.";
+}
+
+function plannedSourceNextAction(source) {
+  if (source.collector === "licensed-api") {
+    return "Activate only after a paid or written API/license relationship is in place.";
+  }
+  if (source.collector === "official-site") {
+    return "Confirm automated-use terms, add an OFFICIAL_SITE_SOURCES adapter, and keep claim-label rules for conflict-party posts.";
+  }
+  if (source.collector === "social-api") {
+    return "Configure approved endpoint metadata through COMPLIANT_SOCIAL_API_SOURCES and keep token values server-side.";
+  }
+  return "Confirm permission, adapter coverage, and editorial policy before activation.";
+}
+
+function sourceAttentionQueue(sources, { resilience, summary } = {}) {
+  const rows = sources
+    .filter(sourceNeedsAttention)
+    .slice()
+    .sort(sourceAttentionSort)
+    .map(sourceAttentionRow);
+  const counts = sourceAttentionCounts(rows);
+  const state = sourceAttentionState(counts, resilience);
+  return {
+    state,
+    count: rows.length,
+    limit: 8,
+    counts,
+    summary: sourceAttentionSummary(rows, counts, summary, resilience),
+    nextAction: sourceAttentionNextAction(rows, state),
+    rows: rows.slice(0, 8)
+  };
+}
+
+function sourceNeedsAttention(source) {
+  return !source.ok || source.status === "planned" || source.diagnostic?.retryable || source.severity !== "ready";
+}
+
+function sourceAttentionRow(source) {
+  return {
+    id: source.id,
+    name: source.name,
+    collector: source.collector,
+    sourceType: source.sourceType,
+    status: source.status,
+    severity: source.severity,
+    ok: source.ok,
+    configured: source.configured,
+    checked: source.checked,
+    message: source.message,
+    nextAction: source.nextAction,
+    itemCount: source.itemCount,
+    url: source.url,
+    diagnostic: source.diagnostic
+  };
+}
+
+function sourceAttentionCounts(rows) {
+  return rows.reduce(
+    (counts, row) => {
+      counts.total += 1;
+      if (row.severity === "blocker") counts.blockers += 1;
+      if (row.severity === "warning") counts.warnings += 1;
+      if (row.severity === "planned") counts.planned += 1;
+      if (row.diagnostic?.retryable) counts.retryable += 1;
+      if (row.status === "missing-config") counts.missingConfiguration += 1;
+      return counts;
+    },
+    { total: 0, blockers: 0, warnings: 0, planned: 0, retryable: 0, missingConfiguration: 0 }
+  );
+}
+
+function sourceAttentionState(counts, resilience = {}) {
+  if (resilience.state === "blocked" || counts.blockers > 0) return "blocked";
+  if (counts.warnings > 0) return "degraded";
+  if (counts.planned > 0) return "planned";
+  return "ready";
+}
+
+function sourceAttentionSummary(rows, counts, summary = {}, resilience = {}) {
+  if (!rows.length) {
+    return "No source-health attention items.";
+  }
+  if (resilience.state === "blocked" && counts.blockers === 0) {
+    return `${Number(summary.reachableSources ?? 0)} reachable collector(s); source health is blocked until at least one checked collector returns usable items.`;
+  }
+  if (counts.blockers > 0) {
+    return `${counts.blockers} blocking source-health item(s), ${counts.warnings} warning(s), and ${counts.planned} planned activation item(s).`;
+  }
+  if (counts.warnings > 0) {
+    return `${counts.warnings} source-health warning(s) need monitoring; ${Number(summary.reachableSources ?? 0)} collector(s) are reachable.`;
+  }
+  if (counts.planned > 0) {
+    return `${counts.planned} planned source activation item(s) remain before broader collector coverage.`;
+  }
+  return "Source-health attention queue is clear.";
+}
+
+function sourceAttentionNextAction(rows, state) {
+  const firstBlocker = rows.find((row) => row.severity === "blocker");
+  if (firstBlocker?.nextAction) return firstBlocker.nextAction;
+  const firstWarning = rows.find((row) => row.severity === "warning");
+  if (firstWarning?.nextAction) return firstWarning.nextAction;
+  const firstPlanned = rows.find((row) => row.severity === "planned");
+  if (firstPlanned?.nextAction) return firstPlanned.nextAction;
+  if (state === "ready") return "Continue collector monitoring and editorial review.";
+  return "Review source diagnostics before treating collector coverage as healthy.";
+}
+
+function sourceAttentionSort(left, right) {
+  return sourceAttentionPriority(left) - sourceAttentionPriority(right)
+    || String(left.id ?? left.name ?? "").localeCompare(String(right.id ?? right.name ?? ""));
+}
+
+function sourceAttentionPriority(source) {
+  if (source.status === "missing-config") return 0;
+  if (source.severity === "blocker") return 1;
+  if (source.status === "error" || source.diagnostic?.category === "http") return 2;
+  if (source.severity === "warning" || source.diagnostic?.retryable || source.status === "empty") return 3;
+  if (source.status === "planned") return 4;
+  return source.ok ? 6 : 5;
+}
+
+function cleanActionText(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 260);
 }
 
 function sourceFamilies(sources) {

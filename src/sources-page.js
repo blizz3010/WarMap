@@ -203,6 +203,8 @@ function renderHealthSummary(health) {
     <p class="status-summary ${sourceHealthStatusClass(health)}">
       ${escapeHtml(resilience.message ?? "Source health checked.")}
     </p>
+    ${health.attention?.summary ? `<p class="status-summary ${sourceHealthAttentionStatusClass(health)}">${escapeHtml(health.attention.summary)}</p>` : ""}
+    ${health.attention?.nextAction ? `<p class="status-summary ${sourceHealthAttentionStatusClass(health)}">${escapeHtml(health.attention.nextAction)}</p>` : ""}
   `;
 }
 
@@ -307,13 +309,14 @@ function renderHealthRow(source) {
   const diagnostic = source.diagnostic ?? {};
   const url = safeUrl(source.url);
   return `
-    <li class="${source.ok ? "is-ready" : source.status === "planned" ? "is-planned" : "is-blocked"}">
+    <li class="${sourceHealthRowClass(source)}">
       <header>
         <strong>${escapeHtml(source.name ?? source.id)}</strong>
         <span>${escapeHtml(titleCase(source.status || (source.ok ? "reachable" : "attention")))}</span>
       </header>
       <small>${escapeHtml(`${titleCase(source.collector)} - ${diagnostic.code ?? "probe.not-run"} - ${diagnostic.category ?? "unknown"}${diagnostic.retryable ? " - retryable" : ""}`)}</small>
       <p>${escapeHtml(source.message ?? "No diagnostic message.")}</p>
+      ${source.nextAction ? `<p>${escapeHtml(source.nextAction)}</p>` : ""}
       ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">Source URL</a>` : ""}
     </li>
   `;
@@ -328,10 +331,18 @@ function healthRows(health) {
 
 function sourceHealthPriority(source) {
   if (source.status === "missing-config") return 0;
-  if (source.status === "error" || source.diagnostic?.category === "http") return 1;
-  if (source.diagnostic?.retryable || source.status === "empty") return 2;
-  if (source.status === "planned") return 3;
-  return source.ok ? 5 : 4;
+  if (source.severity === "blocker") return 1;
+  if (source.status === "error" || source.diagnostic?.category === "http") return 2;
+  if (source.severity === "warning" || source.diagnostic?.retryable || source.status === "empty") return 3;
+  if (source.status === "planned") return 4;
+  return source.ok ? 6 : 5;
+}
+
+function sourceHealthRowClass(source) {
+  if (source.ok) return "is-ready";
+  if (source.status === "planned" || source.severity === "planned") return "is-planned";
+  if (source.severity === "warning" || source.diagnostic?.retryable) return "is-warning";
+  return "is-blocked";
 }
 
 function renderWorkflowStage(stage) {
@@ -448,6 +459,13 @@ function sourceHealthStatusClass(health) {
   if (health?.ready) return "is-ready";
   if (health?.operational) return "is-warning";
   return "is-blocked";
+}
+
+function sourceHealthAttentionStatusClass(health) {
+  const state = health?.attention?.state;
+  if (state === "ready") return "is-ready";
+  if (state === "blocked") return "is-blocked";
+  return "is-warning";
 }
 
 function regionName(regionId) {

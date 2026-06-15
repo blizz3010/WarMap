@@ -328,6 +328,7 @@ WarMap sends the article candidate, current deterministic fallback extraction, s
 The supplied research recommends a provenance-first event platform:
 
 - source registry and connector families for REST, RSS, CAP, HTML, and streaming sources
+- source-health attention queues with non-secret severity labels and operator next actions
 - PostgreSQL/PostGIS as the source of truth
 - OpenSearch for feed/search/faceting
 - queue-backed ingestion, extraction, geocoding, deduplication, and editorial review

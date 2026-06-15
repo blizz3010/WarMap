@@ -2629,6 +2629,11 @@ dd {
   background: rgba(250, 204, 21, 0.07);
 }
 
+.source-health-list > li.is-warning {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.08);
+}
+
 .source-health-list > li.is-blocked,
 .source-template-list > li.is-blocked {
   border-color: rgba(239, 68, 68, 0.3);

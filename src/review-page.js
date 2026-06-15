@@ -360,11 +360,15 @@ function renderSourceHealthDiagnosticRow(source) {
       <strong>${escapeHtml(titleCase(status))}</strong>
       <small>${escapeHtml(`${collector} - ${code} - ${category} - ${retryState}`)}</small>
       <small>${escapeHtml(source.message || source.url || "No source diagnostic message.")}</small>
+      ${source.nextAction ? `<small>${escapeHtml(source.nextAction)}</small>` : ""}
     </li>
   `;
 }
 
 function sourceHealthAttentionRows(health, limit = 4) {
+  if (Array.isArray(health?.attention?.rows)) {
+    return health.attention.rows.slice(0, limit);
+  }
   return (Array.isArray(health?.sources) ? health.sources : [])
     .filter((source) => !source.ok || source.status === "planned" || source.diagnostic?.retryable)
     .sort(sourceHealthAttentionSort)
@@ -372,6 +376,9 @@ function sourceHealthAttentionRows(health, limit = 4) {
 }
 
 function sourceHealthAttentionCount(health) {
+  if (Number.isFinite(health?.attention?.count)) {
+    return health.attention.count;
+  }
   return (Array.isArray(health?.sources) ? health.sources : [])
     .filter((source) => !source.ok || source.status === "planned" || source.diagnostic?.retryable)
     .length;
