@@ -8,6 +8,7 @@ import { buildGdeltUrl, DEFAULT_REGION_ID, normalizeLookback } from "./news-norm
 import { plannedSourcesForRegion, sourcesForRegion } from "./source-registry.js";
 
 const PROBED_COLLECTORS = new Set(["gdelt-doc", "rss", "official-feed"]);
+const DEFAULT_GDELT_TIMEOUT_MS = 6500;
 
 export async function buildSourceHealthPayload({
   region = DEFAULT_REGION_ID,
@@ -126,6 +127,7 @@ async function probeRegistrySource(source, context) {
     : source.collector === "official-site"
       ? "text/html, application/xhtml+xml"
       : "application/rss+xml, application/xml, text/xml";
+  const requestTimeoutMs = sourceTimeoutMs(source, context.timeoutMs);
 
   try {
     const response = await fetchWithTimeout(context.fetchImpl, url, {
@@ -133,7 +135,7 @@ async function probeRegistrySource(source, context) {
         Accept: accept,
         "User-Agent": "WarMapLive/0.1 source-health"
       },
-      timeoutMs: context.timeoutMs
+      timeoutMs: requestTimeoutMs
     });
 
     if (!response.ok) {
@@ -143,6 +145,7 @@ async function probeRegistrySource(source, context) {
         ok: false,
         status: String(response.status),
         url,
+        timeoutMs: requestTimeoutMs,
         message: `${source.name} returned ${response.status}.`,
         diagnostic: {
           code: "http.status",
@@ -162,6 +165,7 @@ async function probeRegistrySource(source, context) {
         ok: Array.isArray(payload.articles),
         status: "reachable",
         url,
+        timeoutMs: requestTimeoutMs,
         itemCount: Array.isArray(payload.articles) ? payload.articles.length : 0,
         message: Array.isArray(payload.articles)
           ? "GDELT returned an article list."
@@ -181,6 +185,7 @@ async function probeRegistrySource(source, context) {
         ok: items.length > 0,
         status: items.length > 0 ? "reachable" : "empty",
         url,
+        timeoutMs: requestTimeoutMs,
         itemCount: items.length,
         message: items.length > 0
           ? `${source.name} returned official-site links.`
@@ -199,6 +204,7 @@ async function probeRegistrySource(source, context) {
       ok: itemCount > 0,
       status: itemCount > 0 ? "reachable" : "empty",
       url,
+      timeoutMs: requestTimeoutMs,
       itemCount,
       message: itemCount > 0 ? `${source.name} returned XML feed items.` : `${source.name} returned no XML feed items.`,
       diagnostic: itemCount > 0
@@ -212,6 +218,7 @@ async function probeRegistrySource(source, context) {
       ok: false,
       status: "error",
       url,
+      timeoutMs: requestTimeoutMs,
       message: `${source.name} health probe failed: ${String(error?.message ?? error)}`,
       diagnostic: errorDiagnostic(error, context.now)
     });
@@ -244,11 +251,12 @@ async function probeSocialSource(source, context) {
       ? `${source.authScheme} ${process.env[source.tokenEnv]}`
       : `Bearer ${process.env[source.tokenEnv]}`;
   }
+  const requestTimeoutMs = sourceTimeoutMs(source, context.timeoutMs);
 
   try {
     const response = await fetchWithTimeout(context.fetchImpl, source.url, {
       headers,
-      timeoutMs: source.timeoutMs ?? context.timeoutMs
+      timeoutMs: requestTimeoutMs
     });
 
     if (!response.ok) {
@@ -257,6 +265,7 @@ async function probeSocialSource(source, context) {
         checked: true,
         ok: false,
         status: String(response.status),
+        timeoutMs: requestTimeoutMs,
         message: `${source.name} returned ${response.status}.`,
         diagnostic: {
           code: "http.status",
@@ -275,6 +284,7 @@ async function probeSocialSource(source, context) {
       checked: true,
       ok: itemCount > 0,
       status: itemCount > 0 ? "reachable" : "empty",
+      timeoutMs: requestTimeoutMs,
       itemCount,
       message: itemCount > 0 ? `${source.name} returned API items.` : `${source.name} returned no API items.`,
       diagnostic: itemCount > 0
@@ -287,6 +297,7 @@ async function probeSocialSource(source, context) {
       checked: true,
       ok: false,
       status: "error",
+      timeoutMs: requestTimeoutMs,
       message: `${source.name} health probe failed: ${String(error?.message ?? error)}`,
       diagnostic: errorDiagnostic(error, context.now)
     });
@@ -295,15 +306,30 @@ async function probeSocialSource(source, context) {
 
 async function fetchWithTimeout(fetchImpl, url, options) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, options.timeoutMs);
   try {
     return await fetchImpl(url, {
       headers: options.headers,
       signal: controller.signal
     });
+  } catch (error) {
+    if (timedOut) {
+      throw timeoutError(options.timeoutMs);
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function timeoutError(timeoutMs) {
+  const error = new Error(`Timeout after ${timeoutMs}ms`);
+  error.name = "AbortError";
+  return error;
 }
 
 function sourceHealthRow(source, state = {}) {
@@ -324,6 +350,7 @@ function sourceHealthRow(source, state = {}) {
     message: state.message,
     nextAction: cleanActionText(state.nextAction || sourceHealthNextAction(source, state, diagnostic, severity)),
     itemCount: Number.isFinite(state.itemCount) ? state.itemCount : null,
+    timeoutMs: Number.isFinite(state.timeoutMs) ? state.timeoutMs : null,
     url: state.url ?? source.url ?? null,
     regions: source.regions ?? ["*"],
     diagnostic
@@ -592,6 +619,7 @@ function sourceAttentionRow(source) {
     message: source.message,
     nextAction: source.nextAction,
     itemCount: source.itemCount,
+    timeoutMs: source.timeoutMs,
     url: source.url,
     diagnostic: source.diagnostic
   };
@@ -710,4 +738,19 @@ function socialItemCount(payload, itemsPath) {
   if (Array.isArray(payload?.data)) return payload.data.length;
   if (Array.isArray(payload?.results)) return payload.results.length;
   return 0;
+}
+
+function sourceTimeoutMs(source, fallback) {
+  if (source.collector === "gdelt-doc") {
+    return boundedTimeoutMs(process.env.GDELT_TIMEOUT_MS, source.timeoutMs ?? DEFAULT_GDELT_TIMEOUT_MS);
+  }
+  return boundedTimeoutMs(source.timeoutMs, fallback);
+}
+
+function boundedTimeoutMs(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(Math.max(Math.trunc(parsed), 1500), 12000);
 }

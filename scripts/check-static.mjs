@@ -870,10 +870,11 @@ if (
   sourceHealth.health.attention?.state !== "planned" ||
   sourceHealth.health.attention?.count !== sourceHealth.health.summary.plannedSources ||
   !sourceHealth.health.sources.some((source) => source.id === "approved-osint" && source.ok && source.itemCount === 1 && source.diagnostic?.code === "social.items") ||
-  !sourceHealth.health.sources.some((source) => source.id === "gdelt-doc" && source.ok && source.diagnostic?.code === "gdelt.article-list") ||
+  !sourceHealth.health.sources.some((source) => source.id === "gdelt-doc" && source.ok && source.timeoutMs === 6500 && source.diagnostic?.code === "gdelt.article-list") ||
   !sourceHealth.health.sources.every((source) => source.severity && source.nextAction) ||
   !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned" && source.severity === "planned" && source.diagnostic?.category === "planned" && source.nextAction.includes("license")) ||
   !sourceHealth.health.attention?.rows?.some((source) => source.id === "liveuamap-api" && source.severity === "planned" && source.nextAction.includes("license")) ||
+  !sourceHealth.health.attention?.rows?.every((source) => source.id === "gdelt-doc" ? source.timeoutMs === 6500 : true) ||
   !sourceHealth.health.families.some((family) => family.collector === "social-api" && family.ok === 1) ||
   sourceHealth.urls.length < 4
 ) {
@@ -1145,6 +1146,19 @@ if (
   !failedSourceHealth.attention?.rows?.some((source) => source.id === "gdelt-doc" && source.severity === "warning" && source.nextAction.includes("GDELT"))
 ) {
   throw new Error("Source health payload failed HTTP diagnostic checks");
+}
+
+const gdeltTimeoutOverrideHealth = await withTemporarySourceHealthEnv(async () => {
+  process.env.GDELT_TIMEOUT_MS = "7000";
+  return buildSourceHealthPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:03:52Z"),
+    maxSources: 1,
+    fetchImpl: async () => jsonResponse(200, { articles: [{ title: "fixture" }] })
+  });
+});
+if (!gdeltTimeoutOverrideHealth.sources.some((source) => source.id === "gdelt-doc" && source.ok && source.timeoutMs === 7000)) {
+  throw new Error("Source health payload failed configurable GDELT timeout checks");
 }
 
 const productionReadiness = await withTemporaryStorageEnvAsync(async () =>
@@ -3526,6 +3540,7 @@ async function withTemporarySourceHealthEnv(callback) {
     "OFFICIAL_FEED_SOURCES",
     "OFFICIAL_SITE_SOURCES",
     "COMPLIANT_SOCIAL_API_SOURCES",
+    "GDELT_TIMEOUT_MS",
     "ALLOWED_OSINT_TOKEN",
     "MISSING_ALLOWED_TOKEN"
   ];
