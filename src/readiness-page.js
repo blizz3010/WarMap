@@ -95,6 +95,13 @@ function readinessChecks() {
       url: notificationStatusUrl(),
       expectedKind: "NotificationStatus",
       required: false
+    },
+    {
+      id: "localization-status",
+      label: "Localization status",
+      url: "/api/localization-status",
+      expectedKind: "LocalizationStatus",
+      required: false
     }
   ];
 }
@@ -133,6 +140,7 @@ function renderReadinessPage() {
   const eventStore = checkPayload("event-store-health") ?? {};
   const publication = checkPayload("publication-status") ?? production.sections?.publication ?? {};
   const notifications = checkPayload("notification-status") ?? {};
+  const localization = checkPayload("localization-status") ?? {};
   const requiredBlockers = production.requiredBlockers ?? (production.blockers ?? []).filter((blocker) => blocker.required);
   const optionalBlockers = production.optionalBlockers ?? (production.blockers ?? []).filter((blocker) => !blocker.required);
   const launchActions = production.launchPlan?.actions ?? [];
@@ -241,6 +249,7 @@ function renderReadinessPage() {
               <div><dt>DB health</dt><dd>${eventStore.ready ? "Ready" : eventStore.capabilities?.mode ?? "Unknown"}</dd></div>
               <div><dt>Source health</dt><dd>${sourceHealth.resilience?.state ?? sourceHealth.status ?? "Unknown"}</dd></div>
               <div><dt>Notifications</dt><dd>${notifications.delivery?.ready ? "Ready" : notifications.delivery?.status ?? "Planned"}</dd></div>
+              <div><dt>Languages</dt><dd>${localization.shellReady ? "Shell ready" : "Attention"}</dd></div>
             </dl>
           </section>
 
@@ -268,6 +277,7 @@ function renderReadinessPage() {
               <a href="/api/event-store-health">DB health</a>
               <a href="${escapeAttr(publicationStatusUrl())}">Publication</a>
               <a href="${escapeAttr(notificationStatusUrl())}">Notifications</a>
+              <a href="/api/localization-status">Localization</a>
             </nav>
           </section>
         </aside>
@@ -456,6 +466,9 @@ function summaryLine(payload, check) {
   }
   if (payload?.kind === "NotificationStatus") {
     return `${payload.delivery?.status ?? "planned"} delivery, ${Number(payload.preview?.candidates?.length ?? 0)} preview candidates.`;
+  }
+  if (payload?.kind === "LocalizationStatus") {
+    return `${Number(payload.summary?.shellCopyLanguages ?? 0)} shell languages, ${Number(payload.summary?.rtlLanguages?.length ?? 0)} RTL, event translation ${payload.capabilities?.eventContentStatus ?? "planned"}.`;
   }
   return `${check.label} returned ${payload?.kind ?? "JSON"}.`;
 }

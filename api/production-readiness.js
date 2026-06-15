@@ -170,6 +170,7 @@ function activationSourceIds(curation, predicate) {
 function platformReadinessSummary({ notifications = notificationRuntimeSummary() } = {}) {
   return {
     notificationStatus: "/api/notification-status",
+    localizationStatus: "/api/localization-status",
     browserNotifications: PLATFORM_CONFIG.notificationChannels.some((channel) => channel.id === "browser" && channel.status === "local-ready"),
     serverNotificationsReady: notifications.serverDeliveryReady,
     notificationRuntime: {
@@ -180,7 +181,8 @@ function platformReadinessSummary({ notifications = notificationRuntimeSummary()
     activeLanguages: PLATFORM_CONFIG.languages.filter((language) => language.status === "active").map((language) => language.id),
     plannedLanguages: PLATFORM_CONFIG.languages.filter((language) => language.status === "planned").map((language) => language.id),
     paidLayersReady: PLATFORM_CONFIG.paidLayers.some((layer) => layer.status === "active-paid"),
-    plannedPaidLayers: PLATFORM_CONFIG.paidLayers.filter((layer) => layer.status === "planned-paid").map((layer) => layer.id)
+    plannedPaidLayers: PLATFORM_CONFIG.paidLayers.filter((layer) => layer.status === "planned-paid").map((layer) => layer.id),
+    localization: PLATFORM_CONFIG.localization ?? {}
   };
 }
 
@@ -199,8 +201,8 @@ function platformBlockers(platform) {
     blockers.push({
       id: "language-catalogs",
       required: false,
-      status: "planned",
-      message: "Language switching covers shell copy; event translation catalogs are still planned."
+      status: platform.localization?.eventContentStatus ?? "planned",
+      message: "Language switching covers shell copy; reviewed event translation catalogs are still planned."
     });
   }
   if (!platform.paidLayersReady && platform.plannedPaidLayers.length) {

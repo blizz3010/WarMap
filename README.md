@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - shareable `/event?id=...&region=...` detail page with granular event type, source links, review status, map return link, archive link, and API link
 - public `/archive?region=...&lookback=...` page with approved records grouped by day, granular event types, source links, map/detail/API links, and theater filtering
 - standalone `/review?region=...&lookback=...` editorial queue with source links, extraction metadata, correction fields, token handling, and publish actions
-- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/publication-package`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/intake-store-health`, `/api/storage-readiness`, `/api/event-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, first-publish approval packages, review actions, static decision exports, setup readiness, durable store checks, storage schema readiness, event-store DB checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, detail records, approved history, and platform capability metadata
+- Vercel `/api/events`, `/api/review-queue`, `/api/review-dossier`, `/api/publication-preview`, `/api/publication-package`, `/api/review-action`, `/api/review-export`, `/api/editorial-setup`, `/api/editorial-store-health`, `/api/intake-store-health`, `/api/storage-readiness`, `/api/event-store-health`, `/api/source-health`, `/api/ingestion-status`, `/api/publication-status`, `/api/notification-status`, `/api/localization-status`, `/api/event`, `/api/archive`, and `/api/platform-config` endpoints for live leads, evidence dossiers, dry-run publication previews, first-publish approval packages, review actions, static decision exports, setup readiness, durable store checks, storage schema readiness, event-store DB checks, collector health, scheduled-ingestion readiness, approved publication coverage, notification readiness, localization readiness, detail records, approved history, and platform capability metadata
 - clean public `/v1/config`, `/v1/events`, `/v1/feed`, `/v1/timeline`, `/v1/search`, and `/v1/stream/events` routes for dashboard integration
 - source registry scaffold for RSS, official feeds, terms-reviewed official-site adapters, and compliant social API collectors
 - alert, language, and paid-layer scaffolding with clear active/planned status boundaries
@@ -65,7 +65,7 @@ The browser map also opens `/v1/stream/events` with `EventSource` when available
 
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
 
-- `/v1/config` returns dashboard defaults, theater presets, category icon taxonomy, granular event-type taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, notification channels, and paid-layer capability records.
+- `/v1/config` returns dashboard defaults, theater presets, category icon taxonomy, granular event-type taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, localization readiness metadata/link, notification channels, and paid-layer capability records.
 - `/v1/events?region=ukraine-east&publication=published` returns event resources with location, granular `eventType`, review state, extraction metadata, visible original source links, collector provenance, and map/detail/API links.
 - `/v1/feed?region=ukraine-east` returns feed-optimized event cards with the same granular `eventType`.
 - `/v1/timeline?region=ukraine-east` groups event cards by day and preserves their granular `eventType`.
@@ -217,11 +217,12 @@ When enabled with a ready database, cron stores source-linked review candidates 
 `/api/platform-config` returns the non-event product surfaces used by the shell:
 
 - language options, active/default locale, planned RTL languages, and local shell-copy switching
+- localization capability metadata for local shell copy, RTL direction, browser persistence, and the reviewed-catalog gate for translated event content
 - local browser-alert preference capability plus planned email and webhook delivery
 - included and planned-paid map layers
 - explicit boundaries for missing push delivery, translation catalogs, billing, entitlements, and licensed layer datasets
 
-The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. `/api/notification-status` exposes the server notification readiness path and preview batch. Webhook delivery stays disabled until `NOTIFICATION_WEBHOOK_URL`, `NOTIFICATION_WEBHOOK_SECRET`, and `NOTIFICATION_ADMIN_TOKEN` are configured. Language selection updates core shell copy and document direction locally, while event articles and source text remain in their source language. It does not unlock paid layers.
+The current UI persists alert preferences, selected language, and time display mode in the browser. When browser notification permission is granted, live stream/poll refreshes can send capped local alerts for new severe leads in the active theater. `/api/notification-status` exposes the server notification readiness path and preview batch. `/api/localization-status` exposes shell-copy language coverage, RTL readiness, and the remaining reviewed translation-catalog blocker. Webhook delivery stays disabled until `NOTIFICATION_WEBHOOK_URL`, `NOTIFICATION_WEBHOOK_SECRET`, and `NOTIFICATION_ADMIN_TOKEN` are configured. Language selection updates core shell copy and document direction locally, while event articles and source text remain in their source language. It does not unlock paid layers.
 
 Optional webhook notifications are intentionally admin-triggered and signed:
 

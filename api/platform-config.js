@@ -42,6 +42,24 @@ export const PLATFORM_CONFIG = {
       direction: "ltr"
     }
   ],
+  localization: {
+    schemaVersion: "localization-capabilities.v1",
+    shellCopyStatus: "local-ready",
+    shellCopyLanguages: ["en", "uk", "fa", "ar", "ru"],
+    directionAware: true,
+    selectionPersistence: "localStorage:warmap.language",
+    eventContentStatus: "planned",
+    plannedCatalogLanguages: ["uk", "fa", "ar", "ru"],
+    translationPolicy: "reviewed-catalog-required",
+    eventContentBoundary:
+      "Event summaries, article titles, and source text remain in the original source language until reviewed translation catalogs are implemented.",
+    requiredBeforeEventTranslation: [
+      "Add reviewed translation catalogs or a reviewed translation provider policy.",
+      "Route translated event summaries through the same editorial approval queue as source-language records.",
+      "Keep original source links and original-language text available on every translated event.",
+      "Expose language and translation provenance in public v1 API responses."
+    ]
+  },
   notificationChannels: [
     {
       id: "browser",

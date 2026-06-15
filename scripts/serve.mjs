@@ -12,6 +12,7 @@ import editorialSetupHandler from "../api/editorial-setup.js";
 import editorialStatusHandler from "../api/editorial-status.js";
 import ingestionStatusHandler from "../api/ingestion-status.js";
 import intakeStoreHealthHandler from "../api/intake-store-health.js";
+import localizationStatusHandler from "../api/localization-status.js";
 import notificationStatusHandler from "../api/notification-status.js";
 import platformConfigHandler from "../api/platform-config.js";
 import productionReadinessHandler from "../api/production-readiness.js";
@@ -55,6 +56,7 @@ const apiHandlers = new Map([
   ["/api/editorial-status", editorialStatusHandler],
   ["/api/ingestion-status", ingestionStatusHandler],
   ["/api/intake-store-health", intakeStoreHealthHandler],
+  ["/api/localization-status", localizationStatusHandler],
   ["/api/notification-status", notificationStatusHandler],
   ["/api/platform-config", platformConfigHandler],
   ["/api/production-readiness", productionReadinessHandler],

@@ -165,6 +165,7 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
     platform: {
       schemaVersion: platformConfig.schemaVersion,
       languages: platformConfig.languages ?? [],
+      localization: platformConfig.localization ?? {},
       notificationChannels: platformConfig.notificationChannels ?? [],
       paidLayers: platformConfig.paidLayers ?? [],
       operationalBoundaries: platformConfig.operationalBoundaries ?? {}
@@ -182,7 +183,8 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       publicationStatus: "/api/publication-status",
       editorialSetup: "/api/editorial-setup",
       reviewDossier: "/api/review-dossier",
-      notificationStatus: "/api/notification-status"
+      notificationStatus: "/api/notification-status",
+      localizationStatus: "/api/localization-status"
     }
   };
 }

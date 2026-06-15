@@ -35,6 +35,7 @@ import {
   runIngestionHeartbeat
 } from "../api/ingestion-service.js";
 import { intakeSnapshotStoreCapabilities, intakeSnapshotStoreHealth, loadIntakeSnapshots } from "../api/intake-store.js";
+import { buildLocalizationStatusPayload } from "../api/localization-status.js";
 import { DEFAULT_REGION_ID, buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import {
   buildNotificationStatusPayload,
@@ -114,6 +115,7 @@ const requiredFiles = [
   "api/ingestion-status.js",
   "api/intake-store.js",
   "api/intake-store-health.js",
+  "api/localization-status.js",
   "api/news-normalizer.js",
   "api/notification-service.js",
   "api/notification-status.js",
@@ -238,7 +240,15 @@ if (
   throw new Error("Expected local browser notifications for new stream/refreshed event leads");
 }
 
-if (!appSource.includes("const UI_COPY") || !appSource.includes("languageSelectedPartial") || !appSource.includes("document.documentElement.dir")) {
+if (
+  !appSource.includes("const UI_COPY") ||
+  !appSource.includes("languageSelectedPartial") ||
+  !appSource.includes("document.documentElement.dir") ||
+  !appSource.includes("Вибрано {language}") ||
+  !appSource.includes("{language} انتخاب شد") ||
+  !appSource.includes("تم اختيار {language}") ||
+  !appSource.includes("Выбран {language}")
+) {
   throw new Error("Expected local shell-copy localization catalog and RTL-aware document chrome");
 }
 
@@ -487,6 +497,7 @@ if (
   !readinessPageSource.includes("/api/storage-readiness") ||
   !readinessPageSource.includes("/api/event-store-health") ||
   !readinessPageSource.includes("/api/notification-status?") ||
+  !readinessPageSource.includes("/api/localization-status") ||
   !readinessPageSource.includes("function renderReadinessPage()") ||
   !readinessPageSource.includes("function renderCheckRow(check)") ||
   !readinessPageSource.includes("function renderLaunchActions(actions") ||
@@ -501,7 +512,7 @@ if (
   !stylesSource.includes(".readiness-blocker-list") ||
   !stylesSource.includes(".readiness-link-list")
 ) {
-  throw new Error("Expected readiness console to aggregate production, editorial, source, ingestion, storage, publication, and notification checks");
+  throw new Error("Expected readiness console to aggregate production, editorial, source, ingestion, storage, publication, notification, and localization checks");
 }
 
 if (
@@ -1071,6 +1082,7 @@ if (
   !productionReadiness.sections.platform.browserNotifications ||
   productionReadiness.sections.platform.serverNotificationsReady ||
   productionReadiness.sections.platform.notificationStatus !== "/api/notification-status" ||
+  productionReadiness.sections.platform.localizationStatus !== "/api/localization-status" ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned") ||
   !productionReadiness.blockers.some(
     (blocker) => blocker.id === "server-notifications" && blocker.setupProfileId === "server-notifications" && blocker.setupHref?.includes("#setup-profile-server-notifications")
@@ -1177,7 +1189,7 @@ if (
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "scheduled-ingestion" && profile.recommended && profile.variables.some((item) => item.name === "CRON_SECRET" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-event-store-candidates" && profile.variables.some((item) => item.name === "EVENT_STORE_WRITE_MODE" && item.value === "candidates")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "server-notifications" && profile.variables.some((item) => item.name === "NOTIFICATION_ADMIN_TOKEN" && item.secret)) ||
-  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "language-catalog-roadmap" && profile.provider === "localization" && profile.notes.some((note) => note.includes("Planned language catalogs"))) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "language-catalog-roadmap" && profile.provider === "localization" && profile.notes.some((note) => note.includes("Planned language catalogs")) && profile.verification.includes("/api/localization-status")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "paid-layer-entitlements" && profile.provider === "entitlements" && profile.notes.some((note) => note.includes("Planned paid layers"))) ||
   editorialSetup.vercelEnvironment?.target !== "production" ||
   editorialSetup.vercelEnvironment?.cli?.pull !== "vercel pull --environment=production" ||
@@ -1210,7 +1222,8 @@ if (
   !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
     profile.id === "language-catalog-roadmap" &&
     profile.commands.length === 0 &&
-    profile.verification.includes("/api/platform-config")
+    profile.verification.includes("/api/platform-config") &&
+    profile.verification.includes("/api/localization-status")
   ) ||
   !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
     profile.id === "paid-layer-entitlements" &&
@@ -2722,6 +2735,9 @@ const v1Config = buildV1ConfigPayload({
   sourceRegistry: SOURCE_REGISTRY,
   sourceTypes
 });
+const localizationStatus = buildLocalizationStatusPayload({
+  now: new Date("2026-05-28T00:00:00.000Z")
+});
 const v1Feed = buildV1FeedPayload({ events, meta: v1Events.meta }, v1Context);
 const v1Timeline = buildV1TimelinePayload({ events, meta: v1Events.meta }, v1Context);
 const v1Search = buildV1SearchPayload(
@@ -2740,6 +2756,21 @@ if (v1Events.apiVersion !== "v1" || v1Events.kind !== "EventCollection" || !v1Ev
 }
 
 if (
+  localizationStatus.kind !== "LocalizationStatus" ||
+  localizationStatus.schemaVersion !== "localization-status.v1" ||
+  localizationStatus.ready ||
+  !localizationStatus.shellReady ||
+  localizationStatus.capabilities.eventContentStatus !== "planned" ||
+  !localizationStatus.summary.rtlLanguages.includes("fa") ||
+  !localizationStatus.summary.rtlLanguages.includes("ar") ||
+  !localizationStatus.languages.some((language) => language.id === "uk" && language.shellCopy === "local-ready" && language.eventContent === "planned") ||
+  !localizationStatus.blockers.some((blocker) => blocker.id === "language-catalogs" && blocker.plannedLanguages.includes("ru")) ||
+  localizationStatus.links.platformConfig !== "/api/platform-config"
+) {
+  throw new Error("Localization status payload failed shell, RTL, or event-translation readiness checks");
+}
+
+if (
   v1Config.kind !== "Configuration" ||
   v1Config.defaults?.region !== DEFAULT_REGION_ID ||
   v1Config.defaults?.lookback !== V1_DEFAULT_LOOKBACK ||
@@ -2755,11 +2786,13 @@ if (
   !v1Config.taxonomies.actorSides.some((side) => side.id === "ukraine" && side.color) ||
   !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
+  v1Config.platform.localization?.eventContentStatus !== "planned" ||
   v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
   v1Config.links.publicationStatus !== "/api/publication-status" ||
   v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
-  v1Config.links.notificationStatus !== "/api/notification-status"
+  v1Config.links.notificationStatus !== "/api/notification-status" ||
+  v1Config.links.localizationStatus !== "/api/localization-status"
 ) {
   throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");
 }
