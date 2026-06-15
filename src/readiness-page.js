@@ -5,6 +5,7 @@ const stateNode = document.querySelector("[data-readiness-state]");
 const mapLink = document.querySelector("[data-map-link]");
 const setupLink = document.querySelector("[data-setup-link]");
 const sourcesLink = document.querySelector("[data-sources-link]");
+const publishLink = document.querySelector("[data-publish-link]");
 const apiLink = document.querySelector("[data-api-link]");
 
 const state = {
@@ -261,6 +262,7 @@ function renderReadinessPage() {
               <a href="${escapeAttr(setupPageUrl())}">Setup</a>
               <a href="${escapeAttr(sourcesPageUrl())}">Sources</a>
               <a href="${escapeAttr(reviewPageUrl())}">Review</a>
+              <a href="${escapeAttr(publishPageUrl())}">Publish</a>
               <a href="/api/editorial-store-health">Store</a>
               <a href="/api/storage-readiness">Storage</a>
               <a href="/api/event-store-health">DB health</a>
@@ -487,6 +489,7 @@ function syncTopLinks() {
   mapLink.href = `/?${regionQuery}`;
   setupLink.href = setupPageUrl();
   sourcesLink.href = sourcesPageUrl();
+  publishLink.href = publishPageUrl();
   apiLink.href = productionReadinessUrl();
 }
 
@@ -520,6 +523,10 @@ function sourcesPageUrl() {
 
 function reviewPageUrl() {
   return `/review?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function publishPageUrl() {
+  return `/publish?${new URLSearchParams({ region: state.region, lookback: state.lookback, limit: "5" }).toString()}`;
 }
 
 function regionName(regionId) {
