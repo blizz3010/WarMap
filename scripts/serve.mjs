@@ -15,6 +15,7 @@ import intakeStoreHealthHandler from "../api/intake-store-health.js";
 import notificationStatusHandler from "../api/notification-status.js";
 import platformConfigHandler from "../api/platform-config.js";
 import productionReadinessHandler from "../api/production-readiness.js";
+import publicationPackageHandler from "../api/publication-package.js";
 import publicationPreviewHandler from "../api/publication-preview.js";
 import publicationStatusHandler from "../api/publication-status.js";
 import reviewActionHandler from "../api/review-action.js";
@@ -57,6 +58,7 @@ const apiHandlers = new Map([
   ["/api/notification-status", notificationStatusHandler],
   ["/api/platform-config", platformConfigHandler],
   ["/api/production-readiness", productionReadinessHandler],
+  ["/api/publication-package", publicationPackageHandler],
   ["/api/publication-preview", publicationPreviewHandler],
   ["/api/publication-status", publicationStatusHandler],
   ["/api/review-action", reviewActionHandler],

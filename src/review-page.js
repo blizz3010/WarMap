@@ -258,6 +258,7 @@ function renderPublicationTargets(publicationCandidates = {}) {
         <span>${Number(publicationCandidates.approvalReady ?? 0)} / ${Number(publicationCandidates.count ?? 0)} approval-ready</span>
       </div>
       <div class="publication-target-actions">
+        <a href="${escapeAttr(publicationPackageHref())}" target="_blank" rel="noreferrer noopener">First publish package</a>
         <button type="button" data-select-approval-ready>Select ready</button>
         <button type="button" data-export-selected-approvals ${selectedCount ? "" : "disabled"}>Export selected approvals</button>
         <span>${selectedCount} selected</span>
@@ -284,6 +285,10 @@ function renderPublicationTarget(target) {
 
 function publicationPreviewHrefById(id) {
   return `/api/publication-preview?${new URLSearchParams({ id, region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function publicationPackageHref() {
+  return `/api/publication-package?${new URLSearchParams({ region: state.region, lookback: state.lookback, limit: "5" }).toString()}`;
 }
 
 function renderSourceHealthStatus() {
