@@ -70,14 +70,16 @@ export function notificationReadinessBlockers(runtime = notificationRuntimeSumma
       id: "notification-webhook-url",
       required: false,
       status: "missing",
-      message: "Set NOTIFICATION_WEBHOOK_URL before server-side webhook notifications can be delivered."
+      message: "Set NOTIFICATION_WEBHOOK_URL before server-side webhook notifications can be delivered.",
+      env: ["NOTIFICATION_WEBHOOK_URL"]
     });
   } else if (!webhook.urlValid) {
     blockers.push({
       id: "notification-webhook-url",
       required: false,
       status: "invalid",
-      message: "NOTIFICATION_WEBHOOK_URL must be a valid absolute HTTPS or HTTP URL."
+      message: "NOTIFICATION_WEBHOOK_URL must be a valid absolute HTTPS or HTTP URL.",
+      env: ["NOTIFICATION_WEBHOOK_URL"]
     });
   }
 
@@ -86,7 +88,8 @@ export function notificationReadinessBlockers(runtime = notificationRuntimeSumma
       id: "notification-webhook-secret",
       required: false,
       status: "missing",
-      message: "Set NOTIFICATION_WEBHOOK_SECRET so outbound webhook batches can be signed."
+      message: "Set NOTIFICATION_WEBHOOK_SECRET so outbound webhook batches can be signed.",
+      env: ["NOTIFICATION_WEBHOOK_SECRET"]
     });
   }
 
@@ -95,7 +98,8 @@ export function notificationReadinessBlockers(runtime = notificationRuntimeSumma
       id: "notification-admin-token",
       required: false,
       status: "missing",
-      message: "Set NOTIFICATION_ADMIN_TOKEN so webhook dispatch cannot be triggered anonymously."
+      message: "Set NOTIFICATION_ADMIN_TOKEN so webhook dispatch cannot be triggered anonymously.",
+      env: ["NOTIFICATION_ADMIN_TOKEN"]
     });
   }
 
@@ -145,6 +149,7 @@ export function buildNotificationStatusPayload({
       limit
     },
     channels: runtime.channels,
+    contract: notificationDispatchContract(),
     preview: {
       minSeverity,
       count: candidates.length,
@@ -159,6 +164,7 @@ export function buildNotificationStatusPayload({
       endpoint: eventEndpoint({ region, lookback, publication })
     },
     blockers: notificationReadinessBlockers(runtime),
+    links: notificationLinks({ region, lookback, publication }),
     dispatch
   };
 }
@@ -348,6 +354,66 @@ function toNotificationEvent(event, { region, lookback }) {
 function eventEndpoint({ region, lookback, publication }) {
   const query = new URLSearchParams({ region, lookback, publication });
   return `/api/events?${query.toString()}`;
+}
+
+function notificationLinks({ region, lookback, publication }) {
+  const regionQuery = new URLSearchParams({ region }).toString();
+  const eventQuery = new URLSearchParams({ region, lookback, publication }).toString();
+  const publishedQuery = new URLSearchParams({ region, lookback, publication: "published" }).toString();
+
+  return {
+    setup: `/setup?${regionQuery}#setup-profile-server-notifications`,
+    setupCommands: `/setup?${regionQuery}#setup-command-profile-server-notifications`,
+    productionReadiness: `/api/production-readiness?${regionQuery}`,
+    readiness: `/readiness?${regionQuery}&lookback=${encodeURIComponent(lookback)}`,
+    events: `/api/events?${eventQuery}`,
+    v1Events: `/v1/events?${publishedQuery}`,
+    platformConfig: "/api/platform-config"
+  };
+}
+
+function notificationDispatchContract() {
+  return {
+    schemaVersion: NOTIFICATION_BATCH_SCHEMA_VERSION,
+    dispatchTask: "deliver-reviewed-war-map-alert-batch",
+    method: "POST",
+    endpoint: "/api/notification-status",
+    authorization: {
+      required: true,
+      acceptedHeaders: ["Authorization: Bearer <NOTIFICATION_ADMIN_TOKEN>", "x-notification-token"]
+    },
+    requestBodyFields: ["query", "eventIds", "minSeverity", "limit"],
+    signedWebhook: {
+      payloadKind: "WarMapNotificationBatch",
+      headers: [
+        "content-type: application/json; charset=utf-8",
+        "x-warmap-notification-timestamp",
+        "x-warmap-notification-signature"
+      ],
+      signature: "sha256=<hmac_sha256(NOTIFICATION_WEBHOOK_SECRET, `${timestamp}.${body}`)>"
+    },
+    eventFields: [
+      "id",
+      "title",
+      "summary",
+      "category",
+      "severity",
+      "verification",
+      "place",
+      "province",
+      "country",
+      "location",
+      "sources",
+      "links"
+    ],
+    sourceLinkPolicy: "Every dispatched event keeps visible original source links in sources[].url.",
+    env: [
+      "NOTIFICATION_WEBHOOK_URL",
+      "NOTIFICATION_WEBHOOK_SECRET",
+      "NOTIFICATION_ADMIN_TOKEN",
+      "NOTIFICATION_MIN_SEVERITY"
+    ]
+  };
 }
 
 function headerValue(headers = {}, name) {

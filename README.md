@@ -106,7 +106,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds, configured official-site adapters, and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, distinguishes strict `ready` from degraded-but-`operational` retryable failures, and redacts tokens.
 - `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
 - `/api/publication-status?region=ukraine-east` audits approved records across the map, feed, detail, archive, and public API surfaces, including source-link and coordinate checks for every published event.
-- `/api/notification-status?region=ukraine-east` returns webhook/browser notification readiness plus a source-linked preview of publishable alerts; `POST /api/notification-status` can dispatch a signed webhook batch only when notification secrets are configured.
+- `/api/notification-status?region=ukraine-east` returns webhook/browser notification readiness, the signed webhook dispatch contract, setup links, non-secret env blockers, and a source-linked preview of publishable alerts; `POST /api/notification-status` can dispatch a signed webhook batch only when notification secrets are configured.
 - `/api/production-readiness?region=ukraine-east` rolls up editorial publishing, AI extraction, source curation, notifications, language, and paid-layer readiness into a flat blocker list plus `summary`, `requiredBlockers`, `optionalBlockers`, and `launchPlan.actions` fields for dashboard gating.
 - `POST /api/review-action` accepts `approve`, `reject`, `needs-review`, `correct`, `merge`, `split`, and `retract` decisions keyed by event id, duplicate key, or source URL. `approve` and `correct` require a valid sanitized event snapshot so approved records can remain available after source feeds or lookback windows change.
 - `POST /api/review-export` validates one decision payload or a `{ decisions: [...] }` batch and returns both a commit-ready static decision module and apply-ready JSON for `api/editorial-decisions.js` when Vercel writes are not configured yet.
@@ -235,7 +235,7 @@ NOTIFICATION_ADMIN_TOKEN=long_random_admin_token
 NOTIFICATION_MIN_SEVERITY=high
 ```
 
-With those variables configured, send `Authorization: Bearer <NOTIFICATION_ADMIN_TOKEN>` to `POST /api/notification-status`. The webhook receives a `WarMapNotificationBatch` payload with event links and original source links, plus `x-warmap-notification-timestamp` and `x-warmap-notification-signature` headers.
+With those variables configured, send `Authorization: Bearer <NOTIFICATION_ADMIN_TOKEN>` to `POST /api/notification-status`. The webhook receives a `WarMapNotificationBatch` payload with event links and original source links, plus `x-warmap-notification-timestamp` and `x-warmap-notification-signature` headers. The same endpoint exposes its dispatch contract and setup deep links in the `contract` and `links` fields for dashboard/operator integration.
 
 ## Editorial launch profiles
 

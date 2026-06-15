@@ -1713,7 +1713,17 @@ if (
   notificationStatus.ready ||
   notificationStatus.preview.count !== 1 ||
   !notificationStatus.preview.events[0].sources[0].url ||
-  !notificationStatus.blockers.some((blocker) => blocker.id === "notification-webhook-url") ||
+  notificationStatus.contract?.schemaVersion !== "warmap.notifications.v1" ||
+  notificationStatus.contract?.dispatchTask !== "deliver-reviewed-war-map-alert-batch" ||
+  !notificationStatus.contract?.authorization?.acceptedHeaders?.some((header) => header.includes("NOTIFICATION_ADMIN_TOKEN")) ||
+  !notificationStatus.contract?.signedWebhook?.headers?.includes("x-warmap-notification-signature") ||
+  !notificationStatus.contract?.eventFields?.includes("sources") ||
+  !notificationStatus.contract?.env?.includes("NOTIFICATION_WEBHOOK_SECRET") ||
+  !notificationStatus.blockers.some(
+    (blocker) => blocker.id === "notification-webhook-url" && blocker.env.includes("NOTIFICATION_WEBHOOK_URL")
+  ) ||
+  notificationStatus.links.setupCommands !== "/setup?region=ukraine-east#setup-command-profile-server-notifications" ||
+  notificationStatus.links.v1Events !== "/v1/events?region=ukraine-east&lookback=30d&publication=published" ||
   JSON.stringify(notificationStatus).includes("notification-secret")
 ) {
   throw new Error("Notification status payload failed preview, readiness, or secret-redaction checks");
