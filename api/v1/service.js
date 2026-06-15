@@ -184,7 +184,8 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       editorialSetup: "/api/editorial-setup",
       reviewDossier: "/api/review-dossier",
       notificationStatus: "/api/notification-status",
-      localizationStatus: "/api/localization-status"
+      localizationStatus: "/api/localization-status",
+      layerStatus: "/api/layer-status"
     }
   };
 }

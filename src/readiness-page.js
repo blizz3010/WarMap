@@ -102,6 +102,13 @@ function readinessChecks() {
       url: "/api/localization-status",
       expectedKind: "LocalizationStatus",
       required: false
+    },
+    {
+      id: "layer-status",
+      label: "Layer status",
+      url: "/api/layer-status",
+      expectedKind: "LayerStatus",
+      required: false
     }
   ];
 }
@@ -141,6 +148,7 @@ function renderReadinessPage() {
   const publication = checkPayload("publication-status") ?? production.sections?.publication ?? {};
   const notifications = checkPayload("notification-status") ?? {};
   const localization = checkPayload("localization-status") ?? {};
+  const layers = checkPayload("layer-status") ?? {};
   const requiredBlockers = production.requiredBlockers ?? (production.blockers ?? []).filter((blocker) => blocker.required);
   const optionalBlockers = production.optionalBlockers ?? (production.blockers ?? []).filter((blocker) => !blocker.required);
   const launchActions = production.launchPlan?.actions ?? [];
@@ -250,6 +258,7 @@ function renderReadinessPage() {
               <div><dt>Source health</dt><dd>${sourceHealth.resilience?.state ?? sourceHealth.status ?? "Unknown"}</dd></div>
               <div><dt>Notifications</dt><dd>${notifications.delivery?.ready ? "Ready" : notifications.delivery?.status ?? "Planned"}</dd></div>
               <div><dt>Languages</dt><dd>${localization.shellReady ? "Shell ready" : "Attention"}</dd></div>
+              <div><dt>Layers</dt><dd>${layers.entitlementsReady ? "Ready" : `${Number(layers.summary?.lockedLayers ?? 0)} locked`}</dd></div>
             </dl>
           </section>
 
@@ -278,6 +287,7 @@ function renderReadinessPage() {
               <a href="${escapeAttr(publicationStatusUrl())}">Publication</a>
               <a href="${escapeAttr(notificationStatusUrl())}">Notifications</a>
               <a href="/api/localization-status">Localization</a>
+              <a href="/api/layer-status">Layers</a>
             </nav>
           </section>
         </aside>
@@ -469,6 +479,9 @@ function summaryLine(payload, check) {
   }
   if (payload?.kind === "LocalizationStatus") {
     return `${Number(payload.summary?.shellCopyLanguages ?? 0)} shell languages, ${Number(payload.summary?.rtlLanguages?.length ?? 0)} RTL, event translation ${payload.capabilities?.eventContentStatus ?? "planned"}.`;
+  }
+  if (payload?.kind === "LayerStatus") {
+    return `${Number(payload.summary?.includedLayers ?? 0)} included, ${Number(payload.summary?.plannedPaidLayers ?? 0)} planned paid layers locked.`;
   }
   return `${check.label} returned ${payload?.kind ?? "JSON"}.`;
 }

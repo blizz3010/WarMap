@@ -313,6 +313,7 @@ function buildEnvironmentProfiles({ editorial, extraction, ingestion, storage, p
       provider: "entitlements",
       variables: [],
       verification: [
+        "/api/layer-status",
         "/api/platform-config",
         `/api/production-readiness?${regionQuery}`
       ],

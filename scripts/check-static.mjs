@@ -35,6 +35,7 @@ import {
   runIngestionHeartbeat
 } from "../api/ingestion-service.js";
 import { intakeSnapshotStoreCapabilities, intakeSnapshotStoreHealth, loadIntakeSnapshots } from "../api/intake-store.js";
+import { buildLayerStatusPayload } from "../api/layer-status.js";
 import { buildLocalizationStatusPayload } from "../api/localization-status.js";
 import { DEFAULT_REGION_ID, buildGdeltUrl, normalizeArticlesToEvents, normalizeArticlesToEventsAsync } from "../api/news-normalizer.js";
 import {
@@ -115,6 +116,7 @@ const requiredFiles = [
   "api/ingestion-status.js",
   "api/intake-store.js",
   "api/intake-store-health.js",
+  "api/layer-status.js",
   "api/localization-status.js",
   "api/news-normalizer.js",
   "api/notification-service.js",
@@ -498,6 +500,7 @@ if (
   !readinessPageSource.includes("/api/event-store-health") ||
   !readinessPageSource.includes("/api/notification-status?") ||
   !readinessPageSource.includes("/api/localization-status") ||
+  !readinessPageSource.includes("/api/layer-status") ||
   !readinessPageSource.includes("function renderReadinessPage()") ||
   !readinessPageSource.includes("function renderCheckRow(check)") ||
   !readinessPageSource.includes("function renderLaunchActions(actions") ||
@@ -1083,6 +1086,7 @@ if (
   productionReadiness.sections.platform.serverNotificationsReady ||
   productionReadiness.sections.platform.notificationStatus !== "/api/notification-status" ||
   productionReadiness.sections.platform.localizationStatus !== "/api/localization-status" ||
+  productionReadiness.sections.platform.layerStatus !== "/api/layer-status" ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "server-notifications" && blocker.status === "planned") ||
   !productionReadiness.blockers.some(
     (blocker) => blocker.id === "server-notifications" && blocker.setupProfileId === "server-notifications" && blocker.setupHref?.includes("#setup-profile-server-notifications")
@@ -1190,7 +1194,7 @@ if (
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "postgres-event-store-candidates" && profile.variables.some((item) => item.name === "EVENT_STORE_WRITE_MODE" && item.value === "candidates")) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "server-notifications" && profile.variables.some((item) => item.name === "NOTIFICATION_ADMIN_TOKEN" && item.secret)) ||
   !editorialSetup.environmentProfiles?.some((profile) => profile.id === "language-catalog-roadmap" && profile.provider === "localization" && profile.notes.some((note) => note.includes("Planned language catalogs")) && profile.verification.includes("/api/localization-status")) ||
-  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "paid-layer-entitlements" && profile.provider === "entitlements" && profile.notes.some((note) => note.includes("Planned paid layers"))) ||
+  !editorialSetup.environmentProfiles?.some((profile) => profile.id === "paid-layer-entitlements" && profile.provider === "entitlements" && profile.notes.some((note) => note.includes("Planned paid layers")) && profile.verification.includes("/api/layer-status")) ||
   editorialSetup.vercelEnvironment?.target !== "production" ||
   editorialSetup.vercelEnvironment?.cli?.pull !== "vercel pull --environment=production" ||
   editorialSetup.vercelEnvironment?.cli?.redeploy !== "vercel deploy --prod" ||
@@ -1228,7 +1232,8 @@ if (
   !editorialSetup.vercelEnvironment?.profiles?.some((profile) =>
     profile.id === "paid-layer-entitlements" &&
     profile.commands.length === 0 &&
-    profile.verification.includes("/api/platform-config")
+    profile.verification.includes("/api/platform-config") &&
+    profile.verification.includes("/api/layer-status")
   ) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_SITE_SOURCES")) ||
@@ -2738,6 +2743,9 @@ const v1Config = buildV1ConfigPayload({
 const localizationStatus = buildLocalizationStatusPayload({
   now: new Date("2026-05-28T00:00:00.000Z")
 });
+const layerStatus = buildLayerStatusPayload({
+  now: new Date("2026-05-28T00:00:00.000Z")
+});
 const v1Feed = buildV1FeedPayload({ events, meta: v1Events.meta }, v1Context);
 const v1Timeline = buildV1TimelinePayload({ events, meta: v1Events.meta }, v1Context);
 const v1Search = buildV1SearchPayload(
@@ -2771,6 +2779,20 @@ if (
 }
 
 if (
+  layerStatus.kind !== "LayerStatus" ||
+  layerStatus.schemaVersion !== "layer-status.v1" ||
+  layerStatus.ready ||
+  layerStatus.entitlementsReady ||
+  layerStatus.summary.includedLayers !== 1 ||
+  layerStatus.summary.plannedPaidLayers < 3 ||
+  !layerStatus.layers.some((layer) => layer.id === "frontline-overlay" && layer.locked && layer.dataReadiness === "license-required") ||
+  !layerStatus.blockers.some((blocker) => blocker.id === "paid-layer-entitlements" && blocker.layerIds.includes("incident-heatmap")) ||
+  layerStatus.links.platformConfig !== "/api/platform-config"
+) {
+  throw new Error("Layer status payload failed entitlement, locked-layer, or license-boundary checks");
+}
+
+if (
   v1Config.kind !== "Configuration" ||
   v1Config.defaults?.region !== DEFAULT_REGION_ID ||
   v1Config.defaults?.lookback !== V1_DEFAULT_LOOKBACK ||
@@ -2792,7 +2814,8 @@ if (
   v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
   v1Config.links.notificationStatus !== "/api/notification-status" ||
-  v1Config.links.localizationStatus !== "/api/localization-status"
+  v1Config.links.localizationStatus !== "/api/localization-status" ||
+  v1Config.links.layerStatus !== "/api/layer-status"
 ) {
   throw new Error("V1 configuration payload failed theater, taxonomy, source, or platform checks");
 }
