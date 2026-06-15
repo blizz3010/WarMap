@@ -81,13 +81,18 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
       },
       publication: {
         ready: publication.ready,
+        checksReady: publication.checksReady,
+        statusLabel: publication.status,
         status: "/api/publication-status",
         published: publication.summary.published,
         complete: publication.summary.complete,
         sourceLinked: publication.summary.sourceLinked,
         surfaces: publication.surfaces.map((surface) => ({
           id: surface.id,
-          path: surface.path
+          path: surface.path,
+          ready: surface.ready,
+          status: surface.status,
+          publishedRecords: surface.publishedRecords
         }))
       },
       platform

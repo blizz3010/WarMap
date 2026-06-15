@@ -2666,10 +2666,15 @@ const publishedRecord = publicationStatus.records.find((record) => record.id ===
 if (
   publicationStatus.kind !== "PublicationStatus" ||
   !publicationStatus.ready ||
+  !publicationStatus.checksReady ||
+  !publicationStatus.publicationReady ||
+  publicationStatus.status !== "ready" ||
   publicationStatus.summary.published !== 1 ||
   publicationStatus.summary.complete !== 1 ||
   publicationStatus.summary.sourceLinked !== 1 ||
+  publicationStatus.summary.surfaceReady !== 5 ||
   publicationStatus.surfaces.length !== 5 ||
+  !publicationStatus.surfaces.every((surface) => surface.ready && surface.status === "ready" && surface.publishedRecords === 1) ||
   !publishedRecord ||
   !publishedRecord.sources[0]?.url ||
   !publishedRecord.links.detail.startsWith("/event?") ||
@@ -2678,6 +2683,27 @@ if (
   !Object.values(publishedRecord.surfaces).every(Boolean)
 ) {
   throw new Error("Publication status failed approved-event surface and source-link checks");
+}
+
+const emptyPublicationStatus = buildPublicationStatusFromDecisions({
+  decisions: [],
+  sourceEvents: [],
+  region: "ukraine-east",
+  lookback: "30d",
+  now: new Date("2026-05-28T02:09:15Z")
+});
+if (
+  emptyPublicationStatus.kind !== "PublicationStatus" ||
+  emptyPublicationStatus.ready ||
+  !emptyPublicationStatus.checksReady ||
+  emptyPublicationStatus.publicationReady ||
+  emptyPublicationStatus.status !== "empty" ||
+  emptyPublicationStatus.summary.published !== 0 ||
+  emptyPublicationStatus.summary.surfaceReady !== 0 ||
+  !emptyPublicationStatus.surfaces.every((surface) => !surface.ready && surface.status === "empty" && surface.publishedRecords === 0) ||
+  !emptyPublicationStatus.blockers.some((blocker) => blocker.id === "no-published-events")
+) {
+  throw new Error("Publication status failed empty-theater readiness checks");
 }
 
 const publicationStatusFromStore = buildPublicationStatusFromDecisions({

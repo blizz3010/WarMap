@@ -588,7 +588,7 @@ function summaryLine(payload, check) {
     return `${payload.capabilities?.provider ?? "Event store"} ${payload.capabilities?.mode ?? "unknown"}, write mode ${payload.capabilities?.writeMode ?? "disabled"}.`;
   }
   if (payload?.kind === "PublicationStatus") {
-    return `${Number(payload.summary?.published ?? 0)} published records across ${Number(payload.surfaces?.length ?? 0)} surfaces.`;
+    return `${Number(payload.summary?.published ?? 0)} published records, ${Number(payload.summary?.surfaceReady ?? 0)} / ${Number(payload.surfaces?.length ?? 0)} surfaces ready (${payload.status ?? "unknown"}).`;
   }
   if (payload?.kind === "NotificationStatus") {
     return `${payload.delivery?.status ?? "planned"} delivery, ${Number(payload.preview?.candidates?.length ?? 0)} preview candidates.`;

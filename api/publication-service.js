@@ -47,6 +47,10 @@ export function buildPublicationStatusFromDecisions({
   const published = dedupeEvents([...seedPublished, ...storedPublished, ...snapshotPublished]);
   const records = published.map((event) => publicationRecord(event, { region: normalizedRegion, lookback: normalizedLookback }));
   const blockers = publicationReadinessBlockers(records);
+  const requiredBlockers = blockers.filter((blocker) => blocker.required);
+  const checksReady = requiredBlockers.length === 0;
+  const publicationReady = records.length > 0 && checksReady;
+  const surfaces = PUBLICATION_TARGETS.map((id) => surfaceSummary(id, normalizedRegion, normalizedLookback, records));
 
   return {
     kind: "PublicationStatus",
@@ -54,7 +58,10 @@ export function buildPublicationStatusFromDecisions({
     generatedAt: now.toISOString(),
     region: normalizedRegion,
     lookback: normalizedLookback,
-    ready: blockers.filter((blocker) => blocker.required).length === 0,
+    ready: publicationReady,
+    checksReady,
+    publicationReady,
+    status: publicationStatusLabel({ records, requiredBlockers }),
     store: {
       mode: store.mode,
       canWrite: store.canWrite,
@@ -62,11 +69,15 @@ export function buildPublicationStatusFromDecisions({
       github: store.github ?? null,
       postgres: store.postgres ?? null
     },
-    surfaces: PUBLICATION_TARGETS.map((id) => surfaceSummary(id, normalizedRegion, normalizedLookback)),
+    surfaces,
     summary: {
       published: records.length,
       sourceLinked: records.filter((record) => record.checks.sourceLinks).length,
       complete: records.filter((record) => record.missing.length === 0).length,
+      surfaceReady: surfaces.filter((surface) => surface.ready).length,
+      requiredBlockers: requiredBlockers.length,
+      checksReady,
+      publicationReady,
       editorialDecisions: decisions.length,
       editorialSnapshots: snapshotEvents.length,
       publishedSnapshots: snapshotPublished.length,
@@ -126,6 +137,13 @@ export function publicationReadinessBlockers(records = []) {
   return blockers;
 }
 
+function publicationStatusLabel({ records, requiredBlockers }) {
+  if (!records.length) {
+    return "empty";
+  }
+  return requiredBlockers.length ? "blocked" : "ready";
+}
+
 function publicationRecord(event, context) {
   const links = eventLinks(event, context);
   const visibleOn = event.review?.visibleOn ?? [];
@@ -181,7 +199,7 @@ function publicationRecord(event, context) {
   };
 }
 
-function surfaceSummary(id, region, lookback) {
+function surfaceSummary(id, region, lookback, records = []) {
   const query = new URLSearchParams({ region, lookback });
   const publishedQuery = new URLSearchParams({ region, lookback, publication: "published" });
   const paths = {
@@ -191,12 +209,17 @@ function surfaceSummary(id, region, lookback) {
     archive: `/archive?${query.toString()}`,
     api: `/v1/events?${publishedQuery.toString()}`
   };
+  const publishedRecords = records.filter((record) => record.surfaces?.[id]).length;
+  const ready = records.length > 0 && publishedRecords === records.length;
 
   return {
     id,
     label: SURFACE_LABELS[id] ?? id,
     path: paths[id],
-    target: id === "api" ? "dashboard integration" : "public product"
+    target: id === "api" ? "dashboard integration" : "public product",
+    ready,
+    status: records.length ? (ready ? "ready" : "incomplete") : "empty",
+    publishedRecords
   };
 }
 
