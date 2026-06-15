@@ -3252,6 +3252,40 @@ const v1LiveEvent = buildV1EventsPayload(
     }
   }
 ).events[0];
+const v1TranslatedEvent = buildV1EventsPayload(
+  {
+    events: [
+      {
+        ...sampleUkraineEvents[0],
+        translations: {
+          uk: {
+            title: "Переглянутий заголовок",
+            summary: "Переглянутий короткий опис",
+            place: "Харків",
+            reviewer: "language desk",
+            reviewedAt: "2026-05-28T04:05:06Z",
+            provider: "human",
+            sourceLanguage: "English",
+            confidence: "reviewed"
+          }
+        }
+      }
+    ],
+    meta: {
+      generatedAt: "2026-05-28T00:00:00.000Z",
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all"
+    }
+  },
+  {
+    query: {
+      region: "ukraine-east",
+      lookback: "30d",
+      publication: "all"
+    }
+  }
+).events[0];
 const v1DroneContext = {
   query: {
     region: "ukraine-east",
@@ -3293,6 +3327,26 @@ if (
 
 if (v1LiveEvent?.extraction?.eventType !== "drone" || v1LiveEvent?.extraction?.category !== "strike") {
   throw new Error("V1 events must preserve granular extraction event type and coarse category");
+}
+
+if (
+  v1LiveEvent?.translations?.schemaVersion !== "event-translation-catalog.v1" ||
+  v1LiveEvent?.translations?.status !== "source-language" ||
+  v1LiveEvent?.translations?.sourceLanguage !== "en" ||
+  v1LiveEvent?.translations?.available?.length !== 0 ||
+  !v1LiveEvent?.translations?.fallback?.includes("source language")
+) {
+  throw new Error("V1 events must expose source-language translation fallback metadata");
+}
+
+if (
+  v1TranslatedEvent?.translations?.status !== "reviewed-ready" ||
+  !v1TranslatedEvent?.translations?.available?.includes("uk") ||
+  v1TranslatedEvent?.translations?.records?.uk?.sourceLanguage !== "en" ||
+  v1TranslatedEvent?.translations?.records?.uk?.reviewer !== "language desk" ||
+  v1TranslatedEvent?.translations?.records?.uk?.reviewedAt !== "2026-05-28T04:05:06.000Z"
+) {
+  throw new Error("V1 events must expose sanitized reviewed translation records when present");
 }
 
 if (

@@ -5,6 +5,8 @@ export const V1_SCHEMA_VERSION = "warmap.public.v1";
 export const V1_DEFAULT_LOOKBACK = "30d";
 export const V1_DEFAULT_PUBLICATION = "published";
 
+const EVENT_TRANSLATION_SCHEMA_VERSION = "event-translation-catalog.v1";
+
 export function buildV1EventsPayload(payload, context = {}) {
   const events = filteredResources(payload.events, context).map((event) => toEventResource(event, context));
   return {
@@ -333,6 +335,7 @@ function toEventResource(event, context) {
       : null,
     sourceCount: event.sourceCount ?? event.sources?.length ?? 0,
     sources: visibleSources(event),
+    translations: translationPayload(event),
     media: event.media ?? null,
     links: eventLinks(event, context)
   };
@@ -389,6 +392,106 @@ function visibleSources(event) {
     publishedAt: source.publishedAt ?? "",
     capturedAt: source.capturedAt ?? ""
   }));
+}
+
+function translationPayload(event) {
+  const records = reviewedTranslationRecords(event.translations);
+  const available = Object.keys(records).sort();
+  return {
+    schemaVersion: EVENT_TRANSLATION_SCHEMA_VERSION,
+    status: available.length ? "reviewed-ready" : "source-language",
+    sourceLanguage: eventSourceLanguage(event),
+    available,
+    records,
+    fallback: "title, summary, and place fields remain in the source language until a reviewed translation record is available"
+  };
+}
+
+function reviewedTranslationRecords(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([language, record]) => [toLanguageTag(language), sanitizeTranslationRecord(record)])
+      .filter(([language, record]) => language && record)
+  );
+}
+
+function sanitizeTranslationRecord(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    return null;
+  }
+
+  const title = cleanText(record.title);
+  const summary = cleanText(record.summary);
+  if (!title && !summary) {
+    return null;
+  }
+
+  return {
+    title,
+    summary,
+    place: cleanText(record.place),
+    province: cleanText(record.province),
+    country: cleanText(record.country),
+    reviewer: cleanText(record.reviewer),
+    reviewedAt: isoDate(record.reviewedAt),
+    provider: cleanText(record.provider),
+    sourceLanguage: toLanguageTag(record.sourceLanguage),
+    confidence: cleanText(record.confidence)
+  };
+}
+
+function eventSourceLanguage(event) {
+  const extractionLanguage = toLanguageTag(event.extraction?.language);
+  if (extractionLanguage) {
+    return extractionLanguage;
+  }
+
+  for (const source of event.sources ?? []) {
+    const language = toLanguageTag(source.language);
+    if (language) {
+      return language;
+    }
+  }
+
+  return "undetermined";
+}
+
+function toLanguageTag(value) {
+  const cleaned = cleanText(value);
+  if (!cleaned || cleaned.toLowerCase() === "unknown") {
+    return "";
+  }
+
+  const known = {
+    english: "en",
+    ukrainian: "uk",
+    russian: "ru",
+    arabic: "ar",
+    persian: "fa",
+    farsi: "fa",
+    hebrew: "he",
+    french: "fr",
+    german: "de",
+    spanish: "es"
+  };
+  const normalized = cleaned.toLowerCase();
+  if (known[normalized]) {
+    return known[normalized];
+  }
+  return /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(cleaned) ? cleaned : "";
+}
+
+function cleanText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function isoDate(value) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
 }
 
 function eventLinks(event, context) {
