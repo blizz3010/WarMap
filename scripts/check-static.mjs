@@ -287,11 +287,17 @@ if (
   !reviewPageSource.includes("function renderDuplicateDetail(review)") ||
   !reviewPageSource.includes("function renderPublicationTargets(publicationCandidates") ||
   !reviewPageSource.includes("function publicationPreviewHrefById(id)") ||
+  !reviewPageSource.includes("selectedCandidateIds: new Set()") ||
+  !reviewPageSource.includes("function exportSelectedApprovals()") ||
+  !reviewPageSource.includes("data-export-selected-approvals") ||
+  !reviewPageSource.includes("data-review-select-event-id") ||
   !reviewQueueApiSource.includes("duplicateKey: request.query?.duplicateKey") ||
   !reviewQueueApiSource.includes("summary: queue.summary") ||
   !stylesSource.includes(".review-duplicate-list") ||
   !stylesSource.includes(".review-duplicate-list a") ||
-  !stylesSource.includes(".publication-target-list")
+  !stylesSource.includes(".publication-target-list") ||
+  !stylesSource.includes(".publication-target-actions") ||
+  !stylesSource.includes(".review-select-candidate")
 ) {
   throw new Error("Expected standalone review page to use review queue and action APIs");
 }
@@ -2025,6 +2031,29 @@ const approvedExport = buildEditorialDecisionExport(
   },
   { now: new Date("2026-05-28T02:03:30Z") }
 );
+const batchApprovedExport = buildEditorialDecisionExport(
+  {
+    decisions: [
+      {
+        action: "approve",
+        eventId: sampleUkraineEvents[0].id,
+        duplicateKey: sampleUkraineEvents[0].review.duplicateKey,
+        sourceUrl: sampleUkraineEvents[0].sources[0].url,
+        eventSnapshot: sampleUkraineEvents[0],
+        notes: "batch static export smoke test"
+      },
+      {
+        action: "approve",
+        eventId: duplicateUkraineCandidate.id,
+        duplicateKey: duplicateUkraineCandidate.review.duplicateKey,
+        sourceUrl: duplicateUkraineCandidate.sources[0].url,
+        eventSnapshot: duplicateUkraineCandidate,
+        notes: "batch static export duplicate smoke test"
+      }
+    ]
+  },
+  { now: new Date("2026-05-28T02:03:45Z") }
+);
 
 const applyExportTempDir = mkdtempSync(join(tmpdir(), "warmap-review-export-"));
 try {
@@ -2049,6 +2078,22 @@ try {
   });
   if (moduleApply.total !== 1 || moduleApply.added !== 0 || moduleApply.unchanged !== 1) {
     throw new Error("Review export apply script failed copied static module input");
+  }
+
+  const batchTargetFile = join(applyExportTempDir, "batch-editorial-decisions.js");
+  writeFileSync(batchTargetFile, "export const STATIC_EDITORIAL_DECISIONS = [];\n", "utf8");
+  const batchApply = applyReviewExportText(JSON.stringify(batchApprovedExport), {
+    targetFile: batchTargetFile
+  });
+  if (
+    batchApprovedExport.decisionCount !== 2 ||
+    batchApprovedExport.decisions.length !== 2 ||
+    !batchApprovedExport.appendObjects.includes(duplicateUkraineCandidate.id) ||
+    batchApply.incoming !== 2 ||
+    batchApply.total !== 2 ||
+    batchApply.added !== 2
+  ) {
+    throw new Error("Review export apply script failed batch JSON export input");
   }
 
   const nextDecision = normalizeDecisionPayload(
