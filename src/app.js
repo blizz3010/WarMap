@@ -40,6 +40,8 @@ const state = {
   readinessMessage: "",
   sourceHealth: null,
   sourceHealthMessage: "",
+  theaterStatus: null,
+  theaterStatusMessage: "",
   paused: false,
   streamConnected: false,
   streamMessage: "Realtime stream idle",
@@ -106,6 +108,7 @@ const els = {
 let map;
 let liveRequestId = 0;
 let readinessRequestId = 0;
+let theaterStatusRequestId = 0;
 const streamController = {
   source: null,
   fallbackTimer: null
@@ -533,6 +536,7 @@ function init() {
   render();
   loadPlatformConfig();
   loadLiveEvents();
+  loadTheaterStatus();
   loadProductionReadiness();
   startEventStream();
 }
@@ -641,28 +645,40 @@ function renderTheaterSwitch() {
   const region = currentRegion();
   const group = region.group ?? "Regions";
   const groupRegions = regions.filter((item) => (item.group ?? "Regions") === group);
+  const statusByRegion = theaterStatusByRegion(group);
 
   els.theaterSwitch.innerHTML = `
     <span class="theater-kicker">Theater</span>
     ${groupRegions
       .map(
-        (item) => `
+        (item) => {
+          const status = statusByRegion.get(item.id);
+          const selectedCount = Number(status?.counts?.selected ?? status?.counts?.[state.publicationMode] ?? 0);
+          const statusClass = status ? ` has-theater-status is-${escapeAttr(status.status || "unknown")}` : "";
+          return `
           <button
             type="button"
-            class="${item.id === state.regionId ? "is-active" : ""}"
+            class="${item.id === state.regionId ? "is-active" : ""}${statusClass}"
             aria-pressed="${item.id === state.regionId}"
             data-theater-region="${escapeAttr(item.id)}"
+            title="${escapeAttr(theaterStatusTitle(status))}"
           >
-            ${escapeHtml(theaterButtonLabel(item, group))}
+            <span class="theater-label">${escapeHtml(theaterButtonLabel(item, group))}</span>
+            ${status ? `<span class="theater-count">${selectedCount.toLocaleString()}</span>` : ""}
           </button>
-        `
+        `;
+        }
       )
       .join("")}
   `;
 
+  const currentStatus = statusByRegion.get(region.id);
+  const statusText = currentStatus
+    ? `${Number(currentStatus.counts?.selected ?? 0).toLocaleString()} ${escapeHtml(publicationModeLabel().toLowerCase())} - ${escapeHtml(currentStatus.message ?? "theater status")}`
+    : `${state.events.length.toLocaleString()} ${escapeHtml(publicationModeLabel().toLowerCase())} - ${escapeHtml(state.feedMeta.verification ?? state.theaterStatusMessage ?? "review queue")}`;
   els.theaterSummary.innerHTML = `
     <strong>${escapeHtml(region.name)}</strong>
-    <span>${state.events.length.toLocaleString()} ${escapeHtml(publicationModeLabel().toLowerCase())} - ${escapeHtml(state.feedMeta.verification ?? "review queue")}</span>
+    <span>${statusText}</span>
   `;
 
   els.theaterSwitch.querySelectorAll("[data-theater-region]").forEach((button) => {
@@ -674,6 +690,21 @@ function theaterButtonLabel(region, group) {
   return region.name
     .replace(`${group} - `, "")
     .replace("Ukraine - ", "");
+}
+
+function theaterStatusByRegion(group) {
+  if (state.theaterStatus?.group !== group || !Array.isArray(state.theaterStatus?.theaters)) {
+    return new Map();
+  }
+  return new Map(state.theaterStatus.theaters.map((theater) => [theater.id, theater]));
+}
+
+function theaterStatusTitle(status) {
+  if (!status) {
+    return "Theater status loading";
+  }
+  const counts = status.counts ?? {};
+  return `${status.name}: ${Number(counts.all ?? 0)} live, ${Number(counts.review ?? 0)} review, ${Number(counts.published ?? 0)} published`;
 }
 
 function renderFilterControls() {
@@ -739,6 +770,7 @@ function bindControls() {
     clearInlineReviewExport();
     render();
     loadLiveEvents();
+    loadTheaterStatus();
     restartEventStream();
   });
 
@@ -773,6 +805,7 @@ function bindControls() {
     clearInlineReviewExport();
     render();
     loadLiveEvents();
+    loadTheaterStatus();
     restartEventStream();
   });
 
@@ -834,6 +867,7 @@ function changeRegion(regionId) {
   fitToRegion(true);
   render();
   loadLiveEvents();
+  loadTheaterStatus();
   loadProductionReadiness();
   restartEventStream();
 }
@@ -1018,6 +1052,39 @@ async function loadProductionReadiness(options = {}) {
   if (!quiet || state.activePanel === "review") {
     renderIntelPanel(filteredEvents(true));
   }
+}
+
+async function loadTheaterStatus() {
+  const region = state.regionId;
+  const requestId = (theaterStatusRequestId += 1);
+
+  try {
+    const params = new URLSearchParams({
+      region,
+      lookback: lookbackForApi(state.timeRange),
+      publication: state.publicationMode
+    });
+    const response = await fetch(`/api/theater-status?${params.toString()}`, {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.kind !== "TheaterStatus") {
+      throw new Error(payload?.message || payload?.error || `Theater status returned ${response.status}`);
+    }
+    if (requestId !== theaterStatusRequestId) {
+      return;
+    }
+    state.theaterStatus = payload;
+    state.theaterStatusMessage = "";
+  } catch (error) {
+    if (requestId !== theaterStatusRequestId) {
+      return;
+    }
+    state.theaterStatus = null;
+    state.theaterStatusMessage = error instanceof Error ? error.message : "Theater status unavailable";
+  }
+
+  renderTheaterSwitch();
 }
 
 function startEventStream() {
