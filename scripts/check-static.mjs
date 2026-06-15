@@ -305,6 +305,9 @@ if (
 if (
   !reviewPageSource.includes("renderExportBundle") ||
   !reviewPageSource.includes("data-copy-export") ||
+  !reviewPageSource.includes("data-copy-export-json") ||
+  !reviewPageSource.includes("data-export-json-text") ||
+  !reviewPageSource.includes("function exportJsonForApply(bundle)") ||
   !reviewPageSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected standalone review page to expose static decision exports when writes are blocked");
@@ -344,7 +347,12 @@ if (
   !appSource.includes("inline-duplicate-list") ||
   !appSource.includes("renderInlineReviewExportBundle") ||
   !appSource.includes("data-copy-review-export") ||
+  !appSource.includes("data-copy-review-export-json") ||
+  !appSource.includes("data-review-export-json-text") ||
+  !appSource.includes("function exportJsonForApply(bundle)") ||
   !appSource.includes("inline-review-export") ||
+  !stylesSource.includes(".review-export-grid") ||
+  !stylesSource.includes(".review-export-actions") ||
   !appSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected inline review panel to expose static decision exports when writes are blocked");

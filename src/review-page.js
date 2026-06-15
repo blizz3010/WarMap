@@ -597,13 +597,24 @@ function bindReviewControls() {
     button.addEventListener("click", () => submitReviewAction(button));
   });
 
-  stateNode.querySelector("[data-copy-export]")?.addEventListener("click", async () => {
-    const text = stateNode.querySelector("[data-export-text]")?.value ?? "";
+  bindExportCopyButton("[data-copy-export]", "[data-export-text]", {
+    copied: "Static decision module copied.",
+    fallback: "Select and copy the static decision module."
+  });
+  bindExportCopyButton("[data-copy-export-json]", "[data-export-json-text]", {
+    copied: "Decision export JSON copied.",
+    fallback: "Select and copy the decision export JSON."
+  });
+}
+
+function bindExportCopyButton(buttonSelector, textSelector, messages) {
+  stateNode.querySelector(buttonSelector)?.addEventListener("click", async () => {
+    const text = stateNode.querySelector(textSelector)?.value ?? "";
     try {
-      await navigator.clipboard?.writeText(text);
-      state.message = "Static decision module copied.";
+      await navigator.clipboard.writeText(text);
+      state.message = messages.copied;
     } catch {
-      state.message = "Select and copy the static decision module.";
+      state.message = messages.fallback;
     }
     renderReviewQueue();
   });
@@ -739,16 +750,45 @@ function renderExportBundle() {
           <strong>Static decision export</strong>
           <span>${escapeHtml(titleCase(bundle.action))} for ${escapeHtml(bundle.place)} - ${decisionCount} decision${decisionCount === 1 ? "" : "s"}</span>
         </div>
-        <button type="button" data-copy-export>Copy module</button>
+        <div class="review-export-actions">
+          <button type="button" data-copy-export>Copy module</button>
+          <button type="button" data-copy-export-json>Copy JSON</button>
+        </div>
       </header>
       <p>${escapeHtml(bundle.error || "Durable editorial writes are not configured.")}</p>
       <ol>
         ${(bundle.instructions ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ol>
-      <textarea readonly data-export-text>${escapeHtml(bundle.staticModule ?? "")}</textarea>
-      <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")}</small>
+      <div class="review-export-grid">
+        <label>
+          <span>Static module</span>
+          <textarea readonly data-export-text>${escapeHtml(bundle.staticModule ?? "")}</textarea>
+        </label>
+        <label>
+          <span>Apply-ready JSON</span>
+          <textarea readonly data-export-json-text>${escapeHtml(exportJsonForApply(bundle))}</textarea>
+        </label>
+      </div>
+      <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")} - Apply JSON with node scripts/apply-review-export.mjs .data/review-export.json</small>
     </section>
   `;
+}
+
+function exportJsonForApply(bundle) {
+  return JSON.stringify(
+    {
+      kind: bundle.kind ?? "EditorialDecisionExport",
+      schemaVersion: bundle.schemaVersion ?? "editorial-decision-export.v1",
+      generatedAt: bundle.generatedAt,
+      targetFile: bundle.targetFile ?? "api/editorial-decisions.js",
+      decision: bundle.decision,
+      decisions: bundle.decisions ?? (bundle.decision ? [bundle.decision] : []),
+      decisionCount: bundle.decisionCount ?? (bundle.decisions?.length || (bundle.decision ? 1 : 0)),
+      instructions: bundle.instructions ?? []
+    },
+    null,
+    2
+  );
 }
 
 async function createDecisionExport(payload) {

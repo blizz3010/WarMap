@@ -1570,17 +1570,28 @@ function renderIntelPanel(visible = filteredEvents(true)) {
   els.intelPanel.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => submitReviewAction(button));
   });
-  els.intelPanel.querySelector("[data-copy-review-export]")?.addEventListener("click", async () => {
-    const text = els.intelPanel.querySelector("[data-review-export-text]")?.value ?? "";
+  bindReviewExportCopyButton("[data-copy-review-export]", "[data-review-export-text]", {
+    copied: "Static decision module copied.",
+    fallback: "Select and copy the static decision module."
+  }, visible);
+  bindReviewExportCopyButton("[data-copy-review-export-json]", "[data-review-export-json-text]", {
+    copied: "Decision export JSON copied.",
+    fallback: "Select and copy the decision export JSON."
+  }, visible);
+  bindPlatformPanelControls();
+}
+
+function bindReviewExportCopyButton(buttonSelector, textSelector, messages, visible) {
+  els.intelPanel.querySelector(buttonSelector)?.addEventListener("click", async () => {
+    const text = els.intelPanel.querySelector(textSelector)?.value ?? "";
     try {
-      await navigator.clipboard?.writeText(text);
-      state.editorialMessage = "Static decision module copied.";
+      await navigator.clipboard.writeText(text);
+      state.editorialMessage = messages.copied;
     } catch {
-      state.editorialMessage = "Select and copy the static decision module.";
+      state.editorialMessage = messages.fallback;
     }
     renderIntelPanel(visible);
   });
-  bindPlatformPanelControls();
 }
 
 function renderReviewPanel(visible) {
@@ -1976,16 +1987,45 @@ function renderInlineReviewExportBundle() {
           <strong>Static decision export</strong>
           <span>${escapeHtml(titleCase(bundle.action))} for ${escapeHtml(bundle.place)}</span>
         </div>
-        <button type="button" data-copy-review-export>Copy module</button>
+        <div class="review-export-actions">
+          <button type="button" data-copy-review-export>Copy module</button>
+          <button type="button" data-copy-review-export-json>Copy JSON</button>
+        </div>
       </header>
       <p>${escapeHtml(bundle.error || "Durable editorial writes are not configured.")}</p>
       <ol>
         ${(bundle.instructions ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ol>
-      <textarea readonly data-review-export-text>${escapeHtml(bundle.staticModule ?? "")}</textarea>
-      <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")}</small>
+      <div class="review-export-grid">
+        <label>
+          <span>Static module</span>
+          <textarea readonly data-review-export-text>${escapeHtml(bundle.staticModule ?? "")}</textarea>
+        </label>
+        <label>
+          <span>Apply-ready JSON</span>
+          <textarea readonly data-review-export-json-text>${escapeHtml(exportJsonForApply(bundle))}</textarea>
+        </label>
+      </div>
+      <small>Target file: ${escapeHtml(bundle.targetFile ?? "api/editorial-decisions.js")} - Apply JSON with node scripts/apply-review-export.mjs .data/review-export.json</small>
     </section>
   `;
+}
+
+function exportJsonForApply(bundle) {
+  return JSON.stringify(
+    {
+      kind: bundle.kind ?? "EditorialDecisionExport",
+      schemaVersion: bundle.schemaVersion ?? "editorial-decision-export.v1",
+      generatedAt: bundle.generatedAt,
+      targetFile: bundle.targetFile ?? "api/editorial-decisions.js",
+      decision: bundle.decision,
+      decisions: bundle.decisions ?? (bundle.decision ? [bundle.decision] : []),
+      decisionCount: bundle.decisionCount ?? (bundle.decisions?.length || (bundle.decision ? 1 : 0)),
+      instructions: bundle.instructions ?? []
+    },
+    null,
+    2
+  );
 }
 
 function renderReviewSourceLink(source) {
