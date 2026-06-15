@@ -3187,6 +3187,7 @@ dd {
   justify-content: flex-start;
 }
 
+.publication-target-actions a,
 .publication-target-actions button {
   min-height: 30px;
   padding: 5px 8px;
@@ -3196,6 +3197,7 @@ dd {
   color: #bfdbfe;
   font-size: 11px;
   font-weight: 850;
+  text-decoration: none;
 }
 
 .publication-target-actions button:disabled {

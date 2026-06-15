@@ -43,6 +43,7 @@ import {
 } from "../api/notification-service.js";
 import { PLATFORM_CONFIG } from "../api/platform-config.js";
 import { buildProductionReadinessPayload } from "../api/production-readiness.js";
+import { buildPublicationPackagePayload } from "../api/publication-package.js";
 import { buildPublicationPreviewPayload } from "../api/publication-preview.js";
 import { buildPublicationStatusFromDecisions } from "../api/publication-service.js";
 import { eventsForRegionScope } from "../api/region-scope.js";
@@ -116,6 +117,7 @@ const requiredFiles = [
   "api/notification-status.js",
   "api/platform-config.js",
   "api/production-readiness.js",
+  "api/publication-package.js",
   "api/publication-preview.js",
   "api/publication-service.js",
   "api/publication-status.js",
@@ -157,6 +159,7 @@ const stylesSource = readFileSync(new URL("src/styles.css", `file:///${root.repl
 const archiveApiSource = readFileSync(new URL("api/archive.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventApiSource = readFileSync(new URL("api/event.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const eventsApiSource = readFileSync(new URL("api/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const publicationPackageSource = readFileSync(new URL("api/publication-package.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const publicationServiceSource = readFileSync(new URL("api/publication-service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewQueueApiSource = readFileSync(new URL("api/review-queue.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const v1ServiceSource = readFileSync(new URL("api/v1/service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
@@ -279,6 +282,7 @@ if (
   !reviewPageSource.includes("/api/review-export") ||
   !reviewPageSource.includes("/api/editorial-status") ||
   !reviewPageSource.includes("/api/source-health?") ||
+  !reviewPageSource.includes("/api/publication-package?") ||
   !reviewPageSource.includes("/api/publication-preview?") ||
   !reviewPageSource.includes("data-review-duplicate-key") ||
   !reviewPageSource.includes("function duplicateGroupOptions(summary") ||
@@ -286,6 +290,7 @@ if (
   !reviewPageSource.includes("function renderDuplicateGroups(summary") ||
   !reviewPageSource.includes("function renderDuplicateDetail(review)") ||
   !reviewPageSource.includes("function renderPublicationTargets(publicationCandidates") ||
+  !reviewPageSource.includes("function publicationPackageHref()") ||
   !reviewPageSource.includes("function publicationPreviewHrefById(id)") ||
   !reviewPageSource.includes("selectedCandidateIds: new Set()") ||
   !reviewPageSource.includes("function exportSelectedApprovals()") ||
@@ -311,6 +316,18 @@ if (
   !reviewPageSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected standalone review page to expose static decision exports when writes are blocked");
+}
+
+if (
+  !publicationPackageSource.includes('PUBLICATION_PACKAGE_SCHEMA_VERSION = "publication-package.v1"') ||
+  !publicationPackageSource.includes("buildEditorialDecisionExport") ||
+  !publicationPackageSource.includes("buildPublicationStatusFromDecisions") ||
+  !publicationPackageSource.includes("publicationCandidateSummary") ||
+  !publicationPackageSource.includes("humanApprovalRequired: true") ||
+  !publicationPackageSource.includes("sourceEvents: []") ||
+  !publicationPackageSource.includes('response.setHeader("Cache-Control", "no-store")')
+) {
+  throw new Error("Expected publication package API to stay dry-run and reuse export/publication contracts");
 }
 
 if (
@@ -2299,6 +2316,59 @@ if (
   publicationPreview.publication.wouldPublishTo.length !== 5
 ) {
   throw new Error("Publication preview failed dry-run approval surface and source-link checks");
+}
+
+const firstPublishPackage = buildPublicationPackagePayload({
+  candidates: [sourceBlockedCandidate, sampleUkraineEvents[0]],
+  region: "ukraine-east",
+  lookback: "30d",
+  limit: 2,
+  now: new Date("2026-05-28T02:10:00Z"),
+  meta: {
+    upstreamArticles: 2,
+    editorialDecisions: 0
+  }
+});
+const firstPublishRecord = firstPublishPackage.publication.records.find((record) => record.id === sampleUkraineEvents[0].id);
+if (
+  firstPublishPackage.kind !== "PublicationPackage" ||
+  firstPublishPackage.schemaVersion !== "publication-package.v1" ||
+  !firstPublishPackage.dryRun ||
+  firstPublishPackage.persisted ||
+  !firstPublishPackage.editorial.humanApprovalRequired ||
+  firstPublishPackage.selectedCount !== 1 ||
+  firstPublishPackage.queue.publicationCandidates?.approvalReady !== 1 ||
+  firstPublishPackage.queue.publicationCandidates?.needsCorrection !== 1 ||
+  firstPublishPackage.editorial.decisionCount !== 1 ||
+  firstPublishPackage.editorial.decisionExport?.decisionCount !== 1 ||
+  !firstPublishPackage.editorial.decisionExport?.appendObjects?.includes(sampleUkraineEvents[0].sources[0].url) ||
+  firstPublishPackage.publication.summary.published !== 1 ||
+  !firstPublishPackage.publication.ready ||
+  !firstPublishRecord?.sources?.[0]?.url ||
+  !firstPublishRecord?.links?.detail?.startsWith("/event?") ||
+  !firstPublishRecord?.links?.archive?.startsWith("/archive?") ||
+  !firstPublishRecord?.links?.api?.startsWith("/v1/events?") ||
+  !firstPublishPackage.publication.wouldPublishTo.includes("map") ||
+  firstPublishPackage.links.reviewExport !== "/api/review-export" ||
+  !firstPublishPackage.links.v1Events.includes("publication=published")
+) {
+  throw new Error("Publication package failed dry-run batch approval and public-surface checks");
+}
+
+const emptyFirstPublishPackage = buildPublicationPackagePayload({
+  candidates: [sourceBlockedCandidate],
+  region: "ukraine-east",
+  lookback: "30d",
+  limit: 1,
+  now: new Date("2026-05-28T02:10:30Z")
+});
+if (
+  emptyFirstPublishPackage.selectedCount !== 0 ||
+  emptyFirstPublishPackage.editorial.decisionExport !== null ||
+  emptyFirstPublishPackage.publication.ready ||
+  !emptyFirstPublishPackage.publication.blockers.some((blocker) => blocker.id === "no-approval-ready-candidates")
+) {
+  throw new Error("Publication package failed empty approval-ready candidate checks");
 }
 
 if (applyEditorialDecisions(sampleUkraineEvents, [correctedSampleDecision])[0].review.status !== "corrected") {
