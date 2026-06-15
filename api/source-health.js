@@ -51,7 +51,7 @@ export async function buildSourceHealthPayload({
   const hardFailures = failed.filter((source) => !source.diagnostic?.retryable);
   const missingConfig = sources.filter((source) => source.status === "missing-config");
   const strictReady = checked.length > 0 && failed.length === 0 && missingConfig.length === 0;
-  const operational = checked.length > 0 && reachable.length > 0 && hardFailures.length === 0 && missingConfig.length === 0;
+  const operational = checked.length > 0 && reachable.length > 0 && missingConfig.length === 0;
   const degraded = operational && !strictReady;
   const resilience = sourceResilienceSummary({
     strictReady,
@@ -506,6 +506,12 @@ function sourceResilienceMessage(state, counts) {
     return "All checked active collectors are reachable.";
   }
   if (state === "degraded") {
+    if (counts.hardFailureCount > 0 && counts.retryableFailureCount > 0) {
+      return `${counts.reachableCount} collector(s) are reachable; ${counts.hardFailureCount} source blocker(s) need adapter review and ${counts.retryableFailureCount} retryable failure(s) need monitoring.`;
+    }
+    if (counts.hardFailureCount > 0) {
+      return `${counts.reachableCount} collector(s) are reachable; ${counts.hardFailureCount} source blocker(s) need adapter review.`;
+    }
     return `${counts.reachableCount} collector(s) are reachable; ${counts.retryableFailureCount} retryable failure(s) need monitoring.`;
   }
   if (counts.missingConfigurationCount > 0) {
@@ -607,8 +613,8 @@ function sourceAttentionCounts(rows) {
 }
 
 function sourceAttentionState(counts, resilience = {}) {
-  if (resilience.state === "blocked" || counts.blockers > 0) return "blocked";
-  if (counts.warnings > 0) return "degraded";
+  if (resilience.state === "blocked" || counts.missingConfiguration > 0) return "blocked";
+  if (counts.blockers > 0 || counts.warnings > 0) return "degraded";
   if (counts.planned > 0) return "planned";
   return "ready";
 }
@@ -619,6 +625,9 @@ function sourceAttentionSummary(rows, counts, summary = {}, resilience = {}) {
   }
   if (resilience.state === "blocked" && counts.blockers === 0) {
     return `${Number(summary.reachableSources ?? 0)} reachable collector(s); source health is blocked until at least one checked collector returns usable items.`;
+  }
+  if (counts.blockers > 0 && resilience.operational) {
+    return `${counts.blockers} blocking source-health item(s) need adapter review; ${Number(summary.reachableSources ?? 0)} collector(s) remain reachable.`;
   }
   if (counts.blockers > 0) {
     return `${counts.blockers} blocking source-health item(s), ${counts.warnings} warning(s), and ${counts.planned} planned activation item(s).`;

@@ -1040,6 +1040,33 @@ if (
   throw new Error("Source health payload failed degraded retryable collector checks");
 }
 
+const mixedHardFailureSourceHealth = await withTemporarySourceHealthEnv(async () => {
+  return buildSourceHealthPayload({
+    region: "ukraine-east",
+    now: new Date("2026-05-28T02:03:49Z"),
+    maxSources: 2,
+    fetchImpl: async (url) => {
+      if (String(url).includes("api.gdeltproject.org")) {
+        return jsonResponse(200, { articles: [{ title: "fixture" }] });
+      }
+      return textResponse(404, "missing feed");
+    }
+  });
+});
+if (
+  mixedHardFailureSourceHealth.ready ||
+  !mixedHardFailureSourceHealth.operational ||
+  !mixedHardFailureSourceHealth.degraded ||
+  mixedHardFailureSourceHealth.resilience?.state !== "degraded" ||
+  mixedHardFailureSourceHealth.summary.reachableSources !== 1 ||
+  mixedHardFailureSourceHealth.summary.hardFailures !== 1 ||
+  mixedHardFailureSourceHealth.attention?.state !== "degraded" ||
+  !mixedHardFailureSourceHealth.attention?.summary?.includes("adapter review") ||
+  !mixedHardFailureSourceHealth.sources.some((source) => source.status === "404" && source.severity === "blocker" && source.diagnostic?.httpStatus === 404)
+) {
+  throw new Error("Source health payload failed mixed hard-failure resilience checks");
+}
+
 const failedSourceHealth = await withTemporarySourceHealthEnv(async () => {
   return buildSourceHealthPayload({
     region: "ukraine-east",
