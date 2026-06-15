@@ -78,6 +78,7 @@ const requiredFiles = [
   "event.html",
   "archive.html",
   "review.html",
+  "publish.html",
   "setup.html",
   "sources.html",
   "readiness.html",
@@ -89,6 +90,7 @@ const requiredFiles = [
   "src/embed.js",
   "src/event-page.js",
   "src/review-page.js",
+  "src/publish-page.js",
   "src/setup-page.js",
   "src/sources-page.js",
   "src/readiness-page.js",
@@ -152,6 +154,8 @@ const embedPageSource = readFileSync(new URL("embed.html", `file:///${root.repla
 const eventPageSource = readFileSync(new URL("src/event-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const indexPageSource = readFileSync(new URL("index.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewPageSource = readFileSync(new URL("src/review-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const publishHtmlSource = readFileSync(new URL("publish.html", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const publishPageSource = readFileSync(new URL("src/publish-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const setupPageSource = readFileSync(new URL("src/setup-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const sourcesPageSource = readFileSync(new URL("src/sources-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const readinessPageSource = readFileSync(new URL("src/readiness-page.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
@@ -313,9 +317,37 @@ if (
   !reviewPageSource.includes("data-copy-export-json") ||
   !reviewPageSource.includes("data-export-json-text") ||
   !reviewPageSource.includes("function exportJsonForApply(bundle)") ||
+  !reviewPageSource.includes("function publishPageUrl()") ||
   !reviewPageSource.includes("EDITORIAL_STORE_NOT_CONFIGURED")
 ) {
   throw new Error("Expected standalone review page to expose static decision exports when writes are blocked");
+}
+
+if (
+  !publishHtmlSource.includes("data-publish-state") ||
+  !publishHtmlSource.includes("/src/publish-page.js") ||
+  !publishHtmlSource.includes("/api/publication-package") ||
+  !publishPageSource.includes("/api/publication-package?") ||
+  !publishPageSource.includes("function renderPublicationPackage()") ||
+  !publishPageSource.includes("function renderDecisionExport(pkg)") ||
+  !publishPageSource.includes("function renderCandidateEvidence(pkg)") ||
+  !publishPageSource.includes("function renderPublicationRecords(pkg)") ||
+  !publishPageSource.includes("function renderSourceLink(source)") ||
+  !publishPageSource.includes("source.url") ||
+  !publishPageSource.includes("data-copy-publish-export") ||
+  !publishPageSource.includes("data-copy-publish-export-json") ||
+  !publishPageSource.includes("data-publish-export-json-text") ||
+  !publishPageSource.includes("function exportJsonForApply(bundle)") ||
+  !publishPageSource.includes("humanApprovalRequired") ||
+  !publishPageSource.includes("pkg.editorial?.decisionExport") ||
+  !publishPageSource.includes("pkg.publication?.records") ||
+  !publishPageSource.includes("pkg.evidence?.candidates") ||
+  !stylesSource.includes(".publish-workspace") ||
+  !stylesSource.includes(".publish-source-list") ||
+  !stylesSource.includes(".publish-record-list") ||
+  !stylesSource.includes(".publish-package-notice")
+) {
+  throw new Error("Expected first-publish package page to expose dry-run export, source evidence, and publication records");
 }
 
 if (
@@ -351,7 +383,9 @@ if (
   !appSource.includes("function renderSourceActivationBacklog(sourceCuration)") ||
   !appSource.includes("function renderInlineLaunchActions(actions") ||
   !appSource.includes("primaryLaunchActionLink(action)") ||
-  !appSource.includes('["Package", links.package],\n    ["Review", links.review]') ||
+  appSource.indexOf('["Package", links.package]') === -1 ||
+  appSource.indexOf('["Review", links.review]') === -1 ||
+  appSource.indexOf('["Package", links.package]') > appSource.indexOf('["Review", links.review]') ||
   !appSource.includes("readiness.launchPlan?.actions") ||
   !stylesSource.includes(".inline-launch-actions") ||
   !appSource.includes("sourceCuration.activationBacklog?.summary") ||
@@ -451,6 +485,7 @@ if (
   !readinessPageSource.includes("function renderBlockerLinks(blocker)") ||
   !readinessPageSource.includes('["Package", links.package]') ||
   !readinessPageSource.includes('["Package", blocker.packageHref]') ||
+  !readinessPageSource.includes("function publishPageUrl()") ||
   !readinessPageSource.includes("readiness-action-list") ||
   !readinessPageSource.includes("setupCommandHref") ||
   !readinessPageSource.includes("data-readiness-region") ||

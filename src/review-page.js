@@ -3,6 +3,8 @@ import { categories, eventTypes, regions, severities, sourceTypes } from "./data
 const params = new URLSearchParams(window.location.search);
 const stateNode = document.querySelector("[data-review-state]");
 const mapLink = document.querySelector("[data-map-link]");
+const publishLink = document.querySelector("[data-publish-link]");
+const readinessLink = document.querySelector("[data-readiness-link]");
 const apiLink = document.querySelector("[data-api-link]");
 
 const state = {
@@ -29,6 +31,8 @@ async function loadReviewQueue() {
   const apiUrl = reviewQueueUrl();
   apiLink.href = apiUrl;
   mapLink.href = `/?${new URLSearchParams({ region: state.region }).toString()}`;
+  publishLink.href = publishPageUrl();
+  readinessLink.href = readinessPageUrl();
 
   try {
     const sourceHealthRequest = fetch(sourceHealthUrl(), { headers: { Accept: "application/json" } })
@@ -289,6 +293,14 @@ function publicationPreviewHrefById(id) {
 
 function publicationPackageHref() {
   return `/api/publication-package?${new URLSearchParams({ region: state.region, lookback: state.lookback, limit: "5" }).toString()}`;
+}
+
+function publishPageUrl() {
+  return `/publish?${new URLSearchParams({ region: state.region, lookback: state.lookback, limit: "5" }).toString()}`;
+}
+
+function readinessPageUrl() {
+  return `/readiness?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function renderSourceHealthStatus() {
