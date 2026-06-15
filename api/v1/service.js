@@ -6,6 +6,7 @@ export const V1_DEFAULT_LOOKBACK = "30d";
 export const V1_DEFAULT_PUBLICATION = "published";
 
 const EVENT_TRANSLATION_SCHEMA_VERSION = "event-translation-catalog.v1";
+const LEGEND_SCHEMA_VERSION = "warmap-legend.v1";
 
 export function buildV1EventsPayload(payload, context = {}) {
   const events = filteredResources(payload.events, context).map((event) => toEventResource(event, context));
@@ -155,6 +156,12 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
         label
       }))
     },
+    legend: buildLegendContract({
+      actorSides: payload.actorSides,
+      categories: payload.categories,
+      eventTypes: payload.eventTypes,
+      severities: payload.severities
+    }),
     sources: {
       registry: sourceRegistry.map(toSourceRegistryResource),
       summary: {
@@ -255,8 +262,97 @@ function configDefaults(regions) {
 function taxonomyEntries(collection = {}, mapper) {
   return Object.entries(collection).map(([id, value]) => ({
     id,
-    ...mapper(value)
+    ...mapper(value, id)
   }));
+}
+
+function buildLegendContract({ actorSides = {}, categories = {}, eventTypes = {}, severities = {} } = {}) {
+  const eventTypeEntries = taxonomyEntries(eventTypes, (eventType) => {
+    const category = categories[eventType.category] ?? categories.other ?? {};
+    return {
+      label: eventType.label,
+      short: eventType.short,
+      icon: eventType.icon,
+      category: eventType.category,
+      categoryLabel: category.label ?? "",
+      color: category.color ?? "",
+      legendGroup: eventType.legendGroup ?? "Other",
+      extractionHints: eventType.extractionHints ?? [],
+      reviewCue: eventType.reviewCue
+    };
+  });
+
+  return {
+    schemaVersion: LEGEND_SCHEMA_VERSION,
+    purpose:
+      "Dashboard marker legend for clustered map markers, feed filters, AI extraction, and editorial review cues.",
+    markerSemantics: {
+      iconField: "eventType.icon",
+      colorField: "category.color",
+      sideColorField: "side.color",
+      severityRankField: "severity.rank",
+      clusterStrategy: "dominant-category",
+      fallbackCategory: "other",
+      fallbackSide: "unknown"
+    },
+    groups: legendGroups(eventTypeEntries),
+    eventTypes: eventTypeEntries,
+    categories: taxonomyEntries(categories, (category, id) => ({
+      label: category.label,
+      short: category.short,
+      icon: category.icon,
+      color: category.color,
+      eventTypeCount: eventTypeEntries.filter((eventType) => eventType.category === id).length
+    })),
+    sides: taxonomyEntries(actorSides, (side) => ({
+      label: side.label,
+      color: side.color
+    })),
+    severities: taxonomyEntries(severities, (severity) => ({
+      label: severity.label,
+      color: severity.color,
+      rank: severity.rank
+    }))
+  };
+}
+
+function legendGroups(eventTypes = []) {
+  return Object.values(
+    eventTypes.reduce((groups, eventType) => {
+      const label = eventType.legendGroup || "Other";
+      groups[label] ??= {
+        id: slug(label),
+        label,
+        eventTypeIds: [],
+        categories: new Set(),
+        colors: new Set()
+      };
+      groups[label].eventTypeIds.push(eventType.id);
+      if (eventType.category) {
+        groups[label].categories.add(eventType.category);
+      }
+      if (eventType.color) {
+        groups[label].colors.add(eventType.color);
+      }
+      return groups;
+    }, {})
+  )
+    .map((group) => ({
+      id: group.id,
+      label: group.label,
+      eventTypeCount: group.eventTypeIds.length,
+      eventTypeIds: group.eventTypeIds.sort(),
+      categories: [...group.categories].sort(),
+      colors: [...group.colors].sort()
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function slug(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function toSourceRegistryResource(source) {

@@ -3195,6 +3195,12 @@ if (
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "drone" && eventType.category === "air" && eventType.color) ||
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "claim" && eventType.reviewCue) ||
   !v1Config.taxonomies.actorSides.some((side) => side.id === "ukraine" && side.color) ||
+  v1Config.legend?.schemaVersion !== "warmap-legend.v1" ||
+  v1Config.legend?.markerSemantics?.clusterStrategy !== "dominant-category" ||
+  !v1Config.legend?.groups?.some((group) => group.id === "air" && group.eventTypeIds.includes("drone") && group.categories.includes("air")) ||
+  !v1Config.legend?.categories?.some((category) => category.id === "air" && category.eventTypeCount >= 3 && category.color) ||
+  !v1Config.legend?.sides?.some((side) => side.id === "ukraine" && side.color) ||
+  !v1Config.legend?.severities?.some((severity) => severity.id === "critical" && severity.rank === 4) ||
   !v1Config.sources.registry.some((source) => source.id === "ukraine-president-rss") ||
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
   v1Config.platform.localization?.eventContentStatus !== "planned" ||

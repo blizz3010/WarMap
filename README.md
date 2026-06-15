@@ -65,7 +65,7 @@ The browser map also opens `/v1/stream/events` with `EventSource` when available
 
 The clean `/v1/*` routes are backed by Vercel rewrites to `/api/v1/*` functions and expose a stable public shape for the future war dashboard:
 
-- `/v1/config` returns dashboard defaults, theater presets, per-region theater-status discovery links, category icon taxonomy, granular event-type taxonomy, severity colors, actor side colors, source-type labels, source registry metadata, language options, localization readiness metadata/link, notification channels, paid-layer capability records, and the paid-layer status link.
+- `/v1/config` returns dashboard defaults, theater presets, per-region theater-status discovery links, raw category/event-type/severity/side taxonomies, a grouped `legend` contract for marker icons, category colors, side colors, severity ranks, and cluster semantics, source registry metadata, language options, localization readiness metadata/link, notification channels, paid-layer capability records, and the paid-layer status link.
 - `/v1/events?region=ukraine-east&publication=published` returns event resources with location, granular `eventType`, review state, extraction metadata, visible original source links, collector provenance, source country/language metadata, a `translations` source-language fallback contract, and map/detail/API links.
 - `/v1/feed?region=ukraine-east` returns feed-optimized event cards with the same granular `eventType`.
 - `/v1/timeline?region=ukraine-east` groups event cards by day and preserves their granular `eventType`.
