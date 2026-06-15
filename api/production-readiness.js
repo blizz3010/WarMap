@@ -171,6 +171,7 @@ function platformReadinessSummary({ notifications = notificationRuntimeSummary()
   return {
     notificationStatus: "/api/notification-status",
     localizationStatus: "/api/localization-status",
+    layerStatus: "/api/layer-status",
     browserNotifications: PLATFORM_CONFIG.notificationChannels.some((channel) => channel.id === "browser" && channel.status === "local-ready"),
     serverNotificationsReady: notifications.serverDeliveryReady,
     notificationRuntime: {
