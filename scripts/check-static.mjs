@@ -520,6 +520,9 @@ if (
   !readinessPageSource.includes("function renderCheckRow(check)") ||
   !readinessPageSource.includes("function renderLaunchActions(actions") ||
   !readinessPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !readinessPageSource.includes("function renderLocalizationPlan(localization)") ||
+  !readinessPageSource.includes("localization.eventTranslation?.status") ||
+  !readinessPageSource.includes("contract.provenance?.publicApiField") ||
   !readinessPageSource.includes('["Activation Package", links.sourceActivationPackage]') ||
   !readinessPageSource.includes('["Activation Package", blocker.sourceActivationPackageHref]') ||
   !readinessPageSource.includes('["Package", links.package]') ||
@@ -2891,10 +2894,21 @@ if (
   localizationStatus.ready ||
   !localizationStatus.shellReady ||
   localizationStatus.capabilities.eventContentStatus !== "planned" ||
+  localizationStatus.region !== DEFAULT_REGION_ID ||
+  localizationStatus.eventTranslation?.schemaVersion !== "event-translation-catalog.v1" ||
+  localizationStatus.eventTranslation?.status !== "review-required" ||
+  !localizationStatus.eventTranslation?.targetLanguages?.some((language) => language.id === "uk" && language.locale === "uk-UA") ||
+  !localizationStatus.eventTranslation?.targetLanguages?.some((language) => language.id === "fa" && language.direction === "rtl") ||
+  !localizationStatus.eventTranslation?.provenance?.preserveOriginalSourceLinks ||
+  localizationStatus.eventTranslation?.provenance?.publicApiField !== "translations" ||
+  !localizationStatus.eventTranslation?.reviewWorkflow?.source?.includes("/api/publication-package?region=ukraine-east&lookback=30d&limit=5") ||
+  !localizationStatus.eventTranslation?.checklist?.some((item) => item.id === "catalog-schema-defined" && item.done) ||
+  !localizationStatus.eventTranslation?.checklist?.some((item) => item.id === "reviewed-catalogs-loaded" && item.done === false) ||
   !localizationStatus.summary.rtlLanguages.includes("fa") ||
   !localizationStatus.summary.rtlLanguages.includes("ar") ||
   !localizationStatus.languages.some((language) => language.id === "uk" && language.shellCopy === "local-ready" && language.eventContent === "planned") ||
   !localizationStatus.blockers.some((blocker) => blocker.id === "language-catalogs" && blocker.plannedLanguages.includes("ru")) ||
+  !localizationStatus.links.publicationPackage.includes("/api/publication-package?region=ukraine-east") ||
   localizationStatus.links.platformConfig !== "/api/platform-config"
 ) {
   throw new Error("Localization status payload failed shell, RTL, or event-translation readiness checks");
