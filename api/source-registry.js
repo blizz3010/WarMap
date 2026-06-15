@@ -8,6 +8,7 @@ export const SOURCE_REGISTRY = [
     access: "public API",
     status: "active",
     url: "https://api.gdeltproject.org/api/v2/doc/doc",
+    timeoutMs: 6500,
     regions: ["*"]
   },
   {

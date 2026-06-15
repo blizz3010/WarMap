@@ -37,6 +37,8 @@ const WATCH_TERMS = [
   "war"
 ];
 
+const DEFAULT_GDELT_TIMEOUT_MS = 6500;
+
 export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRecords = 75, lookback = "30d" } = {}) {
   const normalizedLookback = normalizeLookback(lookback);
   const officialFeeds = officialFeedsForRegion(region);
@@ -93,12 +95,13 @@ export async function collectOpenWebArticles({ region = DEFAULT_REGION_ID, maxRe
 
 async function fetchGdeltArticles(region, maxRecords, lookback) {
   const gdeltUrl = buildGdeltUrl(region, maxRecords, lookback);
+  const timeoutMs = boundedTimeoutMs(process.env.GDELT_TIMEOUT_MS, DEFAULT_GDELT_TIMEOUT_MS);
   const upstream = await fetchWithTimeout(gdeltUrl, {
     headers: {
       Accept: "application/json",
       "User-Agent": "WarMapLive/0.1 prototype contact=https://github.com/blizz3010/WarMap"
     },
-    timeoutMs: 3500
+    timeoutMs
   });
 
   if (!upstream.ok) {
@@ -208,15 +211,30 @@ async function fetchCompliantSocialApiArticles(region, lookback) {
 
 async function fetchWithTimeout(url, options) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, options.timeoutMs);
   try {
     return await fetch(url, {
       headers: options.headers,
       signal: controller.signal
     });
+  } catch (error) {
+    if (timedOut) {
+      throw timeoutError(options.timeoutMs);
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function timeoutError(timeoutMs) {
+  const error = new Error(`Timeout after ${timeoutMs}ms`);
+  error.name = "AbortError";
+  return error;
 }
 
 function extractXmlFeedItems(xml, feed, region, lookback) {
@@ -684,4 +702,12 @@ function lookbackDurationMs(lookback) {
   }
   const amount = Number(match[1]);
   return amount * (match[2] === "h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
+}
+
+function boundedTimeoutMs(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(Math.max(Math.trunc(parsed), 1500), 12000);
 }
