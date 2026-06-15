@@ -348,6 +348,8 @@ if (
   !publishPageSource.includes("function renderDecisionExport(pkg)") ||
   !publishPageSource.includes("function renderCandidateEvidence(pkg)") ||
   !publishPageSource.includes("function renderPublicationRecords(pkg)") ||
+  !publishPageSource.includes("function renderHandoffChecklist(pkg)") ||
+  !publishPageSource.includes("function renderVerificationLinks(links = [])") ||
   !publishPageSource.includes("function renderSourceLink(source)") ||
   !publishPageSource.includes("source.url") ||
   !publishPageSource.includes("data-copy-publish-export") ||
@@ -371,6 +373,8 @@ if (
   !publicationPackageSource.includes("buildEditorialDecisionExport") ||
   !publicationPackageSource.includes("buildPublicationStatusFromDecisions") ||
   !publicationPackageSource.includes("publicationCandidateSummary") ||
+  !publicationPackageSource.includes("function buildFirstPublishHandoff") ||
+  !publicationPackageSource.includes('schemaVersion: "first-publish-handoff.v1"') ||
   !publicationPackageSource.includes("humanApprovalRequired: true") ||
   !publicationPackageSource.includes("sourceEvents: []") ||
   !publicationPackageSource.includes('response.setHeader("Cache-Control", "no-store")')
@@ -2523,6 +2527,15 @@ if (
   firstPublishPackage.editorial.decisionCount !== 1 ||
   firstPublishPackage.editorial.decisionExport?.decisionCount !== 1 ||
   !firstPublishPackage.editorial.decisionExport?.appendObjects?.includes(sampleUkraineEvents[0].sources[0].url) ||
+  firstPublishPackage.handoff?.schemaVersion !== "first-publish-handoff.v1" ||
+  firstPublishPackage.handoff?.status !== "ready-for-human-review" ||
+  !firstPublishPackage.handoff?.humanApprovalRequired ||
+  firstPublishPackage.handoff?.selectedCandidateIds?.[0] !== sampleUkraineEvents[0].id ||
+  firstPublishPackage.handoff?.sourceLinkCount !== 1 ||
+  !firstPublishPackage.handoff?.checklist?.some((item) => item.id === "source-evidence-reviewed" && item.done) ||
+  !firstPublishPackage.handoff?.checklist?.some((item) => item.id === "human-decision-required" && !item.done) ||
+  !firstPublishPackage.handoff?.verificationAfterApply?.includes("/v1/events?region=ukraine-east&lookback=30d&publication=published") ||
+  firstPublishPackage.handoff?.applyCommand !== "node scripts/apply-review-export.mjs .data/review-export.json" ||
   firstPublishPackage.publication.summary.published !== 1 ||
   !firstPublishPackage.publication.ready ||
   !firstPublishRecord?.sources?.[0]?.url ||
@@ -2546,6 +2559,8 @@ const emptyFirstPublishPackage = buildPublicationPackagePayload({
 if (
   emptyFirstPublishPackage.selectedCount !== 0 ||
   emptyFirstPublishPackage.editorial.decisionExport !== null ||
+  emptyFirstPublishPackage.handoff?.status !== "needs-candidate-correction" ||
+  !emptyFirstPublishPackage.handoff?.checklist?.some((item) => item.id === "source-evidence-reviewed" && !item.done) ||
   emptyFirstPublishPackage.publication.ready ||
   !emptyFirstPublishPackage.publication.blockers.some((blocker) => blocker.id === "no-approval-ready-candidates")
 ) {
