@@ -1029,6 +1029,19 @@ input[type="radio"] {
   box-shadow: inset 4px 0 0 var(--card-color);
 }
 
+.feed-card.is-synced {
+  animation: feedSyncPulse 900ms ease;
+}
+
+@keyframes feedSyncPulse {
+  0% {
+    background: color-mix(in srgb, var(--card-color) 18%, rgba(255, 255, 255, 0.04));
+  }
+  100% {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
 .feed-card-button {
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr) 92px 16px;
