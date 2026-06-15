@@ -113,7 +113,7 @@ function readinessChecks() {
     {
       id: "localization-status",
       label: "Localization status",
-      url: "/api/localization-status",
+      url: localizationStatusUrl(),
       expectedKind: "LocalizationStatus",
       required: false
     },
@@ -272,6 +272,7 @@ function renderReadinessPage() {
               <div><dt>Source health</dt><dd>${sourceHealth.resilience?.state ?? sourceHealth.status ?? "Unknown"}</dd></div>
               <div><dt>Notifications</dt><dd>${notifications.delivery?.ready ? "Ready" : notifications.delivery?.status ?? "Planned"}</dd></div>
               <div><dt>Languages</dt><dd>${localization.shellReady ? "Shell ready" : "Attention"}</dd></div>
+              <div><dt>Translation</dt><dd>${escapeHtml(localization.eventTranslation?.status ?? "planned")}</dd></div>
               <div><dt>Layers</dt><dd>${layers.entitlementsReady ? "Ready" : `${Number(layers.summary?.lockedLayers ?? 0)} locked`}</dd></div>
             </dl>
           </section>
@@ -279,6 +280,11 @@ function renderReadinessPage() {
           <section class="event-page-section">
             <h2>Source Activation</h2>
             ${renderSourceActivation(sourceCuration)}
+          </section>
+
+          <section class="event-page-section">
+            <h2>Localization Plan</h2>
+            ${renderLocalizationPlan(localization)}
           </section>
 
           <section class="event-page-section">
@@ -300,7 +306,7 @@ function renderReadinessPage() {
               <a href="/api/event-store-health">DB health</a>
               <a href="${escapeAttr(publicationStatusUrl())}">Publication</a>
               <a href="${escapeAttr(notificationStatusUrl())}">Notifications</a>
-              <a href="/api/localization-status">Localization</a>
+              <a href="${escapeAttr(localizationStatusUrl())}">Localization</a>
               <a href="/api/layer-status">Layers</a>
             </nav>
           </section>
@@ -442,6 +448,41 @@ function renderActivationSource(source) {
   `;
 }
 
+function renderLocalizationPlan(localization) {
+  const contract = localization.eventTranslation ?? {};
+  const targets = contract.targetLanguages ?? [];
+  const checklist = contract.checklist ?? [];
+  return `
+    <p class="status-summary ${localization.eventContentReady ? "is-ready" : "is-warning"}">
+      ${localization.eventContentReady ? "Reviewed event translations are ready." : `${targets.length} reviewed event translation catalog${targets.length === 1 ? "" : "s"} planned.`}
+    </p>
+    <dl class="event-page-facts readiness-console-facts">
+      <div><dt>Schema</dt><dd>${escapeHtml(contract.schemaVersion ?? "planned")}</dd></div>
+      <div><dt>Targets</dt><dd>${Number(targets.length)}</dd></div>
+      <div><dt>Source links</dt><dd>${contract.provenance?.preserveOriginalSourceLinks ? "Required" : "Unknown"}</dd></div>
+      <div><dt>API field</dt><dd>${escapeHtml(contract.provenance?.publicApiField ?? "translations")}</dd></div>
+    </dl>
+    <ul class="readiness-source-list">
+      ${checklist.map(renderLocalizationChecklistItem).join("") || "<li class=\"is-warning\"><strong>Translation checklist</strong><span>planned</span></li>"}
+    </ul>
+    <nav class="setup-profile-links readiness-blocker-links" aria-label="Localization plan links">
+      <a href="${escapeAttr(localizationStatusUrl())}">Localization JSON</a>
+      ${contract.reviewWorkflow?.source ? `<a href="${escapeAttr(contract.reviewWorkflow.source)}">Translation Source</a>` : ""}
+      ${contract.reviewWorkflow?.queue ? `<a href="${escapeAttr(contract.reviewWorkflow.queue)}">Review Queue</a>` : ""}
+    </nav>
+  `;
+}
+
+function renderLocalizationChecklistItem(item) {
+  return `
+    <li class="${item.done ? "is-ready" : item.required ? "is-warning" : "is-ready"}">
+      <strong>${escapeHtml(item.label ?? item.id)}</strong>
+      <span>${item.done ? "ready" : "planned"}</span>
+      <p>${escapeHtml(item.detail ?? "")}</p>
+    </li>
+  `;
+}
+
 function checkPayload(id) {
   return state.checks.find((check) => check.id === id)?.payload;
 }
@@ -500,7 +541,7 @@ function summaryLine(payload, check) {
     return `${payload.delivery?.status ?? "planned"} delivery, ${Number(payload.preview?.candidates?.length ?? 0)} preview candidates.`;
   }
   if (payload?.kind === "LocalizationStatus") {
-    return `${Number(payload.summary?.shellCopyLanguages ?? 0)} shell languages, ${Number(payload.summary?.rtlLanguages?.length ?? 0)} RTL, event translation ${payload.capabilities?.eventContentStatus ?? "planned"}.`;
+    return `${Number(payload.summary?.shellCopyLanguages ?? 0)} shell languages, ${Number(payload.summary?.rtlLanguages?.length ?? 0)} RTL, event translation ${payload.eventTranslation?.status ?? payload.capabilities?.eventContentStatus ?? "planned"}.`;
   }
   if (payload?.kind === "LayerStatus") {
     return `${Number(payload.summary?.includedLayers ?? 0)} included, ${Number(payload.summary?.plannedPaidLayers ?? 0)} planned paid layers locked.`;
@@ -563,6 +604,10 @@ function publicationStatusUrl() {
 
 function notificationStatusUrl() {
   return `/api/notification-status?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function localizationStatusUrl() {
+  return `/api/localization-status?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function setupPageUrl() {
