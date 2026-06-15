@@ -3075,8 +3075,9 @@ if (
   v1Config.defaults?.regionName !== "Ukraine - East" ||
   !v1Config.defaults?.links?.events.includes(`region=${DEFAULT_REGION_ID}`) ||
   !v1Config.defaults?.links?.stream.includes(`publication=${V1_DEFAULT_PUBLICATION}`) ||
+  !v1Config.defaults?.links?.theaterStatus.includes("/api/theater-status?") ||
   !v1Config.defaults?.links?.embed.startsWith("/embed?") ||
-  !v1Config.regions.some((region) => region.id === "ukraine-east") ||
+  !v1Config.regions.some((region) => region.id === "ukraine-east" && region.links.theaterStatus === "/api/theater-status?region=ukraine-east") ||
   !v1Config.taxonomies.categories.some((category) => category.id === "strike" && category.color) ||
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "drone" && eventType.category === "air" && eventType.color) ||
   !v1Config.taxonomies.eventTypes.some((eventType) => eventType.id === "claim" && eventType.reviewCue) ||
@@ -3085,6 +3086,7 @@ if (
   !v1Config.platform.paidLayers.some((layer) => layer.status === "planned-paid") ||
   v1Config.platform.localization?.eventContentStatus !== "planned" ||
   v1Config.links.ingestionStatus !== "/api/ingestion-status" ||
+  v1Config.links.theaterStatus !== "/api/theater-status" ||
   v1Config.links.publicationStatus !== "/api/publication-status" ||
   v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
