@@ -177,7 +177,7 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       timeline: "/v1/timeline",
       search: "/v1/search",
       stream: "/v1/stream/events",
-      theaterStatus: "/api/theater-status",
+      theaterStatus: "/v1/theater-status",
       platformConfig: "/api/platform-config",
       extractionStatus: "/api/extraction-status",
       sourceHealth: "/api/source-health",
@@ -219,7 +219,7 @@ function toRegionResource(region) {
       events: `/v1/events?region=${encodeURIComponent(region.id)}`,
       feed: `/v1/feed?region=${encodeURIComponent(region.id)}`,
       timeline: `/v1/timeline?region=${encodeURIComponent(region.id)}`,
-      theaterStatus: `/api/theater-status?region=${encodeURIComponent(region.id)}`
+      theaterStatus: `/v1/theater-status?region=${encodeURIComponent(region.id)}`
     }
   };
 }
@@ -245,7 +245,7 @@ function configDefaults(regions) {
       feed: `/v1/feed?${query}`,
       timeline: `/v1/timeline?${query}`,
       stream: `/v1/stream/events?${query}`,
-      theaterStatus: `/api/theater-status?${query}`
+      theaterStatus: `/v1/theater-status?${query}`
     }
   };
 }

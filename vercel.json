@@ -32,6 +32,10 @@
     {
       "source": "/v1/stream/events",
       "destination": "/api/v1/stream/events"
+    },
+    {
+      "source": "/v1/theater-status",
+      "destination": "/api/v1/theater-status"
     }
   ],
   "headers": [
