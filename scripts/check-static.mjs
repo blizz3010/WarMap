@@ -56,6 +56,7 @@ import { buildSourceActivationPackagePayload } from "../api/source-activation-pa
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import { buildSourceHealthPayload } from "../api/source-health.js";
 import { buildStorageReadinessPayload, STORAGE_SCHEMA_VERSION, STORAGE_TABLES } from "../api/storage-readiness.js";
+import { buildTheaterStatusPayload } from "../api/theater-status.js";
 import { applyReviewExportText, renderStaticEditorialDecisionModule } from "./apply-review-export.mjs";
 import { applyStorageMigration, storageMigrationPlan } from "./apply-storage-migration.mjs";
 import {
@@ -139,6 +140,7 @@ const requiredFiles = [
   "api/source-curation.js",
   "api/source-health.js",
   "api/storage-readiness.js",
+  "api/theater-status.js",
   "api/source-registry.js",
   "api/v1/adapter.js",
   "api/v1/config.js",
@@ -174,6 +176,7 @@ const eventsApiSource = readFileSync(new URL("api/events.js", `file:///${root.re
 const publicationPackageSource = readFileSync(new URL("api/publication-package.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const publicationServiceSource = readFileSync(new URL("api/publication-service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const reviewQueueApiSource = readFileSync(new URL("api/review-queue.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
+const theaterStatusApiSource = readFileSync(new URL("api/theater-status.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const v1ServiceSource = readFileSync(new URL("api/v1/service.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const v1StreamSource = readFileSync(new URL("api/v1/stream/events.js", `file:///${root.replaceAll("\\", "/")}/`), "utf8");
 const packageConfig = JSON.parse(readFileSync(new URL("package.json", `file:///${root.replaceAll("\\", "/")}/`), "utf8"));
@@ -386,6 +389,7 @@ if (
   !appSource.includes("/api/review-export") ||
   !appSource.includes("/api/production-readiness?") ||
   !appSource.includes("/api/source-health?") ||
+  !appSource.includes("/api/theater-status?") ||
   !appSource.includes("/api/publication-preview?") ||
   !appSource.includes("/api/editorial-setup?") ||
   !appSource.includes("/setup?") ||
@@ -410,6 +414,14 @@ if (
   !stylesSource.includes(".inline-launch-actions") ||
   !appSource.includes("sourceCuration.activationBacklog?.summary") ||
   !appSource.includes("function sourceHealthStatusClass(health)") ||
+  !appSource.includes("function loadTheaterStatus()") ||
+  !appSource.includes("theaterStatusByRegion(group)") ||
+  !appSource.includes("theater-count") ||
+  !theaterStatusApiSource.includes('THEATER_STATUS_SCHEMA_VERSION = "theater-status.v1"') ||
+  !theaterStatusApiSource.includes("buildTheaterStatusPayload") ||
+  !theaterStatusApiSource.includes("registrySummary(theater.id)") ||
+  !stylesSource.includes(".theater-count") ||
+  !stylesSource.includes(".theater-switch button.has-theater-status") ||
   !appSource.includes("inline-review-source-strip") ||
   !appSource.includes("function renderReviewGateChecklist(item)") ||
   !appSource.includes("function renderReviewSourceLink(source)") ||
@@ -1613,6 +1625,61 @@ const sampleUkraineEvents = normalizeArticlesToEvents(
 
 if (sampleUkraineEvents.length !== 1 || sampleUkraineEvents[0].place !== "Kharkiv" || sampleUkraineEvents[0].side !== "russia") {
   throw new Error("Live news normalizer failed Ukraine theater mapping");
+}
+
+const fixtureTheaterStatus = await buildTheaterStatusPayload({
+  region: "ukraine-east",
+  lookback: "30d",
+  publication: "all",
+  maxRecords: 5,
+  now: new Date("2026-05-28T02:04:00Z"),
+  collectImpl: async ({ region }) => ({
+    lookback: "30d",
+    articles:
+      region === "ukraine-east"
+        ? [
+            {
+              title: "Russian drone strike reported near Kharkiv",
+              url: "https://example.com/world/ukraine-kharkiv-theater-status",
+              domain: "example.com",
+              sourcecountry: "United States",
+              language: "English",
+              seendate: "20260528T010203Z"
+            }
+          ]
+        : [],
+    upstreamErrors: [],
+    gdeltStatus: "fixture",
+    rssStatus: "fixture",
+    officialStatus: "fixture",
+    socialStatus: "not-configured",
+    collectorStatus: {},
+    rssFeeds: [],
+    officialFeeds: [],
+    officialSiteSources: [],
+    socialApiSources: []
+  })
+});
+const fixtureEastTheater = fixtureTheaterStatus.theaters.find((theater) => theater.id === "ukraine-east");
+if (
+  fixtureTheaterStatus.kind !== "TheaterStatus" ||
+  fixtureTheaterStatus.schemaVersion !== "theater-status.v1" ||
+  fixtureTheaterStatus.group !== "Ukraine theaters" ||
+  !fixtureTheaterStatus.theaters.some((theater) => theater.id === "ukraine") ||
+  !fixtureTheaterStatus.theaters.some((theater) => theater.id === "ukraine-south") ||
+  !fixtureTheaterStatus.theaters.some((theater) => theater.id === "ukraine-north") ||
+  !fixtureTheaterStatus.theaters.some((theater) => theater.id === "black-sea") ||
+  !fixtureEastTheater?.active ||
+  fixtureEastTheater.counts.all < 1 ||
+  fixtureEastTheater.counts.review < 1 ||
+  fixtureEastTheater.counts.published !== 0 ||
+  fixtureEastTheater.counts.sourceLinked < 1 ||
+  fixtureEastTheater.review.approvalReady < 1 ||
+  !fixtureEastTheater.links.map.includes("region=ukraine-east") ||
+  fixtureTheaterStatus.summary.theaters !== 5 ||
+  fixtureTheaterStatus.summary.review < fixtureEastTheater.counts.review
+) {
+  throw new Error("Theater status payload failed Ukraine switcher counts and review metadata");
 }
 
 const eventStoreEnv = {
