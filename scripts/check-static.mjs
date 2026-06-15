@@ -321,6 +321,7 @@ if (
   !reviewPageSource.includes("function renderPublicationTargets(publicationCandidates") ||
   !reviewPageSource.includes("function publicationPackageHref()") ||
   !reviewPageSource.includes("function publicationPreviewHrefById(id)") ||
+  !reviewPageSource.includes("function claimLabelPolicyForItem(item") ||
   !reviewPageSource.includes("selectedCandidateIds: new Set()") ||
   !reviewPageSource.includes("function exportSelectedApprovals()") ||
   !reviewPageSource.includes("data-export-selected-approvals") ||
@@ -433,6 +434,7 @@ if (
   !stylesSource.includes(".theater-switch button.has-theater-status") ||
   !appSource.includes("inline-review-source-strip") ||
   !appSource.includes("function renderReviewGateChecklist(item)") ||
+  !appSource.includes("function claimLabelPolicyForItem(item") ||
   !appSource.includes("function renderReviewSourceLink(source)") ||
   !appSource.includes("function inlineReviewDuplicateGroups(candidates") ||
   !appSource.includes("function renderInlineDuplicateGroups(groups)") ||
@@ -2317,6 +2319,67 @@ if (
   directPublicationCandidates.topCandidates?.[0]?.approvalReady !== true
 ) {
   throw new Error("Review queue publication candidate scoring failed approval-readiness checks");
+}
+
+const conflictPartyClaimCandidate = {
+  ...sampleUkraineEvents[0],
+  id: "candidate_conflict_party_claim_policy",
+  title: "Russian Defence Ministry says drone strike hit targets near Kharkiv",
+  sources: [
+    {
+      ...sampleUkraineEvents[0].sources[0],
+      registryId: "russia-mod-en",
+      name: "Russian Defence Ministry",
+      collector: "official-site",
+      type: "official",
+      trustTier: "official claim requiring high editorial scrutiny",
+      url: "https://eng.mil.ru/en/special_operation/news/claim-fixture.htm"
+    }
+  ],
+  extraction: {
+    ...sampleUkraineEvents[0].extraction,
+    eventType: "drone",
+    duplicateKey: "russian-mod-kharkiv-claim-policy"
+  },
+  review: {
+    ...sampleUkraineEvents[0].review,
+    duplicateKey: "russian-mod-kharkiv-claim-policy"
+  }
+};
+const claimLabeledCandidate = {
+  ...conflictPartyClaimCandidate,
+  id: "candidate_conflict_party_claim_labeled",
+  extraction: {
+    ...conflictPartyClaimCandidate.extraction,
+    eventType: "claim",
+    duplicateKey: "russian-mod-kharkiv-claim-labeled"
+  },
+  review: {
+    ...conflictPartyClaimCandidate.review,
+    duplicateKey: "russian-mod-kharkiv-claim-labeled"
+  }
+};
+const conflictClaimProfiles = publicationCandidateSummary([conflictPartyClaimCandidate, claimLabeledCandidate], { limit: 2 });
+const conflictBlockedProfile = conflictClaimProfiles.topCandidates.find((candidate) => candidate.id === conflictPartyClaimCandidate.id);
+const claimLabeledProfile = conflictClaimProfiles.topCandidates.find((candidate) => candidate.id === claimLabeledCandidate.id);
+const conflictClaimDossier = buildReviewDossierFromCandidates({
+  candidateId: conflictPartyClaimCandidate.id,
+  candidates: [conflictPartyClaimCandidate],
+  region: "ukraine-east",
+  lookback: "30d"
+});
+if (
+  conflictClaimProfiles.approvalReady !== 1 ||
+  conflictClaimProfiles.needsCorrection !== 1 ||
+  conflictBlockedProfile?.approvalReady ||
+  !conflictBlockedProfile?.blockingChecks?.includes("claim-label") ||
+  claimLabeledProfile?.approvalReady !== true ||
+  conflictClaimDossier?.evidence.sourcePolicy?.reviewPolicy !== "claim-label-required" ||
+  !conflictClaimDossier.editorial.checks.claimLabelRequired ||
+  conflictClaimDossier.editorial.checks.claimLabelReady ||
+  !conflictClaimDossier.editorial.blockers.some((blocker) => blocker.id === "claim-label-required" && blocker.required)
+) {
+  throw new Error("Conflict-party official claim source gate failed claim-label publication checks");
 }
 
 const emptyFilteredSampleQueue = reviewQueueFromEvents(sampleUkraineEvents, {

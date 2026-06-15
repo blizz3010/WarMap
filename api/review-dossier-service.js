@@ -1,4 +1,4 @@
-import { PUBLICATION_TARGETS } from "./editorial-workflow.js";
+import { PUBLICATION_TARGETS, claimLabelPolicyForEvent } from "./editorial-workflow.js";
 import { DEFAULT_REGION_ID } from "./news-normalizer.js";
 
 export const REVIEW_DOSSIER_SCHEMA_VERSION = "review-dossier.v1";
@@ -33,6 +33,7 @@ export function buildReviewDossierFromCandidates({
     candidate: candidateSummary(candidate),
     evidence: {
       sources,
+      sourcePolicy: sourcePolicySummary(candidate, sources),
       sourceFamilies: sourceFamilies(sources),
       extraction: extractionSummary(candidate),
       duplicateContext: duplicateContext(candidate, relatedCandidates),
@@ -147,6 +148,19 @@ function sourceFamilies(sources) {
   }));
 }
 
+function sourcePolicySummary(candidate, sources) {
+  const claimPolicy = claimLabelPolicyForEvent(candidate, sources);
+  return {
+    claimLabelRequired: claimPolicy.required,
+    claimLabelPresent: claimPolicy.claimLabeled,
+    ready: claimPolicy.done,
+    conflictPartySourceCount: claimPolicy.conflictPartySourceCount,
+    sourceIds: claimPolicy.sourceIds,
+    reasons: claimPolicy.reasons,
+    reviewPolicy: claimPolicy.required ? "claim-label-required" : "standard-open-source-review"
+  };
+}
+
 function extractionSummary(candidate) {
   const extraction = candidate.extraction ?? {};
   return {
@@ -235,6 +249,7 @@ function relatedReasons(candidate, item, duplicateKey) {
 
 function reviewChecks(candidate, sources) {
   const extraction = candidate.extraction ?? {};
+  const claimPolicy = claimLabelPolicyForEvent(candidate, sources);
   const lat = Number(candidate.location?.lat);
   const lon = Number(candidate.location?.lon);
   const duplicateKey = candidate.review?.duplicateKey ?? extraction.duplicateKey;
@@ -247,6 +262,9 @@ function reviewChecks(candidate, sources) {
     coordinates,
     extractionComplete,
     duplicateKey: Boolean(duplicateKey),
+    claimLabelRequired: claimPolicy.required,
+    claimLabelPresent: claimPolicy.claimLabeled,
+    claimLabelReady: claimPolicy.done,
     publicationSnapshotReady: Boolean(candidate.id && candidate.title && sourceLinks && coordinates),
     humanApprovalRequired: candidate.review?.publicationStatus !== "published"
   };
@@ -266,6 +284,13 @@ function reviewBlockers(checks) {
       id: "missing-coordinates",
       required: true,
       message: "Candidate needs finite coordinates before it can become a map marker."
+    });
+  }
+  if (checks.claimLabelRequired && !checks.claimLabelReady) {
+    blockers.push({
+      id: "claim-label-required",
+      required: true,
+      message: "Conflict-party official sources must be explicitly labeled as claim before approval export."
     });
   }
   if (!checks.extractionComplete) {
