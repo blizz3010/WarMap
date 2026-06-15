@@ -79,11 +79,12 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
           "COMPLIANT_SOCIAL_API_SOURCES",
           "approved Liveuamap API/license before liveuamap-api activation"
         ],
-        verification: `/api/source-curation?${regionQuery}`
+        verification: `/api/source-activation-package?${regionQuery}`
       }
     ],
     sourceActivation: {
       ready: sourceBacklog.summary.count === 0,
+      packageEndpoint: `/api/source-activation-package?${regionQuery}`,
       backlog: {
         count: sourceBacklog.summary.count,
         sourceIds: sourceBacklog.summary.sourceIds ?? [],
@@ -113,6 +114,7 @@ export async function buildEditorialSetupPayload({ region = "ukraine-east", now 
       storageReadiness: "/api/storage-readiness",
       eventStoreHealth: "/api/event-store-health",
       sourceCuration: `/api/source-curation?${regionQuery}`,
+      sourceActivationPackage: `/api/source-activation-package?${regionQuery}`,
       sourceHealth: `/api/source-health?${regionQuery}`,
       notificationStatus: `/api/notification-status?${regionQuery}`,
       reviewQueue: `/api/review-queue?${regionQuery}`,

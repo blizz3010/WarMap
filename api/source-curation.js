@@ -161,6 +161,7 @@ export function buildSourceCurationPayload({ region = DEFAULT_REGION_ID, now = n
     liveuamapCompatibleModel: LIVEUAMAP_COMPATIBLE_MODEL,
     legendModel: buildLegendModel(),
     endpoints: {
+      sourceActivationPackage: `/api/source-activation-package?region=${encodeURIComponent(normalizedRegion)}`,
       sourceHealth: `/api/source-health?region=${encodeURIComponent(normalizedRegion)}`,
       events: `/api/events?region=${encodeURIComponent(normalizedRegion)}`,
       reviewQueue: `/api/review-queue?region=${encodeURIComponent(normalizedRegion)}`

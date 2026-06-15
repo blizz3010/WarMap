@@ -322,6 +322,7 @@ function renderSourceActivation(sourceActivation) {
       <div><dt>Official site</dt><dd>${Number(backlog.collectorCounts?.["official-site"] ?? 0)}</dd></div>
       <div><dt>Social API</dt><dd>${Number(backlog.collectorCounts?.["social-api"] ?? 0)}</dd></div>
     </dl>
+    ${sourceActivation.packageEndpoint ? `<nav class="setup-profile-links" aria-label="Source activation package"><a href="${escapeAttr(sourceActivation.packageEndpoint)}">Activation Package</a></nav>` : ""}
     <ul class="setup-collector-list">
       ${byCollector.map(renderCollectorGroup).join("") || "<li><strong>No collector backlog</strong></li>"}
     </ul>
@@ -390,6 +391,7 @@ function renderActionLinks(links = {}) {
     ["Setup", links.setup],
     ["Commands", links.commands],
     ["Sources", links.sources],
+    ["Activation Package", links.sourceActivationPackage],
     ["Review", links.review],
     ["Package", links.package],
     ["Publication", links.publication]
@@ -404,6 +406,7 @@ function renderBlockerLinks(blocker) {
     ["Setup", blocker.setupHref],
     ["Commands", blocker.setupCommandHref],
     ["Sources", blocker.sourcesHref],
+    ["Activation Package", blocker.sourceActivationPackageHref],
     ["Review", blocker.reviewHref],
     ["Package", blocker.packageHref],
     ["Publication", blocker.publicationHref]
@@ -439,6 +442,7 @@ function renderSetupLinks(links = {}) {
     ["Storage", links.storageReadiness],
     ["Event Store", links.eventStoreHealth],
     ["Sources", sourcesPageUrl()],
+    ["Activation Package", links.sourceActivationPackage],
     ["Health API", links.sourceHealth],
     ["Curation API", links.sourceCuration],
     ["Notifications", links.notificationStatus],

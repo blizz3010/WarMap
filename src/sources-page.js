@@ -101,6 +101,7 @@ function renderSourcesPage() {
           </select>
         </label>
         <a href="${escapeAttr(sourceCurationUrl())}">Curation JSON</a>
+        <a href="${escapeAttr(sourceActivationPackageUrl())}">Activation Package</a>
         <a href="${escapeAttr(sourceHealthUrl())}">Health JSON</a>
       </section>
 
@@ -180,6 +181,7 @@ function renderSourcesPage() {
               <a href="${escapeAttr(readinessPageUrl())}">Readiness</a>
               <a href="${escapeAttr(setupPageUrl())}">Setup</a>
               <a href="${escapeAttr(productionReadinessUrl())}">Readiness JSON</a>
+              <a href="${escapeAttr(curation.endpoints?.sourceActivationPackage ?? sourceActivationPackageUrl())}">Activation Package</a>
               <a href="${escapeAttr(reviewPageUrl())}">Review</a>
               <a href="${escapeAttr(curation.endpoints?.events ?? eventsUrl())}">Events API</a>
             </nav>
@@ -406,6 +408,10 @@ function syncTopLinks() {
 
 function sourceCurationUrl() {
   return `/api/source-curation?${new URLSearchParams({ region: state.region }).toString()}`;
+}
+
+function sourceActivationPackageUrl() {
+  return `/api/source-activation-package?${new URLSearchParams({ region: state.region }).toString()}`;
 }
 
 function sourceHealthUrl() {

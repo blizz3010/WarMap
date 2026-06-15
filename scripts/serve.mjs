@@ -24,6 +24,7 @@ import reviewActionHandler from "../api/review-action.js";
 import reviewDossierHandler from "../api/review-dossier.js";
 import reviewExportHandler from "../api/review-export.js";
 import reviewQueueHandler from "../api/review-queue.js";
+import sourceActivationPackageHandler from "../api/source-activation-package.js";
 import sourceCurationHandler from "../api/source-curation.js";
 import sourceHealthHandler from "../api/source-health.js";
 import storageReadinessHandler from "../api/storage-readiness.js";
@@ -69,6 +70,7 @@ const apiHandlers = new Map([
   ["/api/review-dossier", reviewDossierHandler],
   ["/api/review-export", reviewExportHandler],
   ["/api/review-queue", reviewQueueHandler],
+  ["/api/source-activation-package", sourceActivationPackageHandler],
   ["/api/source-curation", sourceCurationHandler],
   ["/api/source-health", sourceHealthHandler],
   ["/api/storage-readiness", storageReadinessHandler],

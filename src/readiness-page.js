@@ -55,6 +55,13 @@ function readinessChecks() {
       required: false
     },
     {
+      id: "source-activation-package",
+      label: "Source activation package",
+      url: sourceActivationPackageUrl(),
+      expectedKind: "SourceActivationPackage",
+      required: false
+    },
+    {
       id: "source-health",
       label: "Source health",
       url: sourceHealthUrl(),
@@ -355,6 +362,7 @@ function renderActionLinks(links = {}) {
     ["Setup", links.setup],
     ["Commands", links.commands],
     ["Sources", links.sources],
+    ["Activation Package", links.sourceActivationPackage],
     ["Review", links.review],
     ["Package", links.package],
     ["Publication", links.publication]
@@ -369,6 +377,7 @@ function renderBlockerLinks(blocker) {
     ["Setup", blocker.setupHref],
     ["Commands", blocker.setupCommandHref],
     ["Sources", blocker.sourcesHref],
+    ["Activation Package", blocker.sourceActivationPackageHref],
     ["Review", blocker.reviewHref],
     ["Package", blocker.packageHref],
     ["Publication", blocker.publicationHref]
@@ -459,6 +468,9 @@ function summaryLine(payload, check) {
   if (payload?.kind === "SourceCuration") {
     return `${Number(payload.sourceRegistry?.active ?? 0)} active, ${Number(payload.sourceRegistry?.planned ?? 0)} planned sources.`;
   }
+  if (payload?.kind === "SourceActivationPackage") {
+    return `${Number(payload.summary?.plannedSources ?? 0)} planned sources, ${Number(payload.summary?.activationTemplates ?? 0)} activation templates.`;
+  }
   if (payload?.kind === "SourceHealth") {
     return payload.resilience?.message ?? `${Number(payload.sources?.length ?? 0)} sources checked.`;
   }
@@ -525,6 +537,10 @@ function productionReadinessUrl() {
 
 function sourceCurationUrl() {
   return `/api/source-curation?${new URLSearchParams({ region: state.region }).toString()}`;
+}
+
+function sourceActivationPackageUrl() {
+  return `/api/source-activation-package?${new URLSearchParams({ region: state.region }).toString()}`;
 }
 
 function sourceHealthUrl() {

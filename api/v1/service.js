@@ -179,6 +179,7 @@ export function buildV1ConfigPayload(payload = {}, context = {}) {
       stream: "/v1/stream/events",
       platformConfig: "/api/platform-config",
       sourceHealth: "/api/source-health",
+      sourceActivationPackage: "/api/source-activation-package",
       ingestionStatus: "/api/ingestion-status",
       publicationStatus: "/api/publication-status",
       editorialSetup: "/api/editorial-setup",
