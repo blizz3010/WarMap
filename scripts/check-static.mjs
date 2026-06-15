@@ -51,6 +51,7 @@ import { buildPublicationStatusFromDecisions } from "../api/publication-service.
 import { eventsForRegionScope } from "../api/region-scope.js";
 import { buildReviewDossierFromCandidates } from "../api/review-dossier-service.js";
 import { buildEditorialDecisionExport } from "../api/review-export.js";
+import { buildSourceActivationPackagePayload } from "../api/source-activation-package.js";
 import { buildSourceCurationPayload } from "../api/source-curation.js";
 import { buildSourceHealthPayload } from "../api/source-health.js";
 import { buildStorageReadinessPayload, STORAGE_SCHEMA_VERSION, STORAGE_TABLES } from "../api/storage-readiness.js";
@@ -132,6 +133,7 @@ const requiredFiles = [
   "api/review-dossier-service.js",
   "api/review-export.js",
   "api/review-queue.js",
+  "api/source-activation-package.js",
   "api/source-curation.js",
   "api/source-health.js",
   "api/storage-readiness.js",
@@ -443,6 +445,9 @@ if (
   !setupPageSource.includes("setup-action-list") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !setupPageSource.includes("sourceActivation.packageEndpoint") ||
+  !setupPageSource.includes('["Activation Package", links.sourceActivationPackage]') ||
+  !setupPageSource.includes('["Activation Package", blocker.sourceActivationPackageHref]') ||
   !setupPageSource.includes('["Package", links.package]') ||
   !setupPageSource.includes('["Package", blocker.packageHref]') ||
   !setupPageSource.includes("function setupProfileAnchor(profileId)") ||
@@ -471,6 +476,7 @@ if (
 
 if (
   !sourcesPageSource.includes("/api/source-curation?") ||
+  !sourcesPageSource.includes("/api/source-activation-package?") ||
   !sourcesPageSource.includes("/api/source-health?") ||
   !sourcesPageSource.includes("function renderSourcesPage()") ||
   !sourcesPageSource.includes("function renderBacklogSource(source)") ||
@@ -494,6 +500,7 @@ if (
   !readinessPageSource.includes("/api/production-readiness?") ||
   !readinessPageSource.includes("/api/editorial-store-health") ||
   !readinessPageSource.includes("/api/source-curation?") ||
+  !readinessPageSource.includes("/api/source-activation-package?") ||
   !readinessPageSource.includes("/api/source-health?") ||
   !readinessPageSource.includes("/api/ingestion-status") ||
   !readinessPageSource.includes("/api/storage-readiness") ||
@@ -505,6 +512,8 @@ if (
   !readinessPageSource.includes("function renderCheckRow(check)") ||
   !readinessPageSource.includes("function renderLaunchActions(actions") ||
   !readinessPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !readinessPageSource.includes('["Activation Package", links.sourceActivationPackage]') ||
+  !readinessPageSource.includes('["Activation Package", blocker.sourceActivationPackageHref]') ||
   !readinessPageSource.includes('["Package", links.package]') ||
   !readinessPageSource.includes('["Package", blocker.packageHref]') ||
   !readinessPageSource.includes("function publishPageUrl()") ||
@@ -677,6 +686,10 @@ const ukraineCuration = buildSourceCurationPayload({
   now: new Date("2026-05-28T02:03:00Z")
 });
 const ukraineActivationTemplates = ukraineCuration.sourceRegistry.activationBacklog?.templates ?? [];
+const ukraineSourceActivationPackage = buildSourceActivationPackagePayload({
+  region: "ukraine-east",
+  now: new Date("2026-05-28T02:03:00Z")
+});
 if (
   ukraineCuration.kind !== "SourceCuration" ||
   !ukraineCuration.activationChecks.some((check) => check.id === "permission") ||
@@ -696,6 +709,7 @@ if (
   !ukraineCuration.readiness.canPublishFromCollectors ||
   !ukraineCuration.readiness.activationBacklogSummary?.sourceIds?.includes("compliant-social-apis") ||
   !ukraineCuration.endpoints.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
+  !ukraineCuration.endpoints.sourceActivationPackage.includes("/api/source-activation-package?region=ukraine-east") ||
   !ukraineCuration.readiness.needsOfficialSiteAdapters ||
   !ukraineCuration.principles.some((principle) => principle.includes("Do not ingest Liveuamap website pages")) ||
   !ukraineCuration.liveuamapCompatibleModel?.sourceAttributionFamilies?.some((family) => family.id === "official-military" && family.reviewPolicy === "claim-label-required") ||
@@ -703,6 +717,41 @@ if (
   !ukraineCuration.legendModel?.groups?.some((group) => group.id === "air" && group.eventTypeCount >= 3)
 ) {
   throw new Error("Source curation payload failed Liveuamap boundary or source backlog checks");
+}
+
+if (
+  ukraineSourceActivationPackage.kind !== "SourceActivationPackage" ||
+  ukraineSourceActivationPackage.schemaVersion !== "source-activation-package.v1" ||
+  !ukraineSourceActivationPackage.dryRun ||
+  ukraineSourceActivationPackage.ready ||
+  ukraineSourceActivationPackage.summary?.plannedSources !== ukraineCuration.sourceRegistry.planned ||
+  !ukraineSourceActivationPackage.summary?.sourceIds?.includes("ukraine-mod-news") ||
+  !ukraineSourceActivationPackage.environmentVariables.some(
+    (item) =>
+      item.env === "OFFICIAL_SITE_SOURCES" &&
+      item.commands.includes("vercel env add OFFICIAL_SITE_SOURCES production") &&
+      item.combinedJson.includes('"includePatterns"') &&
+      item.secretValuesIncluded === false
+  ) ||
+  !ukraineSourceActivationPackage.environmentVariables.some(
+    (item) =>
+      item.env === "COMPLIANT_SOCIAL_API_SOURCES" &&
+      item.tokenCommands.includes("vercel env add ALLOWED_OSINT_API_TOKEN production") &&
+      item.tokenEnvNames.includes("ALLOWED_OSINT_API_TOKEN") &&
+      item.secretValuesIncluded === false
+  ) ||
+  !ukraineSourceActivationPackage.licenseGates.some(
+    (gate) => gate.sourceId === "liveuamap-api" && gate.status === "license-required"
+  ) ||
+  ukraineSourceActivationPackage.liveuamapBoundary?.status !== "license-required" ||
+  !ukraineSourceActivationPackage.reviewGates.some((gate) => gate.id === "health-probe" && gate.requiredBeforeActivation) ||
+  !ukraineSourceActivationPackage.templates.some(
+    (template) => template.sourceId === "ukraine-mod-news" && template.json.includes('"OFFICIAL_SITE_SOURCES"') === false
+  ) ||
+  !ukraineSourceActivationPackage.links.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
+  !ukraineSourceActivationPackage.links.setup.includes("#setup-source-activation")
+) {
+  throw new Error("Source activation package payload failed non-secret package or license gate checks");
 }
 
 const sourceHealth = await withTemporarySourceHealthEnv(async () => {
@@ -1065,6 +1114,12 @@ if (
     (blocker) => blocker.id === "liveuamap-license" && blocker.sourceIds?.includes("liveuamap-api")
   ) ||
   !productionReadiness.sections.sourceCuration.sourceHealth?.includes("/api/source-health?region=ukraine-east") ||
+  !productionReadiness.sections.sourceCuration.activationPackage?.includes("/api/source-activation-package?region=ukraine-east") ||
+  !productionReadiness.optionalBlockers?.some(
+    (blocker) =>
+      blocker.id === "social-api-config" &&
+      blocker.sourceActivationPackageHref?.includes("/api/source-activation-package?region=ukraine-east")
+  ) ||
   productionReadiness.sections.ingestion.ready ||
   productionReadiness.sections.ingestion.status !== "/api/ingestion-status" ||
   productionReadiness.sections.ingestion.cron !== "/api/cron/ingest" ||
@@ -1235,12 +1290,20 @@ if (
     profile.verification.includes("/api/platform-config") &&
     profile.verification.includes("/api/layer-status")
   ) ||
-  !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_FEED_SOURCES")) ||
+  !editorialSetup.setupTargets.some(
+    (target) =>
+      target.id === "source-activation" &&
+      !target.ready &&
+      target.env.includes("OFFICIAL_FEED_SOURCES") &&
+      target.verification.includes("/api/source-activation-package?region=ukraine-east")
+  ) ||
   !editorialSetup.setupTargets.some((target) => target.id === "source-activation" && !target.ready && target.env.includes("OFFICIAL_SITE_SOURCES")) ||
+  !editorialSetup.sourceActivation?.packageEndpoint?.includes("/api/source-activation-package?region=ukraine-east") ||
   !editorialSetup.sourceActivation?.backlog?.sourceIds?.includes("liveuamap-api") ||
   !editorialSetup.sourceActivation?.sources?.some((source) => source.id === "compliant-social-apis" && source.nextAction.includes("endpoint metadata")) ||
   editorialSetup.fallbackBridge.targetFile !== "api/editorial-decisions.js" ||
   !editorialSetup.links.productionReadiness.includes("/api/production-readiness?region=ukraine-east") ||
+  !editorialSetup.links.sourceActivationPackage.includes("/api/source-activation-package?region=ukraine-east") ||
   !editorialSetup.links.sourceCuration.includes("/api/source-curation?region=ukraine-east") ||
   !editorialSetup.links.sourceHealth.includes("/api/source-health?region=ukraine-east") ||
   editorialSetup.links.ingestionStatus !== "/api/ingestion-status" ||
@@ -2813,6 +2876,7 @@ if (
   v1Config.links.publicationStatus !== "/api/publication-status" ||
   v1Config.links.editorialSetup !== "/api/editorial-setup" ||
   v1Config.links.reviewDossier !== "/api/review-dossier" ||
+  v1Config.links.sourceActivationPackage !== "/api/source-activation-package" ||
   v1Config.links.notificationStatus !== "/api/notification-status" ||
   v1Config.links.localizationStatus !== "/api/localization-status" ||
   v1Config.links.layerStatus !== "/api/layer-status"

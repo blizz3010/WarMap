@@ -47,6 +47,7 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
         plannedSources: curation.sourceRegistry.planned,
         activationBacklog: curation.sourceRegistry.activationBacklog,
         readiness: curation.readiness,
+        activationPackage: curation.endpoints?.sourceActivationPackage ?? null,
         sourceHealth: curation.endpoints?.sourceHealth ?? null
       },
       ingestion: {
@@ -235,7 +236,8 @@ function enrichBlockerWithSetupLinks(blocker, { region }) {
       ...blocker,
       setupSectionId: "setup-source-activation",
       setupHref: `/setup?${regionQuery}#setup-source-activation`,
-      sourcesHref: `/sources?${regionQuery}&lookback=30d`
+      sourcesHref: `/sources?${regionQuery}&lookback=30d`,
+      sourceActivationPackageHref: `/api/source-activation-package?${regionQuery}`
     };
   }
 
@@ -423,6 +425,7 @@ function actionLinksForBlocker(blocker) {
     setup: blocker.setupHref ?? null,
     commands: blocker.setupCommandHref ?? null,
     sources: blocker.sourcesHref ?? null,
+    sourceActivationPackage: blocker.sourceActivationPackageHref ?? null,
     review: blocker.reviewHref ?? null,
     package: blocker.packageHref ?? null,
     publication: blocker.publicationHref ?? null
