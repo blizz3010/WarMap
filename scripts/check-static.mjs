@@ -416,6 +416,13 @@ if (
   !setupPageSource.includes("function renderSetupTarget(target)") ||
   !setupPageSource.includes("function renderEnvironmentProfile(profile)") ||
   !setupPageSource.includes("function renderEnvironmentVariable(variable)") ||
+  !setupPageSource.includes("function renderReviewerTokenHelper(setup)") ||
+  !setupPageSource.includes("data-generate-review-token") ||
+  !setupPageSource.includes("data-copy-review-token") ||
+  !setupPageSource.includes("data-copy-review-browser-command") ||
+  !setupPageSource.includes("function generateSecretToken()") ||
+  !setupPageSource.includes("crypto.getRandomValues") ||
+  !setupPageSource.includes("warmap.editorialToken") ||
   !setupPageSource.includes("function renderVercelEnvironment(runbook") ||
   !setupPageSource.includes("function renderVercelCommand(command)") ||
   !setupPageSource.includes("data-copy-text") ||
@@ -441,6 +448,7 @@ if (
   !stylesSource.includes(".setup-target-list") ||
   !stylesSource.includes(".setup-profile-list") ||
   !stylesSource.includes(".setup-profile-vars") ||
+  !stylesSource.includes(".setup-secret-kit") ||
   !stylesSource.includes(".setup-command-profile-list") ||
   !stylesSource.includes(".setup-command-list") ||
   !stylesSource.includes(".setup-source-list") ||

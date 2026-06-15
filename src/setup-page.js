@@ -10,6 +10,8 @@ const apiLink = document.querySelector("[data-api-link]");
 
 const state = {
   region: clean(params.get("region") || "ukraine-east"),
+  reviewerToken: "",
+  message: "",
   setup: null
 };
 
@@ -78,6 +80,8 @@ function renderSetup(setup) {
         <a href="${escapeAttr(linkOrFallback(setup.links?.productionReadiness, productionReadinessUrl()))}">Readiness JSON</a>
       </section>
 
+      ${state.message ? `<p class="editorial-message">${escapeHtml(state.message)}</p>` : ""}
+
       <section class="setup-layout">
         <div class="setup-primary">
           <section class="event-page-section">
@@ -85,6 +89,11 @@ function renderSetup(setup) {
             <ul class="setup-target-list">
               ${requiredConfig.map(renderRequiredConfiguration).join("") || "<li><strong>No required configuration reported</strong></li>"}
             </ul>
+          </section>
+
+          <section class="event-page-section" id="setup-review-token-helper">
+            <h2>Reviewer Token Helper</h2>
+            ${renderReviewerTokenHelper(setup)}
           </section>
 
           <section class="event-page-section" id="setup-environment-profiles">
@@ -178,6 +187,36 @@ function renderSetupTarget(target) {
       </div>
       ${target.verification ? `<a href="${escapeAttr(target.verification)}">Verify</a>` : ""}
     </li>
+  `;
+}
+
+function renderReviewerTokenHelper(setup) {
+  const tokenReady = Boolean(setup.current?.reviewTokenReady);
+  const token = state.reviewerToken;
+  const browserCommand = token ? reviewBrowserTokenCommand(token) : "";
+  const tokenLabel = tokenReady ? "configured" : "local generator";
+  return `
+    <div class="setup-secret-kit ${tokenReady ? "is-ready" : "is-warning"}">
+      <header>
+        <strong>EDITORIAL_REVIEW_TOKEN</strong>
+        <span>${escapeHtml(tokenLabel)}</span>
+      </header>
+      <p>Generate a reviewer token locally, add it to Vercel, then set the same value in the trusted review browser.</p>
+      <div class="setup-secret-actions">
+        <button type="button" data-generate-review-token>Generate token</button>
+        <button type="button" data-copy-review-token data-default-label="Copy token" ${token ? "" : "disabled"}>Copy token</button>
+        <button type="button" data-copy-review-browser-command data-default-label="Copy browser command" ${token ? "" : "disabled"}>Copy browser command</button>
+      </div>
+      <label class="setup-secret-output">
+        <span>Generated token</span>
+        <textarea readonly data-review-token-output>${escapeHtml(token || "Generate a token in this browser before copying.")}</textarea>
+      </label>
+      <ul class="setup-requirements">
+        <li>Vercel env name: EDITORIAL_REVIEW_TOKEN</li>
+        <li>Review browser command: ${escapeHtml(browserCommand || "Generate a token to create the browser command.")}</li>
+        <li>This helper never sends the generated token to the API.</li>
+      </ul>
+    </div>
   `;
 }
 
@@ -424,20 +463,66 @@ function bindSetupControls() {
   document.querySelectorAll("[data-copy-text]").forEach((button) => {
     button.addEventListener("click", async () => {
       const command = button.getAttribute("data-copy-text") ?? "";
-      try {
-        if (!navigator.clipboard?.writeText) {
-          throw new Error("Clipboard unavailable");
-        }
-        await navigator.clipboard.writeText(command);
-        button.textContent = "Copied";
-        setTimeout(() => {
-          button.textContent = "Copy";
-        }, 1200);
-      } catch {
-        button.textContent = "Copy";
-      }
+      await copyTextForSetup(command, button, "Copied");
     });
   });
+
+  document.querySelector("[data-generate-review-token]")?.addEventListener("click", () => {
+    state.reviewerToken = generateSecretToken();
+    state.message = "Reviewer token generated locally. Add it to Vercel and copy the browser command for trusted editors.";
+    renderSetup(state.setup);
+  });
+
+  document.querySelector("[data-copy-review-token]")?.addEventListener("click", async (event) => {
+    await copyTextForSetup(state.reviewerToken, event.currentTarget, "Copied");
+    state.message = "Reviewer token copied.";
+  });
+
+  document.querySelector("[data-copy-review-browser-command]")?.addEventListener("click", async (event) => {
+    await copyTextForSetup(reviewBrowserTokenCommand(state.reviewerToken), event.currentTarget, "Copied");
+    state.message = "Review browser command copied.";
+  });
+}
+
+async function copyTextForSetup(text, button, copiedLabel) {
+  try {
+    if (!text || !navigator.clipboard?.writeText) {
+      throw new Error("Clipboard unavailable");
+    }
+    await navigator.clipboard.writeText(text);
+    button.textContent = copiedLabel;
+    setTimeout(() => {
+      button.textContent = button.dataset.defaultLabel || "Copy";
+    }, 1200);
+  } catch {
+    button.textContent = "Copy";
+  }
+}
+
+function generateSecretToken() {
+  const bytes = new Uint8Array(32);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function reviewBrowserTokenCommand(token) {
+  if (!token) {
+    return "";
+  }
+  return `localStorage.setItem("warmap.editorialToken", ${JSON.stringify(token)});`;
 }
 
 function syncTopLinks() {
