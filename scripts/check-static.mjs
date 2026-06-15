@@ -351,6 +351,7 @@ if (
   !appSource.includes("function renderSourceActivationBacklog(sourceCuration)") ||
   !appSource.includes("function renderInlineLaunchActions(actions") ||
   !appSource.includes("primaryLaunchActionLink(action)") ||
+  !appSource.includes('["Package", links.package],\n    ["Review", links.review]') ||
   !appSource.includes("readiness.launchPlan?.actions") ||
   !stylesSource.includes(".inline-launch-actions") ||
   !appSource.includes("sourceCuration.activationBacklog?.summary") ||
@@ -389,6 +390,8 @@ if (
   !setupPageSource.includes("setup-action-list") ||
   !setupPageSource.includes("function renderFallbackBridge(bridge)") ||
   !setupPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !setupPageSource.includes('["Package", links.package]') ||
+  !setupPageSource.includes('["Package", blocker.packageHref]') ||
   !setupPageSource.includes("function setupProfileAnchor(profileId)") ||
   !setupPageSource.includes("function setupCommandProfileAnchor(profileId)") ||
   !setupPageSource.includes("setup-source-activation") ||
@@ -446,6 +449,8 @@ if (
   !readinessPageSource.includes("function renderCheckRow(check)") ||
   !readinessPageSource.includes("function renderLaunchActions(actions") ||
   !readinessPageSource.includes("function renderBlockerLinks(blocker)") ||
+  !readinessPageSource.includes('["Package", links.package]') ||
+  !readinessPageSource.includes('["Package", blocker.packageHref]') ||
   !readinessPageSource.includes("readiness-action-list") ||
   !readinessPageSource.includes("setupCommandHref") ||
   !readinessPageSource.includes("data-readiness-region") ||
@@ -960,6 +965,9 @@ if (
   productionReadiness.launchPlan?.nextRequiredAction?.blockerId !== "editorial-store" ||
   productionReadiness.launchPlan?.nextRequiredAction?.links?.commands?.includes("#setup-command-profile-github-contents-editorial") !== true ||
   productionReadiness.launchPlan?.nextOptionalAction?.blockerId !== "no-published-events" ||
+  productionReadiness.launchPlan?.nextOptionalAction?.links?.package !==
+    "/api/publication-package?region=ukraine-east&lookback=30d&limit=5" ||
+  productionReadiness.launchPlan?.nextOptionalAction?.links?.review !== "/review?region=ukraine-east" ||
   !productionReadiness.launchPlan?.actions?.some(
     (action) =>
       action.blockerId === "liveuamap-license" &&
@@ -968,6 +976,11 @@ if (
   ) ||
   !productionReadiness.requiredBlockers?.some((blocker) => blocker.id === "editorial-store") ||
   !productionReadiness.optionalBlockers?.some((blocker) => blocker.id === "ai-provider") ||
+  !productionReadiness.optionalBlockers?.some(
+    (blocker) =>
+      blocker.id === "no-published-events" &&
+      blocker.packageHref === "/api/publication-package?region=ukraine-east&lookback=30d&limit=5"
+  ) ||
   !productionReadiness.blockers.some((blocker) => blocker.id === "editorial-store" && blocker.required) ||
   !productionReadiness.blockers.some(
     (blocker) =>
