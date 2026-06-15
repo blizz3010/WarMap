@@ -16,6 +16,7 @@ const state = {
   duplicateKeyFilter: clean(params.get("duplicateKey") || "all").toLowerCase(),
   message: "",
   exportBundle: null,
+  selectedCandidateIds: new Set(),
   status: null,
   sourceHealth: null,
   sourceHealthMessage: "",
@@ -75,6 +76,8 @@ function renderReviewQueue() {
   const candidates = state.queue?.candidates ?? [];
   const summary = state.queue?.summary ?? {};
   const meta = state.queue?.meta ?? {};
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  state.selectedCandidateIds = new Set([...state.selectedCandidateIds].filter((id) => candidateIds.has(id)));
   document.title = `${regionName(state.region)} Review Queue | WarMap Live`;
   stateNode.className = "event-page-record review-page-record";
   stateNode.innerHTML = `
@@ -246,12 +249,18 @@ function renderPublicationTargets(publicationCandidates = {}) {
   if (!topCandidates.length) {
     return '<p class="status-summary">No first-publish candidates are available in this queue view.</p>';
   }
+  const selectedCount = selectedCandidates().length;
 
   return `
     <div class="publication-targets">
       <div>
         <strong>First publish targets</strong>
         <span>${Number(publicationCandidates.approvalReady ?? 0)} / ${Number(publicationCandidates.count ?? 0)} approval-ready</span>
+      </div>
+      <div class="publication-target-actions">
+        <button type="button" data-select-approval-ready>Select ready</button>
+        <button type="button" data-export-selected-approvals ${selectedCount ? "" : "disabled"}>Export selected approvals</button>
+        <span>${selectedCount} selected</span>
       </div>
       <ul class="publication-target-list">
         ${topCandidates.map(renderPublicationTarget).join("")}
@@ -413,7 +422,13 @@ function renderCandidate(item) {
           <h2>${escapeHtml(item.title)}</h2>
           <p>${escapeHtml(item.summary)}</p>
         </div>
-        <strong>${escapeHtml(review.priority)}</strong>
+        <div class="review-candidate-state">
+          <strong>${escapeHtml(review.priority)}</strong>
+          <label class="review-select-candidate">
+            <input type="checkbox" data-review-select-event-id="${escapeAttr(item.id)}" ${state.selectedCandidateIds.has(item.id) ? "checked" : ""} />
+            <span>Select</span>
+          </label>
+        </div>
       </header>
 
       <dl class="archive-event-meta">
@@ -553,6 +568,31 @@ function bindReviewControls() {
 
   stateNode.querySelector("[data-refresh-review]")?.addEventListener("click", () => loadReviewQueue());
 
+  stateNode.querySelectorAll("[data-review-select-event-id]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const eventId = input.dataset.reviewSelectEventId;
+      if (!eventId) {
+        return;
+      }
+      if (input.checked) {
+        state.selectedCandidateIds.add(eventId);
+      } else {
+        state.selectedCandidateIds.delete(eventId);
+      }
+      renderReviewQueue();
+    });
+  });
+
+  stateNode.querySelector("[data-select-approval-ready]")?.addEventListener("click", () => {
+    state.selectedCandidateIds = new Set(
+      approvalReadyCandidates().map((candidate) => candidate.id)
+    );
+    state.message = `${state.selectedCandidateIds.size} approval-ready candidate${state.selectedCandidateIds.size === 1 ? "" : "s"} selected.`;
+    renderReviewQueue();
+  });
+
+  stateNode.querySelector("[data-export-selected-approvals]")?.addEventListener("click", () => exportSelectedApprovals());
+
   stateNode.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => submitReviewAction(button));
   });
@@ -567,6 +607,65 @@ function bindReviewControls() {
     }
     renderReviewQueue();
   });
+}
+
+function selectedCandidates() {
+  const candidates = state.queue?.candidates ?? [];
+  return candidates.filter((candidate) => state.selectedCandidateIds.has(candidate.id));
+}
+
+function approvalReadyCandidates() {
+  const candidates = state.queue?.candidates ?? [];
+  const targetIds = new Set((state.queue?.summary?.publicationCandidates?.topCandidates ?? [])
+    .filter((target) => target.approvalReady)
+    .map((target) => target.id));
+  return candidates.filter((candidate) => targetIds.has(candidate.id) && candidateApprovalExportReady(candidate));
+}
+
+function candidateApprovalExportReady(candidate) {
+  return reviewGateChecks(candidate)
+    .filter((check) => check.required)
+    .every((check) => check.done);
+}
+
+async function exportSelectedApprovals() {
+  const candidates = selectedCandidates();
+  const exportableCandidates = candidates.filter(candidateApprovalExportReady);
+  if (!exportableCandidates.length) {
+    state.message = candidates.length
+      ? "Selected candidates still need source links or map points before approval export."
+      : "Select at least one approval-ready candidate first.";
+    renderReviewQueue();
+    return;
+  }
+
+  const decisionPayloads = exportableCandidates.map((item) => ({
+    action: "approve",
+    eventId: item.id,
+    duplicateKey: reviewInfo(item).duplicateKey,
+    sourceUrl: item.sources?.[0]?.url ?? "",
+    reviewer: state.reviewer || "editorial desk",
+    eventSnapshot: eventSnapshotForDecision(item),
+    notes: `Batch static approval export from WarMap review page for ${item.place}`
+  }));
+
+  state.message = `Preparing static approval export for ${exportableCandidates.length} candidate${exportableCandidates.length === 1 ? "" : "s"}.`;
+  renderReviewQueue();
+
+  try {
+    const exportBundle = await createDecisionExport({ decisions: decisionPayloads });
+    state.exportBundle = {
+      action: "approve",
+      place: `${exportableCandidates.length} selected candidate${exportableCandidates.length === 1 ? "" : "s"}`,
+      error: "Durable editorial writes are not configured. This batch export can be reviewed, committed, and deployed.",
+      ...exportBundle
+    };
+    state.message = `Commit-ready static approval export prepared for ${exportableCandidates.length} candidate${exportableCandidates.length === 1 ? "" : "s"}.`;
+    renderReviewQueue();
+  } catch (error) {
+    state.message = error instanceof Error ? error.message : "Batch approval export failed";
+    renderReviewQueue();
+  }
 }
 
 async function submitReviewAction(button) {
@@ -632,12 +731,13 @@ async function submitReviewAction(button) {
 
 function renderExportBundle() {
   const bundle = state.exportBundle;
+  const decisionCount = Number(bundle.decisionCount ?? (bundle.decisions?.length || 1));
   return `
     <section class="review-export-panel" aria-label="Static editorial decision export">
       <header>
         <div>
           <strong>Static decision export</strong>
-          <span>${escapeHtml(titleCase(bundle.action))} for ${escapeHtml(bundle.place)}</span>
+          <span>${escapeHtml(titleCase(bundle.action))} for ${escapeHtml(bundle.place)} - ${decisionCount} decision${decisionCount === 1 ? "" : "s"}</span>
         </div>
         <button type="button" data-copy-export>Copy module</button>
       </header>

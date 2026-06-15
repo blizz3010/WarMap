@@ -115,8 +115,16 @@ function rawDecisionsFromParsedInput(parsed) {
     throw new Error("Review export input must be an object or array");
   }
 
+  if (parsed.kind === "EditorialDecisionExport" && Array.isArray(parsed.decisions)) {
+    return parsed.decisions;
+  }
+
   if (parsed.kind === "EditorialDecisionExport" && parsed.decision) {
     return [parsed.decision];
+  }
+
+  if (Array.isArray(parsed.decisions)) {
+    return parsed.decisions;
   }
 
   if (parsed.decision && typeof parsed.decision === "object") {
