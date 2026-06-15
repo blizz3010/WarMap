@@ -123,6 +123,14 @@ function rawDecisionsFromParsedInput(parsed) {
     return [parsed.decision];
   }
 
+  if (parsed.kind === "PublicationPackage" && parsed.editorial?.decisionExport) {
+    return rawDecisionsFromParsedInput(parsed.editorial.decisionExport);
+  }
+
+  if (parsed.editorial?.decisionExport) {
+    return rawDecisionsFromParsedInput(parsed.editorial.decisionExport);
+  }
+
   if (Array.isArray(parsed.decisions)) {
     return parsed.decisions;
   }
@@ -241,7 +249,8 @@ function usage() {
     "Usage: node scripts/apply-review-export.mjs <export.json|module.js|-> [--target api/editorial-decisions.js] [--dry-run]",
     "",
     "Input can be the JSON returned by /api/review-export, a raw decision object or array,",
-    "or the copied STATIC_EDITORIAL_DECISIONS module text from the review page."
+    "the full JSON returned by /api/publication-package, or the copied",
+    "STATIC_EDITORIAL_DECISIONS module text from the review or publish page."
   ].join("\n");
 }
 

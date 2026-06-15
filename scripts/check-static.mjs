@@ -2555,6 +2555,26 @@ if (
   throw new Error("Publication package failed dry-run batch approval and public-surface checks");
 }
 
+const firstPublishApplyTempDir = mkdtempSync(join(tmpdir(), "warmap-first-publish-apply-"));
+try {
+  const firstPublishApplyTargetFile = join(firstPublishApplyTempDir, "editorial-decisions.js");
+  writeFileSync(firstPublishApplyTargetFile, "export const STATIC_EDITORIAL_DECISIONS = [];\n", "utf8");
+  const firstPublishApply = applyReviewExportText(JSON.stringify(firstPublishPackage), {
+    targetFile: firstPublishApplyTargetFile,
+    dryRun: true
+  });
+  if (
+    firstPublishApply.incoming !== 1 ||
+    firstPublishApply.added !== 1 ||
+    firstPublishApply.total !== 1 ||
+    !firstPublishApply.moduleSource.includes(sampleUkraineEvents[0].sources[0].url)
+  ) {
+    throw new Error("Review export apply script failed full publication package input");
+  }
+} finally {
+  rmSync(firstPublishApplyTempDir, { recursive: true, force: true });
+}
+
 const emptyFirstPublishPackage = buildPublicationPackagePayload({
   candidates: [sourceBlockedCandidate],
   region: "ukraine-east",
