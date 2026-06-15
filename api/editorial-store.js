@@ -1064,6 +1064,8 @@ function sanitizeSourceSnapshot(source) {
     collector: clean(source.collector),
     type: clean(source.type) || "unknown",
     trustTier: clean(source.trustTier),
+    country: clean(source.country ?? source.sourceCountry ?? source.sourcecountry),
+    language: clean(source.language ?? source.sourceLanguage),
     url,
     collectorUrl: safeUrl(source.collectorUrl),
     originalTitle: clean(source.originalTitle),

@@ -321,6 +321,8 @@ function storedEventsQuery() {
         'type', coalesce(s.source_type, 'unknown'),
         'collector', coalesce(s.collector, d.raw->>'collector', 'event-store'),
         'trustTier', coalesce(s.trust_tier, 'stored source'),
+        'country', coalesce(s.metadata->>'country', ''),
+        'language', coalesce(s.metadata->>'language', d.language, ''),
         'url', d.url,
         'collectorUrl', coalesce(s.url, ''),
         'originalTitle', d.title,
@@ -416,6 +418,8 @@ function serializeSourceForStore(source) {
     regions: [],
     metadata: jsonObject({
       collectorUrl: source.collectorUrl,
+      country: clean(source.country ?? source.sourceCountry ?? source.sourcecountry),
+      language: clean(source.language ?? source.sourceLanguage),
       originalTitle: source.originalTitle,
       publishedAt: source.publishedAt,
       capturedAt: source.capturedAt
@@ -733,6 +737,8 @@ function normalizeStoredSources(value) {
         type: clean(source.type) || "unknown",
         collector: clean(source.collector) || "event-store",
         trustTier: clean(source.trustTier) || "stored source",
+        country: clean(source.country),
+        language: clean(source.language),
         url,
         collectorUrl: safeUrl(source.collectorUrl),
         originalTitle: clean(source.originalTitle),

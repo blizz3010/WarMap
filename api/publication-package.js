@@ -301,6 +301,8 @@ function visibleSources(candidate) {
       name: source.name,
       type: source.type,
       trustTier: source.trustTier,
+      country: source.country ?? "",
+      language: source.language ?? "",
       collector: source.collector ?? "",
       url: source.url,
       originalTitle: source.originalTitle ?? "",

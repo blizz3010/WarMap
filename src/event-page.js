@@ -141,7 +141,9 @@ function sourceProvenanceLabel(source) {
   return [
     sourceTypes[source.type] ?? source.type ?? "unknown",
     source.trustTier ?? "source",
-    collectorLabel(source.collector)
+    collectorLabel(source.collector),
+    source.country,
+    source.language
   ]
     .filter(Boolean)
     .join(" - ");

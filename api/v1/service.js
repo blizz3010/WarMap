@@ -381,6 +381,8 @@ function visibleSources(event) {
     collector: source.collector ?? "",
     type: source.type,
     trustTier: source.trustTier,
+    country: source.country ?? "",
+    language: source.language ?? "",
     url: source.url,
     collectorUrl: source.collectorUrl ?? "",
     originalTitle: source.originalTitle ?? "",

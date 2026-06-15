@@ -113,7 +113,8 @@ async function fetchGdeltArticles(region, maxRecords, lookback) {
         collector: "gdelt-doc",
         collectorUrl: gdeltUrl,
         sourceType: article.sourceType || "media",
-        trustTier: article.trustTier || "open web index"
+        trustTier: article.trustTier || "open web index",
+        sourceCountry: article.sourceCountry ?? article.sourcecountry ?? ""
       }))
     : [];
 }
@@ -266,6 +267,7 @@ function rssItemToArticle(itemXml, feed) {
     collectorUrl: feed.url,
     sourceType: feed.sourceType,
     trustTier: feed.trustTier,
+    sourceCountry: feed.country,
     sourcecountry: feed.country,
     language: "English",
     pubDate: decodeXml(readTag(itemXml, "pubDate")),
@@ -287,6 +289,7 @@ function atomEntryToArticle(entryXml, feed) {
     collectorUrl: feed.url,
     sourceType: feed.sourceType,
     trustTier: feed.trustTier,
+    sourceCountry: feed.country,
     sourcecountry: feed.country,
     language: feed.language ?? "English",
     pubDate: decodeXml(readTag(entryXml, "published") || readTag(entryXml, "updated")),
@@ -311,6 +314,7 @@ function capAlertToArticle(alertXml, feed) {
     collectorUrl: feed.url,
     sourceType: feed.sourceType,
     trustTier: feed.trustTier,
+    sourceCountry: feed.country,
     sourcecountry: feed.country,
     language: feed.language ?? "Unknown",
     pubDate: decodeXml(readTag(alertXml, "sent") || readTag(alertXml, "effective") || readTag(alertXml, "onset")),
@@ -365,6 +369,7 @@ function officialSiteAnchorToArticle(item, source) {
     collectorUrl: source.url,
     sourceType: source.sourceType,
     trustTier: source.trustTier,
+    sourceCountry: source.country,
     sourcecountry: source.country,
     language: source.language ?? "Unknown",
     pubDate: "",
@@ -422,6 +427,7 @@ function socialItemToArticle(item, source) {
     collectorUrl: source.url,
     sourceType: source.sourceType || "osint",
     trustTier: source.trustTier || "requires analyst review",
+    sourceCountry: source.country,
     sourcecountry: source.country,
     language: item.language ?? source.language ?? "Unknown",
     pubDate: cleanText(item.publishedAt ?? item.createdAt ?? item.date ?? item.pubDate),
