@@ -72,6 +72,13 @@ export function buildPublicationPackagePayload({
       applyCommand: "node scripts/apply-review-export.mjs .data/review-export.json",
       decisionExport
     },
+    handoff: buildFirstPublishHandoff({
+      selectedCandidates,
+      decisionExport,
+      publication,
+      region: normalizedRegion,
+      lookback: normalizedLookback
+    }),
     publication: {
       ready: publication.ready && Boolean(decisionExport),
       summary: publication.summary,
@@ -115,6 +122,78 @@ export function buildPublicationPackagePayload({
       productionReadiness: `/api/production-readiness?${new URLSearchParams({ region: normalizedRegion }).toString()}`,
       v1Events: `/v1/events?${new URLSearchParams({ region: normalizedRegion, lookback: normalizedLookback, publication: "published" }).toString()}`
     }
+  };
+}
+
+function buildFirstPublishHandoff({ selectedCandidates, decisionExport, publication, region, lookback }) {
+  const selectedCandidateIds = selectedCandidates.map((candidate) => candidate.id);
+  const sourceLinkCount = selectedCandidates.reduce((count, candidate) => count + visibleSources(candidate).length, 0);
+  const hasDecisionExport = Boolean(decisionExport);
+  const hasPublicationRecords = Boolean(publication.records?.length);
+  const allRecordsComplete = hasPublicationRecords && publication.records.every((record) => record.checks?.allTargets);
+  const allRecordsSourceLinked = hasPublicationRecords && publication.records.every((record) => record.checks?.sourceLinks);
+  const allRecordsMapped = hasPublicationRecords && publication.records.every((record) => record.checks?.coordinates);
+  const query = new URLSearchParams({ region, lookback }).toString();
+
+  return {
+    schemaVersion: "first-publish-handoff.v1",
+    status: hasDecisionExport && allRecordsComplete ? "ready-for-human-review" : "needs-candidate-correction",
+    humanApprovalRequired: true,
+    selectedCandidateIds,
+    sourceLinkCount,
+    targetFile: "api/editorial-decisions.js",
+    applyCommand: "node scripts/apply-review-export.mjs .data/review-export.json",
+    verificationAfterApply: [
+      `/api/publication-status?${query}`,
+      `/api/events?${query}&publication=published`,
+      `/v1/events?${query}&publication=published`,
+      `/archive?${query}`,
+      `/readiness?${query}`
+    ],
+    checklist: [
+      {
+        id: "source-evidence-reviewed",
+        label: "Review original source evidence",
+        required: true,
+        done: sourceLinkCount >= selectedCandidates.length && selectedCandidates.length > 0,
+        detail: "Each selected candidate must keep at least one visible original source URL."
+      },
+      {
+        id: "location-reviewed",
+        label: "Review map location and precision",
+        required: true,
+        done: allRecordsMapped,
+        detail: "Approximate coordinates must be suitable for public map, feed, detail, archive, and API surfaces."
+      },
+      {
+        id: "duplicate-reviewed",
+        label: "Review duplicate keys",
+        required: true,
+        done: selectedCandidates.every((candidate) => candidate.review?.duplicateKey || candidate.extraction?.duplicateKey),
+        detail: "Merge or split bundled facts before approval when duplicate keys conflict."
+      },
+      {
+        id: "public-surfaces-reviewed",
+        label: "Review dry-run public records",
+        required: true,
+        done: allRecordsComplete && allRecordsSourceLinked,
+        detail: "Every dry-run record must cover map, feed, detail, archive, and v1 API targets with source links."
+      },
+      {
+        id: "human-decision-required",
+        label: "Human editor approval required",
+        required: true,
+        done: false,
+        detail: "This package does not persist or publish. A trusted editor must apply the export or use a configured durable store."
+      },
+      {
+        id: "post-apply-verification",
+        label: "Verify production after apply and deploy",
+        required: true,
+        done: false,
+        detail: "After committing decisions, verify publication status, published events, archive, API, and readiness links."
+      }
+    ]
   };
 }
 

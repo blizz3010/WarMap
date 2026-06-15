@@ -120,6 +120,11 @@ function renderPublicationPackage() {
           </section>
 
           <section class="event-page-section">
+            <h2>Human Handoff</h2>
+            ${renderHandoffChecklist(pkg)}
+          </section>
+
+          <section class="event-page-section">
             <h2>Approval Checks</h2>
             ${renderApprovalChecks(pkg)}
           </section>
@@ -327,6 +332,46 @@ function renderApprovalChecks(pkg) {
   `;
 }
 
+function renderHandoffChecklist(pkg) {
+  const handoff = pkg.handoff ?? {};
+  const checklist = handoff.checklist ?? [];
+  if (!checklist.length) {
+    return '<p class="status-summary is-warning">First-publish handoff checklist was not reported.</p>';
+  }
+
+  return `
+    <p class="status-summary ${handoff.status === "ready-for-human-review" ? "is-ready" : "is-warning"}">
+      ${escapeHtml(titleCase(handoff.status || "needs review"))}
+    </p>
+    <ul class="publish-check-list">
+      ${checklist
+        .map((item) => `
+          <li class="${item.done ? "is-ready" : item.required ? "is-warning" : ""}">
+            <strong>${escapeHtml(item.label || item.id)}</strong>
+            <span>${item.done ? "ready" : item.required ? "required" : "optional"}</span>
+            <small>${escapeHtml(item.detail || "")}</small>
+          </li>
+        `)
+        .join("")}
+    </ul>
+    <small>Apply command: ${escapeHtml(handoff.applyCommand || pkg.editorial?.applyCommand || "node scripts/apply-review-export.mjs .data/review-export.json")}</small>
+    ${renderVerificationLinks(handoff.verificationAfterApply)}
+  `;
+}
+
+function renderVerificationLinks(links = []) {
+  const validLinks = links.filter(Boolean);
+  if (!validLinks.length) {
+    return "";
+  }
+
+  return `
+    <nav class="setup-profile-links publish-record-links" aria-label="Post-apply verification links">
+      ${validLinks.map((href) => `<a href="${escapeAttr(href)}">${escapeHtml(verificationLinkLabel(href))}</a>`).join("")}
+    </nav>
+  `;
+}
+
 function renderSurfaceList(record) {
   const entries = Object.entries(record.surfaces ?? {});
   if (!entries.length) {
@@ -493,6 +538,15 @@ function collectorLabel(collector) {
     "open-web": "Open web collector"
   };
   return labels[collector] ?? (collector ? `${titleCase(collector)} collector` : "");
+}
+
+function verificationLinkLabel(href) {
+  if (href.includes("/api/publication-status")) return "Publication";
+  if (href.includes("/api/events")) return "Events";
+  if (href.includes("/v1/events")) return "V1 API";
+  if (href.includes("/archive")) return "Archive";
+  if (href.includes("/readiness")) return "Readiness";
+  return "Verify";
 }
 
 function urlHost(value) {
