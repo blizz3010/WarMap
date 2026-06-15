@@ -120,7 +120,7 @@ function readinessChecks() {
     {
       id: "layer-status",
       label: "Layer status",
-      url: "/api/layer-status",
+      url: layerStatusUrl(),
       expectedKind: "LayerStatus",
       required: false
     }
@@ -273,7 +273,7 @@ function renderReadinessPage() {
               <div><dt>Notifications</dt><dd>${notifications.delivery?.ready ? "Ready" : notifications.delivery?.status ?? "Planned"}</dd></div>
               <div><dt>Languages</dt><dd>${localization.shellReady ? "Shell ready" : "Attention"}</dd></div>
               <div><dt>Translation</dt><dd>${escapeHtml(localization.eventTranslation?.status ?? "planned")}</dd></div>
-              <div><dt>Layers</dt><dd>${layers.entitlementsReady ? "Ready" : `${Number(layers.summary?.lockedLayers ?? 0)} locked`}</dd></div>
+              <div><dt>Layers</dt><dd>${escapeHtml(layers.entitlementContract?.status ?? (layers.entitlementsReady ? "ready" : `${Number(layers.summary?.lockedLayers ?? 0)} locked`))}</dd></div>
             </dl>
           </section>
 
@@ -285,6 +285,11 @@ function renderReadinessPage() {
           <section class="event-page-section">
             <h2>Localization Plan</h2>
             ${renderLocalizationPlan(localization)}
+          </section>
+
+          <section class="event-page-section">
+            <h2>Layer Access Plan</h2>
+            ${renderLayerPlan(layers)}
           </section>
 
           <section class="event-page-section">
@@ -307,7 +312,7 @@ function renderReadinessPage() {
               <a href="${escapeAttr(publicationStatusUrl())}">Publication</a>
               <a href="${escapeAttr(notificationStatusUrl())}">Notifications</a>
               <a href="${escapeAttr(localizationStatusUrl())}">Localization</a>
-              <a href="/api/layer-status">Layers</a>
+              <a href="${escapeAttr(layerStatusUrl())}">Layers</a>
             </nav>
           </section>
         </aside>
@@ -483,6 +488,54 @@ function renderLocalizationChecklistItem(item) {
   `;
 }
 
+function renderLayerPlan(layers) {
+  const contract = layers.entitlementContract ?? {};
+  const checklist = contract.checklist ?? [];
+  const datasetRequirements = contract.datasetRequirements ?? [];
+  return `
+    <p class="status-summary ${layers.entitlementsReady ? "is-ready" : "is-warning"}">
+      ${layers.entitlementsReady ? "Paid layer entitlement gates are ready." : `${Number(contract.lockedLayerIds?.length ?? layers.summary?.lockedLayers ?? 0)} paid layer${Number(contract.lockedLayerIds?.length ?? layers.summary?.lockedLayers ?? 0) === 1 ? "" : "s"} locked by default.`}
+    </p>
+    <dl class="event-page-facts readiness-console-facts">
+      <div><dt>Schema</dt><dd>${escapeHtml(contract.schemaVersion ?? "planned")}</dd></div>
+      <div><dt>Paid</dt><dd>${Number(contract.paidLayerIds?.length ?? 0)}</dd></div>
+      <div><dt>Locked</dt><dd>${Number(contract.lockedLayerIds?.length ?? 0)}</dd></div>
+      <div><dt>Deny default</dt><dd>${contract.denyByDefault ? "Yes" : "Unknown"}</dd></div>
+    </dl>
+    <ul class="readiness-source-list">
+      ${checklist.map(renderLayerChecklistItem).join("") || "<li class=\"is-warning\"><strong>Layer checklist</strong><span>planned</span></li>"}
+    </ul>
+    <ul class="readiness-source-list">
+      ${datasetRequirements.slice(0, 4).map(renderLayerDatasetRequirement).join("") || "<li class=\"is-ready\"><strong>Included layers</strong><span>public</span></li>"}
+    </ul>
+    <nav class="setup-profile-links readiness-blocker-links" aria-label="Layer entitlement links">
+      <a href="${escapeAttr(layerStatusUrl())}">Layer JSON</a>
+      <a href="${escapeAttr(setupPageUrl())}#setup-profile-paid-layer-entitlements">Setup</a>
+      <a href="/v1/config">V1 Config</a>
+    </nav>
+  `;
+}
+
+function renderLayerChecklistItem(item) {
+  return `
+    <li class="${item.done ? "is-ready" : item.required ? "is-warning" : "is-ready"}">
+      <strong>${escapeHtml(item.label ?? item.id)}</strong>
+      <span>${item.done ? "ready" : "planned"}</span>
+      <p>${escapeHtml(item.detail ?? "")}</p>
+    </li>
+  `;
+}
+
+function renderLayerDatasetRequirement(item) {
+  return `
+    <li class="is-warning">
+      <strong>${escapeHtml(item.label ?? item.id)}</strong>
+      <span>${escapeHtml(item.dataReadiness ?? "license-required")}</span>
+      <p>${escapeHtml(item.description ?? "Dataset needs review before activation.")}</p>
+    </li>
+  `;
+}
+
 function checkPayload(id) {
   return state.checks.find((check) => check.id === id)?.payload;
 }
@@ -544,7 +597,7 @@ function summaryLine(payload, check) {
     return `${Number(payload.summary?.shellCopyLanguages ?? 0)} shell languages, ${Number(payload.summary?.rtlLanguages?.length ?? 0)} RTL, event translation ${payload.eventTranslation?.status ?? payload.capabilities?.eventContentStatus ?? "planned"}.`;
   }
   if (payload?.kind === "LayerStatus") {
-    return `${Number(payload.summary?.includedLayers ?? 0)} included, ${Number(payload.summary?.plannedPaidLayers ?? 0)} planned paid layers locked.`;
+    return `${Number(payload.summary?.includedLayers ?? 0)} included, ${Number(payload.summary?.plannedPaidLayers ?? 0)} planned paid layers locked, entitlement ${payload.entitlementContract?.status ?? "planned"}.`;
   }
   return `${check.label} returned ${payload?.kind ?? "JSON"}.`;
 }
@@ -608,6 +661,10 @@ function notificationStatusUrl() {
 
 function localizationStatusUrl() {
   return `/api/localization-status?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
+}
+
+function layerStatusUrl() {
+  return `/api/layer-status?${new URLSearchParams({ region: state.region, lookback: state.lookback }).toString()}`;
 }
 
 function setupPageUrl() {
