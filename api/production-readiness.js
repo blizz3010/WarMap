@@ -41,7 +41,10 @@ export async function buildProductionReadinessPayload({ region = DEFAULT_REGION_
     launchPlan,
     sections: {
       editorial,
-      extraction,
+      extraction: {
+        ...extraction,
+        status: "/api/extraction-status"
+      },
       sourceCuration: {
         activeSources: curation.sourceRegistry.active,
         plannedSources: curation.sourceRegistry.planned,

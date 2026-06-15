@@ -48,6 +48,13 @@ function readinessChecks() {
       required: true
     },
     {
+      id: "extraction-status",
+      label: "Extraction status",
+      url: "/api/extraction-status",
+      expectedKind: "ExtractionStatus",
+      required: false
+    },
+    {
       id: "source-curation",
       label: "Source curation",
       url: sourceCurationUrl(),
@@ -464,6 +471,9 @@ function summaryLine(payload, check) {
   }
   if (payload?.kind === "EditorialStoreHealth") {
     return `${storeModeLabel(payload.mode)} store, ${Number(payload.checks?.filter((item) => !item.ok).length ?? 0)} failed checks.`;
+  }
+  if (payload?.kind === "ExtractionStatus") {
+    return `${payload.runtime?.mode ?? "extraction"} mode, provider ${payload.runtime?.provider ?? "unknown"}, review ${payload.capabilities?.reviewOnlyUntilApproved ? "required" : "unknown"}.`;
   }
   if (payload?.kind === "SourceCuration") {
     return `${Number(payload.sourceRegistry?.active ?? 0)} active, ${Number(payload.sourceRegistry?.planned ?? 0)} planned sources.`;

@@ -101,6 +101,7 @@ The embed header includes a theater selector, live/published count, source mode 
 - `/api/intake-store-health` runs a read-only GitHub Contents or local-file health check for optional cron candidate snapshots, including repo, branch, path, snapshot-file readability, and secret redaction.
 - `/api/storage-readiness` exposes the PostgreSQL/PostGIS event-store schema contract, required env names, table plan, migration SQL, and non-secret readiness checks for durable event storage.
 - `/api/event-store-health` performs the live read-only PostgreSQL/PostGIS connection, extension, and expected-table checks when database env is configured.
+- `/api/extraction-status` reports the AI extraction runtime, deterministic fallback, external HTTP provider readiness, review-only contract, provider output fields, and non-secret env blockers.
 - `/api/source-curation?region=ukraine-east` returns the active/planned source registry, Liveuamap-compatible curation rules, licensed-API boundary, source-attribution families, granular legend/event-type taxonomy, per-source activation requirements, grouped activation backlog, Vercel-ready activation templates, and collector readiness flags.
 - `/api/source-health?region=ukraine-east&lookback=30d` probes active GDELT/RSS/official feeds, configured official-site adapters, and configured compliant social APIs, reports reachable/failed/missing-configured sources with non-secret diagnostic codes, distinguishes strict `ready` from degraded-but-`operational` retryable failures, and redacts tokens.
 - `/api/ingestion-status` reports the scheduled source-ingestion heartbeat plan, Vercel cron path, covered regions, and whether `CRON_SECRET` is configured.
@@ -309,7 +310,7 @@ Example official site source configuration:
 - duplicate key and duplicate bucket
 - field-level confidence and keyword signals
 
-The API exposes the extraction runtime in response metadata. To attach a real provider without adding npm dependencies, configure an HTTP JSON extractor:
+The API exposes the extraction runtime in response metadata and through `/api/extraction-status`. To attach a real provider without adding npm dependencies, configure an HTTP JSON extractor:
 
 ```bash
 AI_EXTRACTION_PROVIDER=llm-http

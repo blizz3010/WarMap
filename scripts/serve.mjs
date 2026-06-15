@@ -10,6 +10,7 @@ import cronIngestHandler from "../api/cron/ingest.js";
 import editorialStoreHealthHandler from "../api/editorial-store-health.js";
 import editorialSetupHandler from "../api/editorial-setup.js";
 import editorialStatusHandler from "../api/editorial-status.js";
+import extractionStatusHandler from "../api/extraction-status.js";
 import ingestionStatusHandler from "../api/ingestion-status.js";
 import intakeStoreHealthHandler from "../api/intake-store-health.js";
 import layerStatusHandler from "../api/layer-status.js";
@@ -56,6 +57,7 @@ const apiHandlers = new Map([
   ["/api/editorial-store-health", editorialStoreHealthHandler],
   ["/api/editorial-setup", editorialSetupHandler],
   ["/api/editorial-status", editorialStatusHandler],
+  ["/api/extraction-status", extractionStatusHandler],
   ["/api/ingestion-status", ingestionStatusHandler],
   ["/api/intake-store-health", intakeStoreHealthHandler],
   ["/api/layer-status", layerStatusHandler],

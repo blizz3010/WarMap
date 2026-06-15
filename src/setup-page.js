@@ -438,6 +438,7 @@ function renderSetupLinks(links = {}) {
     ["Readiness Console", readinessPageUrl()],
     ["Editorial", links.editorialStatus],
     ["Store", links.editorialStoreHealth],
+    ["Extraction", links.extractionStatus],
     ["Ingestion", links.ingestionStatus],
     ["Storage", links.storageReadiness],
     ["Event Store", links.eventStoreHealth],
