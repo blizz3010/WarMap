@@ -1820,6 +1820,7 @@ function primaryLaunchActionLink(action) {
   return [
     ["Setup", links.setup],
     ["Commands", links.commands],
+    ["Package", links.package],
     ["Review", links.review],
     ["Publication", links.publication],
     ["Sources", links.sources]

@@ -215,7 +215,8 @@ function platformBlockers(platform) {
 }
 
 function enrichBlockerWithSetupLinks(blocker, { region }) {
-  const regionQuery = new URLSearchParams({ region: String(region || DEFAULT_REGION_ID) }).toString();
+  const normalizedRegion = String(region || DEFAULT_REGION_ID);
+  const regionQuery = new URLSearchParams({ region: normalizedRegion }).toString();
   const profileId = setupProfileIdForBlocker(blocker);
   if (profileId) {
     return {
@@ -236,9 +237,14 @@ function enrichBlockerWithSetupLinks(blocker, { region }) {
   }
 
   if (["no-published-events", "published-source-links", "published-map-coordinates", "published-surface-targets"].includes(blocker.id)) {
+    const packageHref =
+      blocker.id === "no-published-events"
+        ? `/api/publication-package?${new URLSearchParams({ region: normalizedRegion, lookback: "30d", limit: "5" }).toString()}`
+        : null;
     return {
       ...blocker,
       reviewHref: `/review?${regionQuery}`,
+      packageHref,
       publicationHref: `/api/publication-status?${regionQuery}`
     };
   }
@@ -415,6 +421,7 @@ function actionLinksForBlocker(blocker) {
     commands: blocker.setupCommandHref ?? null,
     sources: blocker.sourcesHref ?? null,
     review: blocker.reviewHref ?? null,
+    package: blocker.packageHref ?? null,
     publication: blocker.publicationHref ?? null
   };
 }

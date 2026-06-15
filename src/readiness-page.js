@@ -334,6 +334,7 @@ function renderActionLinks(links = {}) {
     ["Commands", links.commands],
     ["Sources", links.sources],
     ["Review", links.review],
+    ["Package", links.package],
     ["Publication", links.publication]
   ].filter(([, href]) => href);
   return rows.length
@@ -347,6 +348,7 @@ function renderBlockerLinks(blocker) {
     ["Commands", blocker.setupCommandHref],
     ["Sources", blocker.sourcesHref],
     ["Review", blocker.reviewHref],
+    ["Package", blocker.packageHref],
     ["Publication", blocker.publicationHref]
   ].filter(([, href]) => href);
   return links.length
