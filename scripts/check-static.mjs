@@ -523,6 +523,9 @@ if (
   !readinessPageSource.includes("function renderLocalizationPlan(localization)") ||
   !readinessPageSource.includes("localization.eventTranslation?.status") ||
   !readinessPageSource.includes("contract.provenance?.publicApiField") ||
+  !readinessPageSource.includes("function renderLayerPlan(layers)") ||
+  !readinessPageSource.includes("layers.entitlementContract?.status") ||
+  !readinessPageSource.includes("contract.denyByDefault") ||
   !readinessPageSource.includes('["Activation Package", links.sourceActivationPackage]') ||
   !readinessPageSource.includes('["Activation Package", blocker.sourceActivationPackageHref]') ||
   !readinessPageSource.includes('["Package", links.package]') ||
@@ -2919,10 +2922,22 @@ if (
   layerStatus.schemaVersion !== "layer-status.v1" ||
   layerStatus.ready ||
   layerStatus.entitlementsReady ||
+  layerStatus.region !== DEFAULT_REGION_ID ||
   layerStatus.summary.includedLayers !== 1 ||
   layerStatus.summary.plannedPaidLayers < 3 ||
+  layerStatus.entitlementContract?.schemaVersion !== "layer-entitlement-contract.v1" ||
+  layerStatus.entitlementContract?.status !== "planned" ||
+  layerStatus.entitlementContract?.denyByDefault !== true ||
+  !layerStatus.entitlementContract?.lockedLayerIds?.includes("frontline-overlay") ||
+  !layerStatus.entitlementContract?.unlockContract?.requiredClaims?.includes("subscriptionStatus") ||
+  !layerStatus.entitlementContract?.unlockContract?.enforcementPoints?.includes("layer-api") ||
+  !layerStatus.entitlementContract?.datasetRequirements?.some((layer) => layer.id === "osint-media-layer" && layer.moderationRequired) ||
+  layerStatus.entitlementContract?.publicApi?.entitlementField !== "layerEntitlements" ||
+  !layerStatus.entitlementContract?.checklist?.some((item) => item.id === "included-layer-public" && item.done) ||
+  !layerStatus.entitlementContract?.checklist?.some((item) => item.id === "entitlement-api-gates" && item.done === false) ||
   !layerStatus.layers.some((layer) => layer.id === "frontline-overlay" && layer.locked && layer.dataReadiness === "license-required") ||
   !layerStatus.blockers.some((blocker) => blocker.id === "paid-layer-entitlements" && blocker.layerIds.includes("incident-heatmap")) ||
+  !layerStatus.links.readiness.includes("/readiness?region=ukraine-east") ||
   layerStatus.links.platformConfig !== "/api/platform-config"
 ) {
   throw new Error("Layer status payload failed entitlement, locked-layer, or license-boundary checks");
