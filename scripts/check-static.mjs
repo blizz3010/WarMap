@@ -815,9 +815,13 @@ if (
   sourceHealth.health.summary.configuredSocialApis !== 1 ||
   sourceHealth.health.summary.retryableFailures !== 0 ||
   sourceHealth.health.summary.hardFailures !== 0 ||
+  sourceHealth.health.attention?.state !== "planned" ||
+  sourceHealth.health.attention?.count !== sourceHealth.health.summary.plannedSources ||
   !sourceHealth.health.sources.some((source) => source.id === "approved-osint" && source.ok && source.itemCount === 1 && source.diagnostic?.code === "social.items") ||
   !sourceHealth.health.sources.some((source) => source.id === "gdelt-doc" && source.ok && source.diagnostic?.code === "gdelt.article-list") ||
-  !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned" && source.diagnostic?.category === "planned") ||
+  !sourceHealth.health.sources.every((source) => source.severity && source.nextAction) ||
+  !sourceHealth.health.sources.some((source) => source.id === "liveuamap-api" && source.status === "planned" && source.severity === "planned" && source.diagnostic?.category === "planned" && source.nextAction.includes("license")) ||
+  !sourceHealth.health.attention?.rows?.some((source) => source.id === "liveuamap-api" && source.severity === "planned" && source.nextAction.includes("license")) ||
   !sourceHealth.health.families.some((family) => family.collector === "social-api" && family.ok === 1) ||
   sourceHealth.urls.length < 4
 ) {
@@ -1000,7 +1004,9 @@ if (
   missingSocialTokenHealth.summary.missingConfiguration !== 1 ||
   missingSocialTokenHealth.operational ||
   missingSocialTokenHealth.resilience?.state !== "blocked" ||
-  !missingSocialTokenHealth.sources.some((source) => source.id === "missing-token-api" && source.status === "missing-config" && source.diagnostic?.code === "config.missing-token-env")
+  missingSocialTokenHealth.attention?.state !== "blocked" ||
+  !missingSocialTokenHealth.sources.some((source) => source.id === "missing-token-api" && source.status === "missing-config" && source.diagnostic?.code === "config.missing-token-env") ||
+  !missingSocialTokenHealth.attention?.rows?.some((source) => source.id === "missing-token-api" && source.severity === "blocker" && source.nextAction.includes("MISSING_ALLOWED_TOKEN"))
 ) {
   throw new Error("Source health payload failed missing social API token checks");
 }
@@ -1027,7 +1033,9 @@ if (
   degradedSourceHealth.resilience?.state !== "degraded" ||
   degradedSourceHealth.summary.reachableSources !== 1 ||
   degradedSourceHealth.summary.retryableFailures !== 1 ||
-  degradedSourceHealth.summary.hardFailures !== 0
+  degradedSourceHealth.summary.hardFailures !== 0 ||
+  degradedSourceHealth.attention?.state !== "degraded" ||
+  !degradedSourceHealth.attention?.rows?.some((source) => source.severity === "warning" && source.diagnostic?.code === "network.timeout" && source.nextAction.includes("Retry"))
 ) {
   throw new Error("Source health payload failed degraded retryable collector checks");
 }
@@ -1046,6 +1054,7 @@ if (
   failedSourceHealth.summary.hardFailures !== 0 ||
   failedSourceHealth.operational ||
   failedSourceHealth.resilience?.state !== "blocked" ||
+  failedSourceHealth.attention?.state !== "blocked" ||
   !failedSourceHealth.sources.some(
     (source) =>
       source.id === "gdelt-doc" &&
@@ -1053,7 +1062,8 @@ if (
       source.diagnostic?.code === "http.status" &&
       source.diagnostic?.httpStatus === 503 &&
       source.diagnostic?.retryable
-  )
+  ) ||
+  !failedSourceHealth.attention?.rows?.some((source) => source.id === "gdelt-doc" && source.severity === "warning" && source.nextAction.includes("GDELT"))
 ) {
   throw new Error("Source health payload failed HTTP diagnostic checks");
 }

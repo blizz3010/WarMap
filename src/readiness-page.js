@@ -576,7 +576,7 @@ function summaryLine(payload, check) {
     return `${Number(payload.summary?.plannedSources ?? 0)} planned sources, ${Number(payload.summary?.activationTemplates ?? 0)} activation templates.`;
   }
   if (payload?.kind === "SourceHealth") {
-    return payload.resilience?.message ?? `${Number(payload.sources?.length ?? 0)} sources checked.`;
+    return payload.attention?.summary ?? payload.resilience?.message ?? `${Number(payload.sources?.length ?? 0)} sources checked.`;
   }
   if (payload?.kind === "IngestionStatus") {
     return `${payload.runtime?.scheduleDescription ?? "Scheduled ingestion status"} Cron secret ${payload.runtime?.cronSecretConfigured ? "ready" : "missing"}.`;
