@@ -12,7 +12,7 @@ This rebuild shifts the project away from the original strike-only dashboard and
 - Vercel `/api/events` endpoint that pulls open-web leads from GDELT and RSS fallback feeds
 - compact embed view at `/embed`
 
-The app now attempts to load real open-web news leads first. These are not verified incidents: they are article-derived leads normalized onto the map for review. If the live sources fail or return no mapped items, the UI falls back to synthetic prototype content from `src/data.js`.
+The app now attempts to load real open-web news leads first. These are not verified incidents: they are article-derived leads normalized onto the map for review. If the live sources fail, the UI falls back to synthetic prototype content from `src/data.js`; a successful live response with no mapped items stays empty so short lookback windows do not imply prototype events.
 
 ## Local development
 
@@ -42,7 +42,7 @@ The check validates the static app files and the event, region, category, severi
 - verification state: `reported` by default, because these are source leads
 - lookback windows: 1h, 6h, 24h, 7d, 30d, 90d, and all available
 
-The browser and embed views fetch `/api/events?region=iran` and keep the static data as a safe fallback.
+The browser and embed views fetch `/api/events?region=iran` and keep the static data as a safe fallback when the live feed is unavailable.
 
 ## Production direction
 
