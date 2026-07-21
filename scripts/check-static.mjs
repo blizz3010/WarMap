@@ -884,6 +884,7 @@ if (JSON.stringify(sourceHealth.health).includes("social-secret")) {
   throw new Error("Source health payload leaked a configured social API secret");
 }
 
+const officialXmlFixtureNow = new Date();
 const officialXmlFeed = await withTemporarySourceHealthEnv(async () => {
   process.env.OFFICIAL_FEED_SOURCES = JSON.stringify([
     {
@@ -907,7 +908,7 @@ const officialXmlFeed = await withTemporarySourceHealthEnv(async () => {
         200,
         `<alert>
           <identifier>fixture-cap-1</identifier>
-          <sent>2026-06-13T12:00:00Z</sent>
+          <sent>${officialXmlFixtureNow.toISOString()}</sent>
           <info>
             <event>Missile attack</event>
             <headline>Missile attack reported near Kharkiv, Ukraine</headline>
@@ -929,7 +930,7 @@ const officialXmlFeed = await withTemporarySourceHealthEnv(async () => {
     });
     const health = await buildSourceHealthPayload({
       region: "ukraine-east",
-      now: new Date("2026-06-13T12:05:00Z"),
+      now: officialXmlFixtureNow,
       maxSources: 8,
       fetchImpl: globalThis.fetch
     });
