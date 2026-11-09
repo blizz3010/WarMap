@@ -212,6 +212,76 @@
       "role": "official-statement",
       "why": "mod.gov.ua links x.com/DefenceU. This is a conflict-party official account. Its posts are claims and need a higher bar than a newsroom report. Not polled live.",
       "claimPolicy": "Official claim from a party to the conflict. Never auto-verified."
+    },
+    {
+      "id": "x-ukmto",
+      "displayName": "UKMTO on X",
+      "kind": "x",
+      "ingest": "snapshot",
+      "url": "https://x.com/UK_MTO",
+      "homepage": "https://www.ukmto.org/",
+      "handle": "UK_MTO",
+      "profileUrl": "https://x.com/UK_MTO",
+      "theaters": ["iran", "gulf", "yemen", "middle-east"],
+      "role": "official-statement",
+      "why": "ukmto.org/contact-us says UKMTO publishes maritime safety information on its website and on X. The public status https://x.com/UK_MTO/status/2119830956169175405 is the organization's post for warning 199-26. This server does not call the X API. An updater copies the post into the snapshot.",
+      "claimPolicy": "Official maritime warning. A single UKMTO post is a sourced report, not an independently verified event."
+    },
+    {
+      "id": "ukmto-warnings",
+      "displayName": "UKMTO warnings",
+      "kind": "official-document",
+      "ingest": "snapshot",
+      "url": "https://www.ukmto.org/ukmto-products",
+      "homepage": "https://www.ukmto.org/ukmto-products",
+      "handle": null,
+      "profileUrl": null,
+      "theaters": ["iran", "gulf", "yemen", "middle-east"],
+      "role": "official-statement",
+      "why": "Public warning PDFs and the JMIC advisory on ukmto.org. Used when the wording comes from the document rather than from a copied X post. Not a live crawl of the site.",
+      "claimPolicy": "Official maritime warning. Not an independently verified event."
+    },
+    {
+      "id": "x-centcom",
+      "displayName": "U.S. Central Command on X",
+      "kind": "x",
+      "ingest": "snapshot",
+      "url": "https://x.com/CENTCOM",
+      "homepage": "https://www.centcom.mil/",
+      "handle": "CENTCOM",
+      "profileUrl": "https://x.com/CENTCOM",
+      "theaters": ["iran", "gulf", "yemen", "israel-palestine", "middle-east"],
+      "role": "official-statement",
+      "why": "Public X account of U.S. Central Command. Included as an official military source for the same theaters as UKMTO. Not polled live. Conflict-party or intervening-military posts stay claims.",
+      "claimPolicy": "Official military statement. Never auto-verified."
+    },
+    {
+      "id": "x-defencehq",
+      "displayName": "UK Ministry of Defence on X",
+      "kind": "x",
+      "ingest": "snapshot",
+      "url": "https://x.com/DefenceHQ",
+      "homepage": "https://www.gov.uk/government/organisations/ministry-of-defence",
+      "handle": "DefenceHQ",
+      "profileUrl": "https://x.com/DefenceHQ",
+      "theaters": ["iran", "gulf", "yemen", "ukraine", "middle-east"],
+      "role": "official-statement",
+      "why": "Public X account of the UK Ministry of Defence, the department UKMTO belongs to. Snapshot only. Official posts are claims.",
+      "claimPolicy": "Official statement. Never auto-verified."
+    },
+    {
+      "id": "x-idf",
+      "displayName": "Israel Defense Forces on X",
+      "kind": "x",
+      "ingest": "snapshot",
+      "url": "https://x.com/IDF",
+      "homepage": "https://www.idf.il/en/",
+      "handle": "IDF",
+      "profileUrl": "https://x.com/IDF",
+      "theaters": ["israel-palestine", "iran", "middle-east"],
+      "role": "official-statement",
+      "why": "Public X account of the Israel Defense Forces. Snapshot only. A conflict-party account cannot confirm its own claim.",
+      "claimPolicy": "Official claim from a party to the conflict. Never auto-verified."
     }
   ]
 }

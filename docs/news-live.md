@@ -9,9 +9,9 @@ The right-hand panel is a list of sourced claims. It is not a list of confirmed 
 `data/curated-sources.json` is the editable source list. Each entry has a display name, why it was included, theaters, and a claim policy.
 
 - `ingest: "live-rss"` is fetched on each request. No API key is used.
-- `ingest: "snapshot"` is an X account verified from that organization's own site. This deployment does not call the X API. Those accounts contribute items only after the snapshot file is updated.
+- `ingest: "snapshot"` is an X account or an official document set. This deployment does not call the X API. Those sources contribute items only from `data/news-live-snapshot.json`.
 
-The checked-in snapshot has an empty `items` array. That is intentional. Do not invent posts to fill it.
+The checked-in snapshot includes public UKMTO warnings, including the X status for warning 199-26 (a tanker on fire northwest of Khasab). That row is there so the Iran map can show the source. Do not invent extra posts. An updater replaces or appends rows with text taken from the post or the official document.
 
 ## What an updater writes
 
@@ -29,12 +29,20 @@ Replace `data/news-live-snapshot.json` with:
       "headline": "Short text taken from the public post.",
       "summary": "Optional longer text from the same post. Leave empty if the post is short.",
       "url": "https://x.com/DefenceU/status/000",
+      "authorHandle": "DefenceU",
+      "postUrl": "https://x.com/DefenceU/status/000",
+      "media": [
+        { "type": "document", "url": "https://example.com/warning.pdf", "label": "Warning" }
+      ],
+      "publishedAtPrecision": "instant",
       "editorVerified": false,
       "editorNote": ""
     }
   ]
 }
 ```
+
+`authorHandle`, `postUrl`, `media`, and `publishedAtPrecision` are optional. Use them for an X post. `media[].type` is `image`, `video`, or `document`. `publishedAtPrecision: "date"` means the clock time was not available and only the date is known. Do not put `lat` or `lon` in this file.
 
 Rules for the updater:
 
