@@ -10,6 +10,10 @@ const REGION_QUERIES = {
     '(Iran OR Israel OR Gaza OR Lebanon OR Syria OR Iraq OR Yemen OR "Red Sea" OR "Strait of Hormuz") (explosion OR strike OR missile OR drone OR airstrike OR military OR security OR nuclear OR protest)',
   gulf:
     '("Persian Gulf" OR "Arabian Gulf" OR "Strait of Hormuz" OR Kuwait OR Bahrain OR Qatar OR UAE OR "Saudi Arabia" OR Iran) (tanker OR port OR missile OR drone OR explosion OR strike OR military OR security)',
+  "israel-palestine":
+    '(Gaza OR Israel OR "West Bank" OR Hamas OR Jerusalem OR Rafah OR Palestinian) (strike OR explosion OR missile OR drone OR military OR security OR ceasefire OR humanitarian)',
+  yemen:
+    '(Yemen OR Houthi OR Aden OR Sanaa OR Hudaydah OR "Red Sea") (strike OR explosion OR missile OR drone OR military OR port OR ship OR humanitarian)',
   ukraine:
     '(Ukraine OR Ukrainian OR Kyiv OR Kharkiv OR Dnipro OR Odesa OR Donetsk OR "Black Sea" OR Crimea OR Russia) (missile OR drone OR shelling OR explosion OR strike OR frontline OR military OR airstrike OR security)',
   "ukraine-east":

@@ -8,6 +8,7 @@ import {
   sourceTypes,
   verificationStates
 } from "./data.js";
+import { PRIMARY_THEATERS, newsTheaterForRegion, primaryTheaterIsActive } from "./news-live-shared.js";
 
 const PUBLICATION_MODES = new Set(["all", "review", "published"]);
 const PUBLICATION_MODE_LABELS = {
@@ -53,6 +54,11 @@ const state = {
   severities: new Set(Object.keys(severities)),
   sourceTypes: new Set(Object.keys(sourceTypes)),
   events: fallbackEvents,
+  newsItems: [],
+  newsMeta: null,
+  selectedNewsId: null,
+  newsFeedSignature: "",
+  newsDetailSignature: "",
   editorialMessage: "",
   editorialExportBundle: null,
   feedMeta: {
@@ -82,6 +88,7 @@ const els = {
   mediaCount: document.querySelector("#mediaCount"),
   mediaOnlyToggle: document.querySelector("#mediaOnlyToggle"),
   newEventsButton: document.querySelector("#newEventsButton"),
+  newsLiveStatus: document.querySelector("#newsLiveStatus"),
   officialCount: document.querySelector("#officialCount"),
   officialOnlyToggle: document.querySelector("#officialOnlyToggle"),
   pauseStreamButton: document.querySelector("#pauseStreamButton"),
@@ -107,6 +114,8 @@ const els = {
 
 let map;
 let liveRequestId = 0;
+let newsRequestId = 0;
+let newsTimer = null;
 let readinessRequestId = 0;
 let theaterStatusRequestId = 0;
 const streamController = {
@@ -143,7 +152,7 @@ const PLATFORM_CONFIG_FALLBACK = {
 
 const UI_COPY = {
   en: {
-    brandTagline: "Automated news map prototype",
+    brandTagline: "Conflict map",
     region: "Region",
     tabFeed: "News Live",
     tabMap: "Map",
@@ -175,7 +184,7 @@ const UI_COPY = {
     fit: "Fit",
     premiumOverlays: "Premium overlays",
     viewportOnly: "Viewport only",
-    newEvents: "New events",
+    newEvents: "Top",
     updatedAt: "Updated {time}",
     showingEvents: "Showing {visible} of {total} events",
     alertsPanelKicker: "Alerts",
@@ -237,7 +246,7 @@ const UI_COPY = {
     fit: "Вмістити",
     premiumOverlays: "Преміум-шари",
     viewportOnly: "Лише область перегляду",
-    newEvents: "Нові події",
+    newEvents: "Вгору",
     updatedAt: "Оновлено {time}",
     showingEvents: "Показано {visible} з {total} подій",
     alertsPanelKicker: "Сповіщення",
@@ -298,7 +307,7 @@ const UI_COPY = {
     fit: "جا دادن",
     premiumOverlays: "لایه‌های ویژه",
     viewportOnly: "فقط نمای فعلی",
-    newEvents: "رویدادهای تازه",
+    newEvents: "بالا",
     updatedAt: "به‌روزرسانی {time}",
     showingEvents: "نمایش {visible} از {total} رویداد",
     alertsPanelKicker: "هشدارها",
@@ -359,7 +368,7 @@ const UI_COPY = {
     fit: "ملاءمة",
     premiumOverlays: "طبقات مدفوعة",
     viewportOnly: "ضمن العرض فقط",
-    newEvents: "أحداث جديدة",
+    newEvents: "أعلى",
     updatedAt: "تم التحديث {time}",
     showingEvents: "عرض {visible} من {total} حدث",
     alertsPanelKicker: "التنبيهات",
@@ -420,7 +429,7 @@ const UI_COPY = {
     fit: "Вместить",
     premiumOverlays: "Премиум-слои",
     viewportOnly: "Только область экрана",
-    newEvents: "Новые события",
+    newEvents: "Наверх",
     updatedAt: "Обновлено {time}",
     showingEvents: "Показано {visible} из {total} событий",
     alertsPanelKicker: "Оповещения",
@@ -535,8 +544,10 @@ function init() {
   updateCounts();
   render();
   loadPlatformConfig();
+  loadNewsLive();
   loadLiveEvents();
   loadTheaterStatus();
+  scheduleNewsRefresh();
   loadProductionReadiness();
   startEventStream();
 }
@@ -564,13 +575,13 @@ function initMap() {
 
 function buildStyle(theme) {
   const rasterTiles = {
-    dark: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    light: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+    dark: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    light: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
   };
   const attributions = {
-    dark: "OpenStreetMap contributors, CARTO",
-    light: "OpenStreetMap contributors, CARTO",
+    dark: "Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS user community",
+    light: "Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS user community",
     satellite: "Esri, Maxar, Earthstar Geographics, and the GIS User Community"
   };
 
@@ -644,41 +655,55 @@ function renderTheaterSwitch() {
 
   const region = currentRegion();
   const group = region.group ?? "Regions";
-  const groupRegions = regions.filter((item) => (item.group ?? "Regions") === group);
   const statusByRegion = theaterStatusByRegion(group);
+  const ukraineSubtheaters =
+    primaryTheaterIsActive("ukraine", state.regionId)
+      ? regions.filter((item) => item.group === "Ukraine theaters" && item.id !== "ukraine")
+      : [];
 
   els.theaterSwitch.innerHTML = `
-    <span class="theater-kicker">Theater</span>
-    ${groupRegions
-      .map(
-        (item) => {
-          const status = statusByRegion.get(item.id);
-          const selectedCount = Number(status?.counts?.selected ?? status?.counts?.[state.publicationMode] ?? 0);
-          const statusClass = status ? ` has-theater-status is-${escapeAttr(status.status || "unknown")}` : "";
-          return `
-          <button
-            type="button"
-            class="${item.id === state.regionId ? "is-active" : ""}${statusClass}"
-            aria-pressed="${item.id === state.regionId}"
-            data-theater-region="${escapeAttr(item.id)}"
-            title="${escapeAttr(theaterStatusTitle(status))}"
-          >
-            <span class="theater-label">${escapeHtml(theaterButtonLabel(item, group))}</span>
-            ${status ? `<span class="theater-count">${selectedCount.toLocaleString()}</span>` : ""}
-          </button>
-        `;
-        }
-      )
-      .join("")}
+    <span class="theater-kicker">Region</span>
+    ${PRIMARY_THEATERS.map((item) => {
+      const active = primaryTheaterIsActive(item.id, state.regionId);
+      return `
+        <button
+          type="button"
+          class="${active ? "is-active" : ""}"
+          aria-pressed="${active}"
+          data-theater-region="${escapeAttr(item.id)}"
+        >
+          <span class="theater-label">${escapeHtml(item.label)}</span>
+        </button>
+      `;
+    }).join("")}
+    ${
+      ukraineSubtheaters.length
+        ? `<span class="theater-divider" aria-hidden="true"></span>${ukraineSubtheaters
+            .map((item) => {
+              const status = statusByRegion.get(item.id);
+              const selectedCount = Number(status?.counts?.selected ?? status?.counts?.[state.publicationMode] ?? 0);
+              return `
+                <button
+                  type="button"
+                  class="${item.id === state.regionId ? "is-active" : ""}"
+                  aria-pressed="${item.id === state.regionId}"
+                  data-theater-region="${escapeAttr(item.id)}"
+                  title="${escapeAttr(theaterStatusTitle(status))}"
+                >
+                  <span class="theater-label">${escapeHtml(theaterButtonLabel(item, "Ukraine theaters"))}</span>
+                  ${status ? `<span class="theater-count">${selectedCount.toLocaleString()}</span>` : ""}
+                </button>
+              `;
+            })
+            .join("")}`
+        : ""
+    }
   `;
 
-  const currentStatus = statusByRegion.get(region.id);
-  const statusText = currentStatus
-    ? `${Number(currentStatus.counts?.selected ?? 0).toLocaleString()} ${escapeHtml(publicationModeLabel().toLowerCase())} - ${escapeHtml(currentStatus.message ?? "theater status")}`
-    : `${state.events.length.toLocaleString()} ${escapeHtml(publicationModeLabel().toLowerCase())} - ${escapeHtml(state.feedMeta.verification ?? state.theaterStatusMessage ?? "review queue")}`;
+  const plottedNews = state.newsItems.filter((item) => item.plot).length;
   els.theaterSummary.innerHTML = `
     <strong>${escapeHtml(region.name)}</strong>
-    <span>${statusText}</span>
+    <span>${state.newsItems.length.toLocaleString()} sourced claims · ${plottedNews.toLocaleString()} on the map</span>
   `;
 
   els.theaterSwitch.querySelectorAll("[data-theater-region]").forEach((button) => {
@@ -770,6 +795,7 @@ function bindControls() {
     clearInlineReviewExport();
     render();
     loadLiveEvents();
+    loadNewsLive();
     loadTheaterStatus();
     restartEventStream();
   });
@@ -792,9 +818,12 @@ function bindControls() {
     els.pauseStreamButton.setAttribute("aria-pressed", String(state.paused));
     if (state.paused) {
       stopEventStream("Auto-update paused");
+      scheduleNewsRefresh();
     } else {
       loadLiveEvents({ reason: "resume" });
+      loadNewsLive({ reason: "resume" });
       startEventStream();
+      scheduleNewsRefresh();
     }
   });
 
@@ -805,6 +834,7 @@ function bindControls() {
     clearInlineReviewExport();
     render();
     loadLiveEvents();
+    loadNewsLive();
     loadTheaterStatus();
     restartEventStream();
   });
@@ -818,11 +848,11 @@ function bindControls() {
   els.locateRegion.addEventListener("click", () => fitToRegion(true));
   els.fitEvents.addEventListener("click", () => fitVisibleEvents());
   els.newEventsButton.addEventListener("click", () => {
-    const firstEvent = filteredEvents(false)[0];
-    if (firstEvent) {
-      selectEvent(firstEvent.id, true);
+    const firstItem = filteredNews()[0];
+    if (firstItem) {
+      selectNewsItem(firstItem.id, true);
     }
-    render();
+    els.feedList.scrollTop = 0;
   });
 
   bindFilterInputControls();
@@ -839,7 +869,10 @@ function bindControls() {
     });
   });
 
-  window.addEventListener("hashchange", () => selectHashEventIfAvailable(true));
+  window.addEventListener("hashchange", () => {
+    selectHashEventIfAvailable(true);
+    selectNewsFromHash(true);
+  });
 }
 
 function setActivePanel(panel) {
@@ -866,6 +899,7 @@ function changeRegion(regionId) {
   updateRegionFocus();
   fitToRegion(true);
   render();
+  loadNewsLive();
   loadLiveEvents();
   loadTheaterStatus();
   loadProductionReadiness();
@@ -905,6 +939,393 @@ async function loadPlatformConfig() {
   renderPlatformChrome();
   renderPremiumLayers();
   renderIntelPanel(filteredEvents(true));
+}
+
+function scheduleNewsRefresh() {
+  if (newsTimer) {
+    clearInterval(newsTimer);
+    newsTimer = null;
+  }
+  if (state.paused) {
+    return;
+  }
+  newsTimer = setInterval(() => {
+    if (!state.paused) {
+      loadNewsLive({ quiet: true });
+    }
+  }, 90000);
+}
+
+async function loadNewsLive(options = {}) {
+  const { quiet = false } = options;
+  const region = state.regionId;
+  const requestId = (newsRequestId += 1);
+  if (!quiet) {
+    updateStreamStatusLabel("Loading News Live");
+  }
+
+  try {
+    const params = new URLSearchParams({
+      region,
+      lookback: lookbackForApi(state.timeRange)
+    });
+    const response = await fetch(`/api/news-live?${params.toString()}`, {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json();
+    if (!response.ok || !Array.isArray(payload.items)) {
+      throw new Error(payload.message || payload.error || "News Live returned an invalid feed");
+    }
+    if (requestId !== newsRequestId) {
+      return;
+    }
+    const previousId = state.selectedNewsId;
+    state.newsItems = payload.items;
+    state.newsMeta = payload.meta ?? {};
+    state.newsFeedSignature = "";
+    if (previousId && !payload.items.some((item) => item.id === previousId)) {
+      state.selectedNewsId = null;
+      state.detailOpen = false;
+    }
+    render();
+    selectNewsFromHash(false);
+    refreshNewsStatusLabel();
+  } catch (error) {
+    if (requestId !== newsRequestId) {
+      return;
+    }
+    state.newsItems = [];
+    state.newsMeta = {
+      emptyReason: error instanceof Error ? error.message : "News Live is unavailable",
+      xAccess: "not-polled",
+      verification: "Sourced claims are not confirmed events."
+    };
+    state.newsFeedSignature = "";
+    state.selectedNewsId = null;
+    render();
+    refreshNewsStatusLabel();
+  }
+}
+
+function refreshNewsStatusLabel() {
+  const plotted = state.newsItems.filter((item) => item.plot).length;
+  if (!state.newsItems.length) {
+    updateStreamStatusLabel(state.newsMeta?.emptyReason || "News Live has no sourced claims in this range");
+    return;
+  }
+  updateStreamStatusLabel(`News Live · ${state.newsItems.length} sourced claims · ${plotted} approximate map points`);
+}
+
+function newsStatusSentence() {
+  const meta = state.newsMeta;
+  if (!meta) {
+    return "Loading sourced claims. One article is not a confirmed event. X is not polled live.";
+  }
+  if (!state.newsItems.length && meta.emptyReason) {
+    return meta.emptyReason;
+  }
+  const missed = Array.isArray(meta.rssErrors) ? meta.rssErrors.length : 0;
+  const missedLabel = missed ? ` ${missed} feed${missed === 1 ? "" : "s"} could not be reached.` : "";
+  return `Sourced claims, not confirmed events. X is not polled live.${missedLabel}`;
+}
+
+function filteredNews() {
+  const minTimestamp = minTimestampForRange(state.timeRange);
+  const bounds = map && state.viewportOnly ? map.getBounds() : null;
+  return state.newsItems.filter((item) => {
+    const timestamp = Date.parse(item.publishedAt);
+    const timeMatch = !minTimestamp || (Number.isFinite(timestamp) && timestamp >= minTimestamp);
+    const verifiedMatch = !state.verifiedOnly || item.status === "verified-event";
+    const officialMatch = !state.officialOnly || item.sources.some((source) => source.official);
+    const viewportMatch =
+      !bounds || !item.plot || !item.location || bounds.contains([item.location.lon, item.location.lat]);
+    const searchMatch =
+      !state.search ||
+      `${item.headline} ${item.summary} ${item.location?.namedPlace ?? ""} ${item.sources.map((source) => source.name).join(" ")}`
+        .toLowerCase()
+        .includes(state.search);
+    return timeMatch && verifiedMatch && officialMatch && viewportMatch && searchMatch;
+  });
+}
+
+function renderNewsFeed(items) {
+  const signature = items.map((item) => item.id).join("|") || `empty:${newsStatusSentence()}`;
+  if (signature === state.newsFeedSignature) {
+    markActiveNewsCard();
+    return;
+  }
+  state.newsFeedSignature = signature;
+
+  if (!items.length) {
+    const reason = state.newsItems.length
+      ? "No sourced claims match the current search or filters."
+      : state.newsMeta?.emptyReason || "No sourced claims for this region in the selected time range.";
+    els.feedList.innerHTML = `<p class="empty-state">${escapeHtml(reason)} The feed is not filled with sample incidents.</p>`;
+    return;
+  }
+
+  els.feedList.innerHTML = items
+    .map((item) => {
+      const sourceLinks = item.sources
+        .slice(0, 3)
+        .map((source) => {
+          const url = safeUrl(source.url);
+          const label = source.handle ? `${source.name}` : source.name;
+          return url
+            ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">Source · ${escapeHtml(label)}</a>`
+            : `<span>${escapeHtml(label)}</span>`;
+        })
+        .join("");
+      return `
+        <article class="news-live-card ${item.id === state.selectedNewsId ? "is-active" : ""}" data-news-id="${escapeAttr(item.id)}">
+          <button type="button" class="news-live-button" data-news-select="${escapeAttr(item.id)}">
+            <time>${escapeHtml(newsRelativeTime(item.publishedAt))}<span>${escapeHtml(newsClock(item.publishedAt))}</span></time>
+            <div class="news-live-copy">
+              <h3>${escapeHtml(item.headline)}</h3>
+              <p class="news-live-flags">
+                <span class="claim-pill is-${escapeAttr(item.status)}">${escapeHtml(item.statusLabel)}</span>
+                <span>${item.plot ? escapeHtml(item.location.namedPlace) : "Feed only"}</span>
+              </p>
+            </div>
+          </button>
+          <div class="news-live-sources">${sourceLinks}</div>
+        </article>
+      `;
+    })
+    .join("");
+
+  els.feedList.querySelectorAll("[data-news-select]").forEach((button) => {
+    button.addEventListener("click", () => selectNewsItem(button.dataset.newsSelect, true));
+  });
+}
+
+function markActiveNewsCard() {
+  els.feedList.querySelectorAll("[data-news-id]").forEach((card) => {
+    card.classList.toggle("is-active", card.dataset.newsId === state.selectedNewsId);
+  });
+}
+
+function renderNewsDetail() {
+  const signature = `${state.selectedNewsId ?? ""}|${state.detailOpen}`;
+  if (signature === state.newsDetailSignature) {
+    return;
+  }
+  state.newsDetailSignature = signature;
+  const item = state.newsItems.find((entry) => entry.id === state.selectedNewsId);
+  if (!item || !state.detailOpen) {
+    els.detailDrawer.classList.remove("is-open");
+    els.detailDrawer.setAttribute("aria-hidden", "true");
+    els.detailDrawer.innerHTML = "";
+    return;
+  }
+
+  const links = item.sources
+    .map((source) => {
+      const url = safeUrl(source.url);
+      return url
+        ? `<li><a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(source.name)}</a></li>`
+        : `<li>${escapeHtml(source.name)}</li>`;
+    })
+    .join("");
+  els.detailDrawer.style.setProperty("--detail-color", item.status === "verified-event" ? "#22c55e" : "#f59e0b");
+  els.detailDrawer.classList.add("is-open");
+  els.detailDrawer.setAttribute("aria-hidden", "false");
+  els.detailDrawer.innerHTML = `
+    <header class="detail-header">
+      <div>
+        <time>${escapeHtml(newsRelativeTime(item.publishedAt))} · ${escapeHtml(newsClock(item.publishedAt))}</time>
+        <h2>${escapeHtml(item.headline)}</h2>
+        <span>${escapeHtml(item.statusLabel)}</span>
+      </div>
+      <button type="button" id="closeNewsDetail">Close</button>
+    </header>
+    <div class="detail-grid">
+      <section>
+        <h3>What this is</h3>
+        <p>${escapeHtml(item.statusNote)}</p>
+        ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
+        <p>${escapeHtml(item.locationNote)}</p>
+      </section>
+      <aside>
+        <h3>Original sources</h3>
+        <ul class="news-source-list">${links}</ul>
+      </aside>
+    </div>
+  `;
+  document.querySelector("#closeNewsDetail")?.addEventListener("click", () => {
+    state.detailOpen = false;
+    render();
+  });
+}
+
+function renderNewsMarkers(items) {
+  if (!map) {
+    return;
+  }
+  const markerItems = clusteredNewsMarkers(items);
+  const visibleIds = new Set(markerItems.map((item) => item.markerId));
+  for (const [id, marker] of state.markers) {
+    if (!visibleIds.has(id)) {
+      marker.remove();
+      state.markers.delete(id);
+    }
+  }
+
+  markerItems.forEach((markerItem) => {
+    if (state.markers.has(markerItem.markerId)) {
+      const node = state.markers.get(markerItem.markerId).getElement();
+      node.className = markerItem.className;
+      node.style.setProperty("--marker-color", markerItem.color);
+      node.innerHTML = `<span>${escapeHtml(markerItem.short)}</span>`;
+      node.title = markerItem.title;
+      return;
+    }
+
+    const markerNode = document.createElement("button");
+    markerNode.type = "button";
+    markerNode.className = markerItem.className;
+    markerNode.style.setProperty("--marker-color", markerItem.color);
+    markerNode.innerHTML = `<span>${escapeHtml(markerItem.short)}</span>`;
+    markerNode.title = markerItem.title;
+    markerNode.addEventListener("click", () => {
+      if (markerItem.kind === "cluster") {
+        const bounds = new maplibregl.LngLatBounds();
+        markerItem.items.forEach((item) => bounds.extend([item.location.lon, item.location.lat]));
+        map.fitBounds(bounds, { padding: 80, maxZoom: 8.5, duration: 500 });
+        return;
+      }
+      selectNewsItem(markerItem.item.id, false);
+    });
+
+    const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
+      .setLngLat(markerItem.coordinates)
+      .addTo(map);
+    state.markers.set(markerItem.markerId, marker);
+  });
+}
+
+function clusteredNewsMarkers(items) {
+  if (!map || map.getZoom() >= 7.5) {
+    return items.map(newsToMarker);
+  }
+
+  const bucketSize = 46;
+  const buckets = new Map();
+  items.forEach((item) => {
+    const point = map.project([item.location.lon, item.location.lat]);
+    const key = `${Math.round(point.x / bucketSize)}:${Math.round(point.y / bucketSize)}`;
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(item);
+    buckets.set(key, bucket);
+  });
+
+  return [...buckets.values()].flatMap((bucket) => {
+    if (bucket.length === 1) {
+      return [newsToMarker(bucket[0])];
+    }
+    const totals = bucket.reduce(
+      (sum, item) => {
+        sum.lon += item.location.lon;
+        sum.lat += item.location.lat;
+        return sum;
+      },
+      { lon: 0, lat: 0 }
+    );
+    return [
+      {
+        kind: "cluster",
+        markerId: `news_cluster_${bucket
+          .map((item) => item.id)
+          .sort()
+          .join("|")}`,
+        items: bucket,
+        coordinates: [totals.lon / bucket.length, totals.lat / bucket.length],
+        color: "#f59e0b",
+        short: String(bucket.length),
+        className: "incident-cluster news-claim-marker",
+        title: `${bucket.length} sourced claims. These points are approximate, not confirmed locations.`
+      }
+    ];
+  });
+}
+
+function newsToMarker(item) {
+  const verified = item.status === "verified-event";
+  return {
+    kind: "news",
+    markerId: item.id,
+    item,
+    coordinates: [item.location.lon, item.location.lat],
+    color: verified ? "#22c55e" : "#f59e0b",
+    short: verified ? "VF" : "CL",
+    className: [
+      "incident-marker",
+      "news-claim-marker",
+      verified ? "is-verified" : "is-reported",
+      item.id === state.selectedNewsId ? "is-selected" : ""
+    ]
+      .filter(Boolean)
+      .join(" "),
+    title: `${item.location.namedPlace}: ${item.headline}. ${item.location.uncertainty}`
+  };
+}
+
+function selectNewsItem(id, pan) {
+  const item = state.newsItems.find((entry) => entry.id === id);
+  if (!item) {
+    return;
+  }
+  state.selectedNewsId = id;
+  state.selectedEventId = null;
+  state.detailOpen = true;
+  if (pan && item.plot && item.location && map) {
+    map.easeTo({
+      center: [item.location.lon, item.location.lat],
+      zoom: Math.max(map.getZoom(), 5.8),
+      duration: 500
+    });
+  }
+  const nextHash = `#news=${encodeURIComponent(id)}`;
+  if (window.location.hash !== nextHash) {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}${nextHash}`);
+  }
+  render();
+  els.feedList.querySelector(`[data-news-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
+}
+
+function selectNewsFromHash(pan) {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const id = params.get("news");
+  if (id && state.newsItems.some((item) => item.id === id) && state.selectedNewsId !== id) {
+    selectNewsItem(id, pan);
+  }
+}
+
+function newsRelativeTime(iso) {
+  const delta = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(delta)) {
+    return "";
+  }
+  const minutes = Math.max(0, Math.round(delta / 60000));
+  if (minutes < 1) {
+    return "now";
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) {
+    return `${hours}h`;
+  }
+  return `${Math.round(hours / 24)}d`;
+}
+
+function newsClock(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 async function loadLiveEvents(options = {}) {
@@ -957,7 +1378,9 @@ async function loadLiveEvents(options = {}) {
       state.detailOpen = previousDetailOpen;
     } else {
       state.selectedEventId = null;
-      state.detailOpen = false;
+      if (!state.selectedNewsId) {
+        state.detailOpen = false;
+      }
     }
     if (!preserveFilters) {
       state.verifiedOnly = false;
@@ -971,11 +1394,7 @@ async function loadLiveEvents(options = {}) {
       maybeNotifyForEvents(payload.events, previousEventIds);
     }
     selectHashEventIfAvailable(false);
-    updateStreamStatusLabel(
-      payload.events.length > 0
-        ? `${reason === "stream" ? "Stream refresh" : "Live open-web feed"} - ${payload.events.length} ${publicationModeLabel(state.publicationMode).toLowerCase()} / ${rangeLabel(state.timeRange)}`
-        : `No ${publicationModeLabel(state.publicationMode).toLowerCase()} in ${rangeLabel(state.timeRange)}`
-    );
+    refreshNewsStatusLabel();
   } catch (error) {
     if (requestId !== liveRequestId) {
       return;
@@ -992,12 +1411,14 @@ async function loadLiveEvents(options = {}) {
       error: error instanceof Error ? error.message : "Unknown live feed error"
     };
     state.selectedEventId = null;
-    state.detailOpen = false;
+    if (!state.selectedNewsId) {
+      state.detailOpen = false;
+    }
     resetFilterSets();
     renderFilterControls();
     bindFilterInputControls();
     render();
-    updateStreamStatusLabel("Prototype fallback - live feed unavailable");
+    refreshNewsStatusLabel();
   }
 }
 
@@ -1225,25 +1646,27 @@ function updateStreamStatusLabel(message) {
 
 function render() {
   const visible = filteredEvents(true);
-  if (state.selectedEventId && !visible.some((item) => item.id === state.selectedEventId)) {
-    state.selectedEventId = null;
+  const news = filteredNews();
+  if (state.selectedNewsId && !news.some((item) => item.id === state.selectedNewsId)) {
+    state.selectedNewsId = null;
     state.detailOpen = false;
   }
 
-  renderMarkers(visible);
-  renderFeed(visible);
-  renderDetail();
+  renderNewsMarkers(news.filter((item) => item.plot && item.location));
+  renderNewsFeed(news);
+  renderNewsDetail();
   renderTheaterSwitch();
   renderChromeState();
   renderIntelPanel(visible);
   updateCounts();
-  els.mapVisibleCount.textContent = uiCopy("showingEvents", {
-    visible: visible.length.toLocaleString(),
-    total: state.events.length.toLocaleString()
-  });
+  const plotted = news.filter((item) => item.plot).length;
+  els.mapVisibleCount.textContent = `${plotted.toLocaleString()} mapped claims · ${news.length.toLocaleString()} in News Live`;
   els.updatedAt.textContent = uiCopy("updatedAt", {
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   });
+  if (els.newsLiveStatus) {
+    els.newsLiveStatus.textContent = newsStatusSentence();
+  }
 }
 
 function filteredEvents(applyViewport) {
@@ -3177,7 +3600,7 @@ function fitToRegion(animated) {
 }
 
 function fitVisibleEvents() {
-  const visible = filteredEvents(false);
+  const visible = filteredNews().filter((item) => item.plot && item.location);
   if (!visible.length) {
     fitToRegion(true);
     return;
@@ -3215,9 +3638,34 @@ function focusGeoJsonForRegion(regionId) {
   if (regionId === "iran") {
     return FOCUS_GEOJSON_BY_FAMILY.iran;
   }
+  const region = regions.find((item) => item.id === regionId);
+  if (!region?.bounds || !["israel-palestine", "yemen", "gulf", "middle-east"].includes(regionId)) {
+    return {
+      type: "FeatureCollection",
+      features: []
+    };
+  }
+  const [west, south, east, north] = region.bounds;
   return {
     type: "FeatureCollection",
-    features: []
+    features: [
+      {
+        type: "Feature",
+        properties: { name: region.name },
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [west, south],
+              [east, south],
+              [east, north],
+              [west, north],
+              [west, south]
+            ]
+          ]
+        }
+      }
+    ]
   };
 }
 

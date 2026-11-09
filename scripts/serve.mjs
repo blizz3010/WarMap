@@ -29,6 +29,7 @@ import sourceActivationPackageHandler from "../api/source-activation-package.js"
 import sourceCurationHandler from "../api/source-curation.js";
 import sourceHealthHandler from "../api/source-health.js";
 import storageReadinessHandler from "../api/storage-readiness.js";
+import newsLiveHandler from "../api/news-live.js";
 import theaterStatusHandler from "../api/theater-status.js";
 import v1ConfigHandler from "../api/v1/config.js";
 import v1EventsHandler from "../api/v1/events.js";
@@ -64,6 +65,7 @@ const apiHandlers = new Map([
   ["/api/intake-store-health", intakeStoreHealthHandler],
   ["/api/layer-status", layerStatusHandler],
   ["/api/localization-status", localizationStatusHandler],
+  ["/api/news-live", newsLiveHandler],
   ["/api/notification-status", notificationStatusHandler],
   ["/api/platform-config", platformConfigHandler],
   ["/api/production-readiness", productionReadinessHandler],

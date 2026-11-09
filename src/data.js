@@ -26,6 +26,26 @@ export const regions = [
     bounds: [43.0, 21.1, 63.1, 32.5]
   },
   {
+    id: "israel-palestine",
+    name: "Israel-Palestine",
+    group: "Conflict theaters",
+    center: [34.95, 31.7],
+    zoom: 6.6,
+    bounds: [34.05, 29.45, 35.95, 33.4],
+    fitPadding: 28,
+    maxZoom: 8.2
+  },
+  {
+    id: "yemen",
+    name: "Yemen",
+    group: "Conflict theaters",
+    center: [47.6, 15.5],
+    zoom: 5.5,
+    bounds: [42.0, 12.0, 54.8, 19.1],
+    fitPadding: 24,
+    maxZoom: 6.4
+  },
+  {
     id: "ukraine",
     name: "Ukraine",
     group: "Ukraine theaters",
