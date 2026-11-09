@@ -10,7 +10,7 @@
     <title>WarMap Live</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://unpkg.com" />
-    <link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" />
     <link
       rel="stylesheet"
       href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css"
@@ -24,7 +24,7 @@
           <span class="brand-mark">WM</span>
           <span class="brand-copy">
             <strong>WarMap <em>Live</em></strong>
-            <small>Automated news map prototype</small>
+            <small>Conflict map</small>
           </span>
         </a>
 
@@ -164,8 +164,12 @@
         </section>
 
         <aside class="feed-panel" aria-label="Live news feed">
-          <div class="feed-header">
-            <button type="button" class="new-events-button" id="newEventsButton">New events</button>
+          <div class="feed-header news-live-header">
+            <div class="news-live-heading">
+              <strong class="news-live-title">News Live</strong>
+              <button type="button" id="newEventsButton">Top</button>
+            </div>
+            <p id="newsLiveStatus">Sourced claims, not confirmed events.</p>
             <span id="updatedAt">Updated now</span>
           </div>
 

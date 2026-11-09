@@ -26,9 +26,9 @@ const map = new maplibregl.Map({
     sources: {
       base: {
         type: "raster",
-        tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
         tileSize: 256,
-        attribution: "OpenStreetMap contributors, CARTO"
+        attribution: "Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS user community"
       }
     },
     layers: [{ id: "base", type: "raster", source: "base" }]

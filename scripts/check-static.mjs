@@ -70,6 +70,8 @@ import {
   V1_DEFAULT_PUBLICATION,
   formatServerSentEvent
 } from "../api/v1/service.js";
+import { buildNewsLiveFeed, loadCuratedSources, locateText } from "../api/news-live.js";
+import { PRIMARY_THEATERS, newsTheaterForRegion } from "../src/news-live-shared.js";
 import {
   activeOfficialFeedsForRegion,
   activeRssFeedsForRegion,
@@ -91,6 +93,7 @@ const requiredFiles = [
   "scripts/apply-storage-migration.mjs",
   "scripts/apply-review-export.mjs",
   "src/app.js",
+  "src/news-live-shared.js",
   "src/archive-page.js",
   "src/embed.js",
   "src/event-page.js",
@@ -122,6 +125,7 @@ const requiredFiles = [
   "api/intake-store-health.js",
   "api/layer-status.js",
   "api/localization-status.js",
+  "api/news-live.js",
   "api/news-normalizer.js",
   "api/notification-service.js",
   "api/notification-status.js",
@@ -150,7 +154,10 @@ const requiredFiles = [
   "api/v1/service.js",
   "api/v1/stream/events.js",
   "api/v1/theater-status.js",
-  "api/v1/timeline.js"
+  "api/v1/timeline.js",
+  "docs/news-live.md",
+  "data/curated-sources.json",
+  "data/news-live-snapshot.json"
 ];
 const root = fileURLToPath(new URL("..", import.meta.url));
 
@@ -728,6 +735,185 @@ if (
 
 if (!activeRssFeedsForRegion("ukraine").length || SOURCE_REGISTRY.length < 6) {
   throw new Error("Expected active Ukraine media RSS sources in the source registry");
+}
+
+const curatedSources = loadCuratedSources();
+if (curatedSources.schemaVersion !== "curated-sources.v1" || curatedSources.sources.length < 8) {
+  throw new Error("Expected a documented curated source list");
+}
+for (const source of curatedSources.sources) {
+  if (!source.id || !source.displayName || !source.why || !source.claimPolicy || !source.theaters?.length) {
+    throw new Error(`Curated source is missing required fields: ${source.id || "unknown"}`);
+  }
+  if (!["live-rss", "snapshot"].includes(source.ingest)) {
+    throw new Error(`Curated source ${source.id} has an unknown ingest mode`);
+  }
+}
+if (!curatedSources.sources.some((source) => source.id === "x-defenceu" && source.role === "official-statement")) {
+  throw new Error("Expected the Ukrainian defence account to stay labeled as an official claim");
+}
+if (newsTheaterForRegion("ukraine-east") !== "ukraine" || newsTheaterForRegion("black-sea") !== "ukraine") {
+  throw new Error("Ukraine sub-theaters should share the Ukraine News Live feed");
+}
+if (!appSource.includes("/api/news-live") || !indexPageSource.includes("newsLiveStatus")) {
+  throw new Error("Expected the public map to load the News Live feed");
+}
+if (PRIMARY_THEATERS.map((theater) => theater.label).join("|") !== "Iran|Israel-Palestine|Yemen|Ukraine") {
+  throw new Error("Expected Iran, Israel-Palestine, Yemen, and Ukraine region tabs");
+}
+if (!appSource.includes("PRIMARY_THEATERS")) {
+  throw new Error("Expected primary region tabs for the conflict map");
+}
+
+const newsNow = new Date("2026-11-09T18:00:00.000Z");
+const newsFeed = buildNewsLiveFeed({
+  theater: "iran",
+  now: newsNow,
+  lookback: "7d",
+  records: [
+    {
+      sourceId: "bbc-middle-east",
+      name: "BBC News Middle East",
+      url: "https://example.com/france-bbc",
+      publishedAt: "2026-11-09T16:00:00.000Z",
+      headline: "France accuses Iran of supermarket fridge hacking",
+      summary: "Paris blamed a cyber unit.",
+      kind: "rss",
+      role: "journalism",
+      lat: 1,
+      lon: 2
+    },
+    {
+      sourceId: "al-jazeera",
+      name: "Al Jazeera",
+      url: "https://example.com/france-aj",
+      publishedAt: "2026-11-09T16:10:00.000Z",
+      headline: "France accuses Iran of cyberattack on supermarket fridges",
+      summary: "More than 1,000 stores were hit.",
+      kind: "rss",
+      role: "journalism"
+    },
+    {
+      sourceId: "x-bbc",
+      name: "BBC News on X",
+      url: "https://x.com/bbc/status/1",
+      publishedAt: "2026-11-09T16:05:00.000Z",
+      headline: "France accuses Iran of supermarket fridge hacking",
+      summary: "",
+      kind: "x",
+      role: "journalism",
+      editorVerified: true,
+      editorNote: "Desk compared the post with the article."
+    },
+    {
+      sourceId: "al-jazeera",
+      name: "Al Jazeera",
+      url: "https://example.com/tehran",
+      publishedAt: "2026-11-09T15:00:00.000Z",
+      headline: "Loud blasts reported in Tehran",
+      summary: "Residents described explosions in the capital.",
+      kind: "rss",
+      role: "journalism",
+      lat: 0,
+      lon: 0
+    },
+    {
+      sourceId: "bbc-middle-east",
+      name: "BBC News Middle East",
+      url: "https://example.com/demands",
+      publishedAt: "2026-11-09T14:00:00.000Z",
+      headline: "Iran stands by demands to end the war",
+      summary: "Talks are continuing.",
+      kind: "rss",
+      role: "journalism"
+    },
+    {
+      sourceId: "guardian-world",
+      name: "The Guardian World",
+      url: "https://example.com/sealed",
+      publishedAt: "2026-11-09T14:20:00.000Z",
+      headline: "Trump says Iran is sealed off from weapons",
+      summary: "Analysts questioned the claim.",
+      kind: "rss",
+      role: "journalism"
+    },
+    {
+      sourceId: "x-defenceu",
+      name: "Ministry of Defence of Ukraine on X",
+      url: "https://x.com/DefenceU/status/9",
+      publishedAt: "2026-11-09T12:00:00.000Z",
+      headline: "Dock fire reported at Bandar Abbas",
+      summary: "The account published a photo.",
+      kind: "x",
+      role: "official-statement",
+      editorVerified: true,
+      editorNote: "Editor matched the photo to the port."
+    }
+  ]
+});
+const france = newsFeed.items.find((item) => item.headline.toLowerCase().includes("france"));
+const tehran = newsFeed.items.find((item) => item.headline.toLowerCase().includes("tehran"));
+const demands = newsFeed.items.find((item) => item.headline.toLowerCase().includes("demands"));
+const sealed = newsFeed.items.find((item) => item.headline.toLowerCase().includes("sealed"));
+const bandar = newsFeed.items.find((item) => item.headline.toLowerCase().includes("bandar"));
+if (!france || france.status !== "corroborated-claim" || france.plot || france.sources.length < 2) {
+  throw new Error("Near-duplicate Iran headlines should merge into an unplotted corroborated claim");
+}
+if (france.status === "verified-event") {
+  throw new Error("One editor flag must not verify a cluster that still contains unverified copies");
+}
+if (!tehran?.plot || tehran.location?.namedPlace !== "Tehran" || tehran.location.lat === 0 || tehran.status !== "sourced-claim") {
+  throw new Error("A named city should plot as an approximate sourced claim and ignore supplied coordinates");
+}
+if (!tehran.location.uncertainty || tehran.location.confidence !== "approximate") {
+  throw new Error("Plotted claims need an explicit uncertainty label");
+}
+if (!demands || !sealed || demands.id === sealed.id) {
+  throw new Error("Different Iran headlines should stay separate");
+}
+if (!bandar || bandar.status !== "verified-event" || bandar.location?.namedPlace !== "Bandar Abbas") {
+  throw new Error("An editor-verified snapshot item can be labeled verified and plotted from its text");
+}
+if (locateText("Protests spread across southern Iran")) {
+  throw new Error("A vague country mention must stay in the feed and not invent a coordinate");
+}
+const summaryOnlyCity = buildNewsLiveFeed({
+  theater: "iran",
+  now: newsNow,
+  lookback: "7d",
+  records: [
+    {
+      sourceId: "guardian-world",
+      name: "The Guardian World",
+      url: "https://example.com/guards",
+      publishedAt: "2026-11-09T16:30:00.000Z",
+      headline: "France blames Iran's Revolutionary Guards for cyber-attacks on supermarket fridges",
+      summary: "The foreign minister vowed sanctions against Tehran.",
+      kind: "rss",
+      role: "journalism"
+    },
+    {
+      sourceId: "al-jazeera",
+      name: "Al Jazeera",
+      url: "https://example.com/hormuz-headline",
+      publishedAt: "2026-11-09T15:10:00.000Z",
+      headline: "IRGC strikes three tankers near Hormuz over US links",
+      summary: "A tanker caught fire.",
+      kind: "rss",
+      role: "journalism"
+    }
+  ]
+});
+const guards = summaryOnlyCity.items.find((item) => item.headline.includes("Revolutionary"));
+const hormuz = summaryOnlyCity.items.find((item) => item.headline.includes("Hormuz"));
+if (!guards || guards.plot) {
+  throw new Error("A city name buried in a summary must not become a map point");
+}
+if (!hormuz?.plot || hormuz.location?.precision !== "maritime") {
+  throw new Error("A waterway named in the headline should stay an approximate maritime point");
+}
+if (locateText("Three projectiles were reported toward the Strait of Hormuz")?.precision !== "maritime") {
+  throw new Error("A named waterway may plot only as a maritime reference point");
 }
 
 if (!activeOfficialFeedsForRegion("ukraine").some((source) => source.id === "ukraine-president-rss")) {

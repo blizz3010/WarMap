@@ -38,6 +38,14 @@ node scripts/check-static.mjs
 
 The check validates the static app files and the event, region, category, severity, and source metadata used by the dashboard.
 
+## News Live
+
+The public map's right-hand panel is `/api/news-live`. It lists sourced claims from the curated feeds in `data/curated-sources.json`, with a relative time, a short headline, and a link to the original article. X accounts in that list are not polled. A later updater writes public posts into `data/news-live-snapshot.json`. The contract is in `docs/news-live.md`.
+
+Items that only mention a country stay in the feed. A marker is drawn only when the text names a gazetteer place, and the marker says that the point is approximate. One source is never shown as a verified event. The panel does not fill itself with sample incidents when a feed is empty.
+
+The region tabs on the map are Iran, Israel-Palestine, Yemen, and Ukraine. Ukraine's east, south, north, and Black Sea views remain available.
+
 ## Live feed prototype
 
 `/api/events` returns event-shaped JSON:
