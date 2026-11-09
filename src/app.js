@@ -65,7 +65,8 @@ const state = {
     source: "Prototype data",
     verification: "synthetic fallback"
   },
-  markers: new Map()
+  markers: new Map(),
+  deskMode: initialDeskMode()
 };
 
 const els = {
@@ -109,6 +110,10 @@ const els = {
   viewportOnlyToggle: document.querySelector("#viewportOnlyToggle"),
   zoomIn: document.querySelector("#zoomIn"),
   zoomOut: document.querySelector("#zoomOut"),
+  headerDate: document.querySelector("#headerDate"),
+  deskBar: document.querySelector("#deskBar"),
+  deskModeButton: document.querySelector("#deskModeButton"),
+  openDeskButton: document.querySelector("#openDeskButton"),
   topTabs: document.querySelectorAll("[data-focus-panel]")
 };
 
@@ -180,7 +185,7 @@ const UI_COPY = {
     severity: "Severity",
     category: "Category",
     dateRange: "Date range",
-    aim: "Aim",
+    aim: "Region",
     fit: "Fit",
     premiumOverlays: "Premium overlays",
     viewportOnly: "Viewport only",
@@ -537,6 +542,7 @@ function init() {
   els.timeRange.value = state.timeRange;
   renderFilterControls();
   renderRegionOptions();
+  applyDeskMode();
   renderPlatformChrome();
   renderPremiumLayers();
   bindControls();
@@ -556,7 +562,7 @@ function initMap() {
   const region = currentRegion();
   map = new maplibregl.Map({
     container: "map",
-    style: buildStyle("dark"),
+    style: buildStyle("streets"),
     center: region.center,
     zoom: region.zoom,
     attributionControl: false
@@ -574,29 +580,27 @@ function initMap() {
 }
 
 function buildStyle(theme) {
+  if (!theme || theme === "streets") {
+    return "https://tiles.openfreemap.org/styles/bright";
+  }
   const rasterTiles = {
-    dark: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     light: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
   };
   const attributions = {
-    dark: "Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS user community",
     light: "Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS user community",
     satellite: "Esri, Maxar, Earthstar Geographics, and the GIS User Community"
   };
+  const selected = rasterTiles[theme] ? theme : "light";
 
   return {
     version: 8,
     sources: {
       base: {
         type: "raster",
-        tiles: [rasterTiles[theme] ?? rasterTiles.dark],
+        tiles: [rasterTiles[selected]],
         tileSize: 256,
-        attribution: attributions[theme] ?? attributions.dark
-      },
-      regionFocus: {
-        type: "geojson",
-        data: focusGeoJsonForRegion(state.regionId)
+        attribution: attributions[selected]
       }
     },
     layers: [
@@ -606,25 +610,6 @@ function buildStyle(theme) {
         source: "base",
         minzoom: 0,
         maxzoom: 19
-      },
-      {
-        id: "region-focus-fill",
-        type: "fill",
-        source: "regionFocus",
-        paint: {
-          "fill-color": theme === "light" ? "#f97316" : "#ff3b3b",
-          "fill-opacity": theme === "satellite" ? 0.12 : 0.08
-        }
-      },
-      {
-        id: "region-focus-line",
-        type: "line",
-        source: "regionFocus",
-        paint: {
-          "line-color": theme === "light" ? "#c2410c" : "#ff5757",
-          "line-width": 2.2,
-          "line-opacity": 0.78
-        }
       }
     ]
   };
@@ -662,7 +647,6 @@ function renderTheaterSwitch() {
       : [];
 
   els.theaterSwitch.innerHTML = `
-    <span class="theater-kicker">Region</span>
     ${PRIMARY_THEATERS.map((item) => {
       const active = primaryTheaterIsActive(item.id, state.regionId);
       return `
@@ -842,6 +826,9 @@ function bindControls() {
   els.regionSelect.addEventListener("change", () => {
     changeRegion(els.regionSelect.value);
   });
+
+  els.openDeskButton?.addEventListener("click", () => setDeskMode(true));
+  els.deskModeButton?.addEventListener("click", () => setDeskMode(false));
 
   els.zoomIn.addEventListener("click", () => map.zoomIn());
   els.zoomOut.addEventListener("click", () => map.zoomOut());
@@ -1069,25 +1056,39 @@ function renderNewsFeed(items) {
       const sourceLinks = item.sources
         .slice(0, 3)
         .map((source) => {
-          const url = safeUrl(source.url);
-          const label = source.handle ? `${source.name}` : source.name;
+          const url = safeUrl(source.post?.url || source.url);
+          const handle = source.handle ? `@${source.handle}` : "";
+          const label = handle ? `${source.name} ${handle}` : source.name;
           return url
             ? `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">Source · ${escapeHtml(label)}</a>`
             : `<span>${escapeHtml(label)}</span>`;
         })
         .join("");
+      const markerStyle = newsMarkerStyle(item);
+      const media = (item.media || [])
+        .map((entry) => {
+          const url = safeUrl(entry.url);
+          if (!url) {
+            return "";
+          }
+          return `<a class="news-media-chip" href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(entry.label || "Source file")}</a>`;
+        })
+        .join("");
       return `
         <article class="news-live-card ${item.id === state.selectedNewsId ? "is-active" : ""}" data-news-id="${escapeAttr(item.id)}">
           <button type="button" class="news-live-button" data-news-select="${escapeAttr(item.id)}">
-            <time>${escapeHtml(newsRelativeTime(item.publishedAt))}<span>${escapeHtml(newsClock(item.publishedAt))}</span></time>
+            <time>${escapeHtml(item.publishedAtPrecision === "date" ? newsClock(item.publishedAt, "date") : newsRelativeTime(item.publishedAt))}<span>${escapeHtml(item.publishedAtPrecision === "date" ? "Date only" : newsClock(item.publishedAt))}</span></time>
+            <span class="feed-type-icon" style="--marker-color:${markerStyle.color}" aria-hidden="true">${markerGlyph(markerStyle.icon)}</span>
             <div class="news-live-copy">
               <h3>${escapeHtml(item.headline)}</h3>
               <p class="news-live-flags">
                 <span class="claim-pill is-${escapeAttr(item.status)}">${escapeHtml(item.statusLabel)}</span>
+                <span>${escapeHtml(markerStyle.label)}</span>
                 <span>${item.plot ? escapeHtml(item.location.namedPlace) : "Feed only"}</span>
               </p>
             </div>
           </button>
+          ${media ? `<div class="news-live-media">${media}</div>` : ""}
           <div class="news-live-sources">${sourceLinks}</div>
         </article>
       `;
@@ -1122,18 +1123,29 @@ function renderNewsDetail() {
   const links = item.sources
     .map((source) => {
       const url = safeUrl(source.url);
+      const handle = source.handle ? ` @${source.handle}` : "";
       return url
-        ? `<li><a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(source.name)}</a></li>`
+        ? `<li><a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(source.name)}${escapeHtml(handle)}</a></li>`
         : `<li>${escapeHtml(source.name)}</li>`;
     })
     .join("");
-  els.detailDrawer.style.setProperty("--detail-color", item.status === "verified-event" ? "#22c55e" : "#f59e0b");
+  const mediaLinks = (item.media || [])
+    .map((entry) => {
+      const url = safeUrl(entry.url);
+      return url ? `<li><a href="${escapeAttr(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(entry.label || "Source file")}</a></li>` : "";
+    })
+    .join("");
+  const markerStyle = newsMarkerStyle(item);
+  const postLine = item.post?.url
+    ? `<p><a href="${escapeAttr(safeUrl(item.post.url))}" target="_blank" rel="noreferrer noopener">Post${item.post.handle ? ` by @${escapeHtml(item.post.handle)}` : ""}</a></p>`
+    : "";
+  els.detailDrawer.style.setProperty("--detail-color", markerStyle.color);
   els.detailDrawer.classList.add("is-open");
   els.detailDrawer.setAttribute("aria-hidden", "false");
   els.detailDrawer.innerHTML = `
     <header class="detail-header">
       <div>
-        <time>${escapeHtml(newsRelativeTime(item.publishedAt))} · ${escapeHtml(newsClock(item.publishedAt))}</time>
+        <time>${escapeHtml(item.publishedAtPrecision === "date" ? newsClock(item.publishedAt, "date") : `${newsRelativeTime(item.publishedAt)} · ${newsClock(item.publishedAt)}`)}</time>
         <h2>${escapeHtml(item.headline)}</h2>
         <span>${escapeHtml(item.statusLabel)}</span>
       </div>
@@ -1143,12 +1155,15 @@ function renderNewsDetail() {
       <section>
         <h3>What this is</h3>
         <p>${escapeHtml(item.statusNote)}</p>
+        <p>${escapeHtml(markerStyle.label)}${item.plot ? ` · ${escapeHtml(item.location.namedPlace)}` : ""}</p>
         ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
         <p>${escapeHtml(item.locationNote)}</p>
+        ${postLine}
       </section>
       <aside>
         <h3>Original sources</h3>
         <ul class="news-source-list">${links}</ul>
+        ${mediaLinks ? `<h3>Files</h3><ul class="news-source-list">${mediaLinks}</ul>` : ""}
       </aside>
     </div>
   `;
@@ -1162,7 +1177,7 @@ function renderNewsMarkers(items) {
   if (!map) {
     return;
   }
-  const markerItems = clusteredNewsMarkers(items);
+  const markerItems = fanOverlappingMarkers(clusteredNewsMarkers(items));
   const visibleIds = new Set(markerItems.map((item) => item.markerId));
   for (const [id, marker] of state.markers) {
     if (!visibleIds.has(id)) {
@@ -1176,8 +1191,9 @@ function renderNewsMarkers(items) {
       const node = state.markers.get(markerItem.markerId).getElement();
       node.className = markerItem.className;
       node.style.setProperty("--marker-color", markerItem.color);
-      node.innerHTML = `<span>${escapeHtml(markerItem.short)}</span>`;
+      node.innerHTML = markerItem.kind === "cluster" ? `<span>${escapeHtml(markerItem.short)}</span>` : markerGlyph(markerItem.icon);
       node.title = markerItem.title;
+      state.markers.get(markerItem.markerId).setOffset(markerItem.offset || [0, 0]);
       return;
     }
 
@@ -1185,7 +1201,7 @@ function renderNewsMarkers(items) {
     markerNode.type = "button";
     markerNode.className = markerItem.className;
     markerNode.style.setProperty("--marker-color", markerItem.color);
-    markerNode.innerHTML = `<span>${escapeHtml(markerItem.short)}</span>`;
+    markerNode.innerHTML = markerItem.kind === "cluster" ? `<span>${escapeHtml(markerItem.short)}</span>` : markerGlyph(markerItem.icon);
     markerNode.title = markerItem.title;
     markerNode.addEventListener("click", () => {
       if (markerItem.kind === "cluster") {
@@ -1197,7 +1213,7 @@ function renderNewsMarkers(items) {
       selectNewsItem(markerItem.item.id, false);
     });
 
-    const marker = new maplibregl.Marker({ element: markerNode, anchor: "center" })
+    const marker = new maplibregl.Marker({ element: markerNode, anchor: "center", offset: markerItem.offset || [0, 0] })
       .setLngLat(markerItem.coordinates)
       .addTo(map);
     state.markers.set(markerItem.markerId, marker);
@@ -1205,7 +1221,7 @@ function renderNewsMarkers(items) {
 }
 
 function clusteredNewsMarkers(items) {
-  if (!map || map.getZoom() >= 7.5) {
+  if (!map || map.getZoom() >= 4.2) {
     return items.map(newsToMarker);
   }
 
@@ -1250,24 +1266,91 @@ function clusteredNewsMarkers(items) {
 }
 
 function newsToMarker(item) {
-  const verified = item.status === "verified-event";
+  const markerStyle = newsMarkerStyle(item);
   return {
     kind: "news",
     markerId: item.id,
     item,
+    icon: markerStyle.icon,
     coordinates: [item.location.lon, item.location.lat],
-    color: verified ? "#22c55e" : "#f59e0b",
-    short: verified ? "VF" : "CL",
+    color: markerStyle.color,
+    short: markerStyle.short,
+    offset: [0, 0],
     className: [
       "incident-marker",
       "news-claim-marker",
-      verified ? "is-verified" : "is-reported",
+      "icon-marker",
+      item.status === "verified-event" ? "is-verified" : "is-reported",
       item.id === state.selectedNewsId ? "is-selected" : ""
     ]
       .filter(Boolean)
       .join(" "),
-    title: `${item.location.namedPlace}: ${item.headline}. ${item.location.uncertainty}`
+    title: `${markerStyle.label} · ${item.location.namedPlace}: ${item.headline}. ${item.location.uncertainty}`
   };
+}
+
+const NEWS_MARKER_STYLES = {
+  naval: { icon: "ship", color: "#0369a1", label: "Naval / maritime", short: "SEA" },
+  drone: { icon: "drone", color: "#2563eb", label: "Drone", short: "UAV" },
+  missile: { icon: "missile", color: "#dc2626", label: "Missile", short: "MSL" },
+  strike: { icon: "blast", color: "#ea580c", label: "Airstrike / explosion", short: "EX" },
+  artillery: { icon: "blast", color: "#c2410c", label: "Artillery", short: "ART" },
+  "air-defense": { icon: "alert", color: "#1d4ed8", label: "Air defense", short: "AD" },
+  "ground-clash": { icon: "ground", color: "#b91c1c", label: "Ground fighting", short: "GND" },
+  protest: { icon: "protest", color: "#15803d", label: "Protest", short: "PRO" },
+  cyber: { icon: "cyber", color: "#7c3aed", label: "Cyber", short: "CYB" },
+  fire: { icon: "fire", color: "#d97706", label: "Fire", short: "FIR" },
+  diplomacy: { icon: "statement", color: "#0f766e", label: "Diplomacy", short: "DIP" },
+  "official-statement": { icon: "statement", color: "#0f766e", label: "Official statement", short: "OF" },
+  claim: { icon: "claim", color: "#475569", label: "Sourced claim", short: "CL" }
+};
+
+function newsMarkerStyle(item) {
+  return NEWS_MARKER_STYLES[item?.eventType] || NEWS_MARKER_STYLES.claim;
+}
+
+function markerGlyph(icon) {
+  const paths = {
+    ship: '<path fill="currentColor" d="M4 14.5 6.2 9h11.6L20 14.5v1.2H4v-1.2Zm2.2 2.2h2.1V19H6.2v-2.3Zm9.5 0h2.1V19h-2.1v-2.3ZM9 5.5h6l.8 2.5H8.2L9 5.5Z"/>',
+    drone: '<path fill="currentColor" d="M6 7.2a2.2 2.2 0 1 1 .4 4.4H9l2 2-2 2h-2.6a2.2 2.2 0 1 1-.4-4.4H8l1.2-1.2L8 8.8H6.4A2.2 2.2 0 0 1 6 7.2Zm12 0a2.2 2.2 0 1 1-.4 4.4H16l-1.2 1.2L16 14h1.6a2.2 2.2 0 1 1 .4 4.4A2.2 2.2 0 0 1 16 14.8H15l-2-2 2-2h1.6A2.2 2.2 0 0 1 18 7.2ZM11 11h2v2h-2v-2Z"/>',
+    missile: '<path fill="currentColor" d="M13 3.5c2.8 1.2 5.2 4.6 5.2 8.2 0 1.2-.2 2.2-.5 3.1L14 13.2V11h-2v3.4l-4.2 2.6c.2 1.4.8 2.4 1.7 3 .6-1.6 2-2.8 3.5-3.2l2.7 2.7c-1.6.6-3.4.8-5 .4-2-.5-3.4-1.8-4.2-3.6L4 18.5v-2l3.2-2C6.4 12.2 6 10.4 6 8.8 6 6.2 7.6 4.2 9.4 3.2L13 3.5Z"/>',
+    blast: '<path fill="currentColor" d="M12 2.8 13.4 7l4.4-1.2-2 4.1 4.2 1.6-4.2 1.2 2.2 4-4.4-.8L12 20.2 10.4 16l-4.4.6 2.2-4-4.2-1.2 4.2-1.6-2-4.1L10.6 7 12 2.8Z"/>',
+    alert: '<path fill="currentColor" d="M12 3.2 21 19.2H3L12 3.2Zm0 5.2-.1 5.2h.2L12 8.4Zm0 7.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z"/>',
+    ground: '<path fill="currentColor" d="M12 3.5 5 6.4v5.2c0 4.1 2.8 7.2 7 8.9 4.2-1.7 7-4.8 7-8.9V6.4L12 3.5Zm0 2.3 5 2.2v3.4c0 2.8-1.8 5.1-5 6.6-3.2-1.5-5-3.8-5-6.6V8l5-2.2Z"/>',
+    protest: '<path fill="currentColor" d="M8 10.5a1.7 1.7 0 1 1 0-3.4 1.7 1.7 0 0 1 0 3.4Zm4.2-.4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm4.1.5a1.6 1.6 0 1 1 0-3.2 1.6 1.6 0 0 1 0 3.2ZM4.8 18.8c.4-2.4 2-3.8 4-3.8 1.1 0 2 .4 2.7 1.1.6-.8 1.6-1.3 2.8-1.3 2.2 0 3.6 1.5 4 3.9h-2c-.3-1.3-1-2-2-2s-1.7.6-2 1.6l-.8 1.6H9.2c-.4-1.2-1.1-1.8-2-1.8-.9 0-1.5.6-1.8 1.7h-2.6Z"/>',
+    cyber: '<path fill="currentColor" d="M7 6.5h10v2H7v-2Zm-1 3.5h12v8H6v-8Zm2 2v4h8v-4H8Zm1.5 1.2h2v1.6h-2v-1.6Zm3 0h2v1.6h-2v-1.6Z"/>',
+    fire: '<path fill="currentColor" d="M12 3s3.2 3.2 3.2 6.1c0 1.2-.5 2.1-1.2 2.8.2-1.6-1-2.6-1-2.6s-2.8 2-2.8 4.4c0 2.6 2 4.5 4.6 4.5 3.2 0 5.4-2.6 5.4-6.1C20.2 7.4 12 3 12 3ZM8.2 14.2c0 2.4 1.8 4.6 4.3 4.6.4 0 .7 0 1-.1-2 .2-3.6-1.2-3.6-3.1 0-1.4.8-2.6 1.5-3.4-1.8.8-3.2 2.2-3.2 2Z"/>',
+    statement: '<path fill="currentColor" d="M5 6.5h10.5v7H8.2L5 16.2V6.5Zm12 .8h2v7h-2v-7Z"/>',
+    claim: '<path fill="currentColor" d="M12 5.2a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Zm0 2.2a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Z"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[icon] || paths.claim}</svg>`;
+}
+
+function fanOverlappingMarkers(markerItems) {
+  if (!map) {
+    return markerItems;
+  }
+  const placed = [];
+  markerItems.forEach((item) => {
+    if (item.kind === "cluster") {
+      item.offset = [0, 0];
+      placed.push(item);
+      return;
+    }
+    const point = map.project(item.coordinates);
+    const slot = placed.filter((other) => {
+      if (other.kind === "cluster") {
+        return false;
+      }
+      const otherPoint = map.project(other.coordinates);
+      return Math.hypot(otherPoint.x - point.x, otherPoint.y - point.y) < 20;
+    }).length;
+    const column = slot % 3;
+    const row = Math.floor(slot / 3);
+    item.offset = slot === 0 ? [0, 0] : [(column - 1) * 16, row * 16];
+    placed.push(item);
+  });
+  return markerItems;
 }
 
 function selectNewsItem(id, pan) {
@@ -1281,7 +1364,7 @@ function selectNewsItem(id, pan) {
   if (pan && item.plot && item.location && map) {
     map.easeTo({
       center: [item.location.lon, item.location.lat],
-      zoom: Math.max(map.getZoom(), 5.8),
+      zoom: Math.max(map.getZoom(), 6.6),
       duration: 500
     });
   }
@@ -1320,10 +1403,13 @@ function newsRelativeTime(iso) {
   return `${Math.round(hours / 24)}d`;
 }
 
-function newsClock(iso) {
+function newsClock(iso, precision) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return "";
+  }
+  if (precision === "date") {
+    return date.toLocaleDateString([], { day: "numeric", month: "short" });
   }
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -1660,13 +1746,14 @@ function render() {
   renderIntelPanel(visible);
   updateCounts();
   const plotted = news.filter((item) => item.plot).length;
-  els.mapVisibleCount.textContent = `${plotted.toLocaleString()} mapped claims · ${news.length.toLocaleString()} in News Live`;
+  els.mapVisibleCount.textContent = `${plotted.toLocaleString()} on the map · ${news.length.toLocaleString()} in News Live`;
   els.updatedAt.textContent = uiCopy("updatedAt", {
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   });
   if (els.newsLiveStatus) {
     els.newsLiveStatus.textContent = newsStatusSentence();
   }
+  renderHeaderDate();
 }
 
 function filteredEvents(applyViewport) {
@@ -3361,6 +3448,52 @@ function setInputLabelText(input, text) {
   }
 }
 
+function setDeskMode(enabled) {
+  state.deskMode = Boolean(enabled);
+  try {
+    window.sessionStorage.setItem("warmap.deskMode", state.deskMode ? "1" : "0");
+  } catch {
+    // Session storage is optional. The bar still toggles for this page view.
+  }
+  applyDeskMode();
+}
+
+function applyDeskMode() {
+  document.body.classList.toggle("desk-mode", state.deskMode);
+  if (els.deskBar) {
+    els.deskBar.hidden = !state.deskMode;
+  }
+  if (els.deskModeButton) {
+    els.deskModeButton.setAttribute("aria-pressed", String(state.deskMode));
+  }
+  if (els.openDeskButton) {
+    els.openDeskButton.hidden = state.deskMode;
+  }
+  if (!state.deskMode) {
+    state.filtersOpen = false;
+    state.layersOpen = false;
+    if (["review", "alerts", "time"].includes(state.activePanel)) {
+      state.activePanel = "feed";
+    }
+  }
+}
+
+function renderHeaderDate() {
+  if (!els.headerDate) {
+    return;
+  }
+  const mode = activeTimeZoneMode();
+  const timeZone = mode.id === "utc" ? "UTC" : mode.id === "utc3" ? "Etc/GMT-3" : undefined;
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone
+  }).format(new Date());
+  els.headerDate.dateTime = new Date().toISOString();
+  els.headerDate.textContent = formatted;
+}
+
 function renderPlatformChrome() {
   const language = activeLanguage();
   document.documentElement.lang = language.locale ?? language.id;
@@ -3586,17 +3719,12 @@ function storeModeLabel(mode) {
 function fitToRegion(animated) {
   const region = currentRegion();
   updateRegionFocus();
-  map.fitBounds(
-    [
-      [region.bounds[0], region.bounds[1]],
-      [region.bounds[2], region.bounds[3]]
-    ],
-    {
-      padding: region.fitPadding ?? 36,
-      maxZoom: region.maxZoom,
-      duration: animated ? 700 : 0
-    }
-  );
+  const camera = { center: region.center, zoom: region.zoom };
+  if (animated) {
+    map.easeTo({ ...camera, duration: 700 });
+    return;
+  }
+  map.jumpTo(camera);
 }
 
 function fitVisibleEvents() {
@@ -3629,6 +3757,18 @@ function initialPublicationMode() {
 function initialTimeRange() {
   const params = new URLSearchParams(window.location.search);
   return normalizeTimeRange(params.get("lookback"));
+}
+
+function initialDeskMode() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("desk") === "1") {
+    return true;
+  }
+  try {
+    return window.sessionStorage.getItem("warmap.deskMode") === "1";
+  } catch {
+    return false;
+  }
 }
 
 function focusGeoJsonForRegion(regionId) {

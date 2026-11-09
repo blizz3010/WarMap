@@ -915,6 +915,51 @@ if (!hormuz?.plot || hormuz.location?.precision !== "maritime") {
 if (locateText("Three projectiles were reported toward the Strait of Hormuz")?.precision !== "maritime") {
   throw new Error("A named waterway may plot only as a maritime reference point");
 }
+if (!curatedSources.sources.some((source) => source.id === "x-ukmto" && source.handle === "UK_MTO" && source.ingest === "snapshot")) {
+  throw new Error("Expected the UKMTO X account in the curated source list");
+}
+const khasab = locateText("incident 8NM northwest of Khasab, Oman");
+if (!khasab || khasab.namedPlace !== "Khasab" || khasab.lat !== 26.17993 || khasab.lon !== 56.24774) {
+  throw new Error("Khasab should geocode to the town reference, not an invented offshore point");
+}
+const ukmtoFeed = buildNewsLiveFeed({
+  theater: "iran",
+  now: newsNow,
+  lookback: "30d",
+  records: [
+    {
+      sourceId: "x-ukmto",
+      name: "UKMTO on X",
+      url: "https://x.com/UK_MTO/status/2119830956169175405",
+      postUrl: "https://x.com/UK_MTO/status/2119830956169175405",
+      authorHandle: "UK_MTO",
+      publishedAt: "2026-11-08T00:00:00.000Z",
+      publishedAtPrecision: "date",
+      headline: "UKMTO has received a time-late report of an incident 8NM northwest of Khasab, Oman.",
+      summary: "Military authorities reported the Tanker is on fire which has resulted in the evacuation of the crew.",
+      kind: "x",
+      role: "official-statement",
+      handle: "UK_MTO",
+      media: [{ type: "document", url: "https://www.ukmto.org/-/media/ukmto/products/20261108-ukmto_warning_199-26.pdf", label: "UKMTO warning 199-26" }]
+    }
+  ]
+});
+const ukmto = ukmtoFeed.items[0];
+if (
+  !ukmto?.plot ||
+  ukmto.location?.namedPlace !== "Khasab" ||
+  ukmto.location?.precision !== "near-place" ||
+  ukmto.eventType !== "naval" ||
+  ukmto.post?.handle !== "UK_MTO" ||
+  ukmto.post?.url !== "https://x.com/UK_MTO/status/2119830956169175405" ||
+  ukmto.media?.[0]?.label !== "UKMTO warning 199-26" ||
+  ukmto.status !== "sourced-claim"
+) {
+  throw new Error("The UKMTO tanker warning should stay a sourced naval claim plotted on Khasab");
+}
+if (!appSource.includes("tiles.openfreemap.org") || !indexPageSource.includes('id="deskBar"') || !indexPageSource.includes('id="headerDate"')) {
+  throw new Error("Expected a street basemap and a public header with review tools separated");
+}
 
 if (!activeOfficialFeedsForRegion("ukraine").some((source) => source.id === "ukraine-president-rss")) {
   throw new Error("Expected official Ukraine presidential feed collector");

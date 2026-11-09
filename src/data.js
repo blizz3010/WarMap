@@ -3,8 +3,8 @@ export const regions = [
     id: "iran",
     name: "Iran",
     group: "Middle East",
-    center: [53.6, 32.7],
-    zoom: 4.85,
+    center: [53.4, 29.6],
+    zoom: 5.55,
     bounds: [44.0, 25.2, 62.3, 39.6],
     fitPadding: 18,
     maxZoom: 5.05

@@ -19,11 +19,11 @@ const LOOKBACK_MS = {
 };
 
 const THEATER_TERMS = {
-  iran: ["iran", "iranian", "tehran", "irgc", "isfahan", "esfahan", "shiraz", "mashhad", "tabriz", "qom", "bandar abbas", "qeshm", "bushehr", "persian gulf", "strait of hormuz", "hormuz"],
+  iran: ["iran", "iranian", "tehran", "irgc", "isfahan", "esfahan", "shiraz", "mashhad", "tabriz", "qom", "bandar abbas", "qeshm", "bushehr", "persian gulf", "strait of hormuz", "hormuz", "khasab", "khor fakkan", "ras al khafji", "khafji", "madinat ash shamal", "musandam", "gulf of oman"],
   "israel-palestine": ["gaza", "israel", "israeli", "palestinian", "west bank", "hamas", "jerusalem", "tel aviv", "rafah", "khan younis", "ramallah", "jenin", "nablus", "hezbollah"],
   yemen: ["yemen", "yemeni", "houthi", "houthis", "sanaa", "sana'a", "aden", "hudaydah", "hodeidah", "marib", "taiz", "bab el-mandeb", "bab al-mandab"],
   ukraine: ["ukraine", "ukrainian", "kyiv", "kiev", "kharkiv", "kharkov", "odesa", "odessa", "donetsk", "luhansk", "crimea", "kherson", "zaporizhzhia", "zelensky", "dnipro", "mykolaiv", "sumy"],
-  gulf: ["persian gulf", "arabian gulf", "strait of hormuz", "hormuz", "qatar", "bahrain", "kuwait", "saudi", "uae", "emirates", "tanker", "bandar abbas"],
+  gulf: ["persian gulf", "arabian gulf", "strait of hormuz", "hormuz", "qatar", "bahrain", "kuwait", "saudi", "uae", "emirates", "tanker", "bandar abbas", "khasab", "khor fakkan", "ras al khafji", "khafji", "madinat ash shamal", "musandam", "gulf of oman", "oman"],
   "middle-east": ["iran", "israel", "gaza", "yemen", "lebanon", "syria", "iraq", "houthi", "hezbollah", "tehran", "damascus", "beirut"]
 };
 
@@ -46,6 +46,14 @@ const PLACES = [
   { name: "Bushehr", precision: "city", lat: 28.9234, lon: 50.8203, aliases: ["bushehr"] },
   { name: "Qeshm Island", precision: "island", lat: 26.8119, lon: 55.8913, aliases: ["qeshm island", "qeshm"] },
   { name: "Strait of Hormuz", precision: "maritime", lat: 26.5667, lon: 56.25, aliases: ["strait of hormuz", "hormuz"] },
+  // Khasab town, GeoNames 287614. Not an offset from the town.
+  { name: "Khasab", precision: "city", lat: 26.17993, lon: 56.24774, aliases: ["khasab"] },
+  // Nominatim city relation for Khor Fakkan, 9 Nov 2026.
+  { name: "Khor Fakkan", precision: "city", lat: 25.3491721, lon: 56.3478105, aliases: ["khor fakkan"] },
+  // Nominatim place node for Ras Al Khafji, 9 Nov 2026.
+  { name: "Ras Al Khafji", precision: "city", lat: 28.4225409, lon: 48.4927814, aliases: ["ras al khafji", "khafji"] },
+  // Nominatim administrative area for Madinat ash Shamal, Qatar, 9 Nov 2026.
+  { name: "Madinat ash Shamal", precision: "city", lat: 26.0517166, lon: 51.2005821, aliases: ["madinat ash shamal", "madinat al shamal"] },
   { name: "Jerusalem", precision: "city", lat: 31.7683, lon: 35.2137, aliases: ["jerusalem"] },
   { name: "Tel Aviv", precision: "city", lat: 32.0853, lon: 34.7818, aliases: ["tel aviv"] },
   { name: "Haifa", precision: "city", lat: 32.794, lon: 34.9896, aliases: ["haifa"] },
@@ -77,8 +85,24 @@ const PLACES = [
 const UNCERTAINTY = {
   city: "The text names this city. The marker is a city reference point, not a confirmed impact or unit location.",
   island: "The text names this island. The marker is an island reference point, not a confirmed impact location.",
-  maritime: "The text names this waterway. The marker is a representative point for the waterway, not a vessel or impact position."
+  maritime: "The text names this waterway. The marker is a representative point for the waterway, not a vessel or impact position.",
+  "near-place": "The text names this place and a distance from it. The marker stays on the named place. The distance is not turned into a new coordinate."
 };
+
+// First matching rule wins. Maritime wording is checked before generic "strike".
+const EVENT_TYPE_RULES = [
+  ["naval", ["tanker", "vessel", "ukmto", "naval", "maritime", "warship", "bulk carrier", "dhow"]],
+  ["drone", ["drone", "uav", "shahed", "loitering munition"]],
+  ["missile", ["missile", "ballistic", "cruise missile"]],
+  ["air-defense", ["air defense", "air defence", "intercepted", "interception"]],
+  ["artillery", ["artillery", "shelling", "mortar"]],
+  ["strike", ["airstrike", "air strike", "bombing", "explosion", "blast", "struck"]],
+  ["ground-clash", ["clashes", "ground fighting", "firefight"]],
+  ["protest", ["protest", "protests", "demonstration", "unrest"]],
+  ["cyber", ["cyber", "hack", "hacking", "ransomware"]],
+  ["fire", ["on fire", "ablaze", "fire"]],
+  ["diplomacy", ["sanction", "talks", "diplomatic"]]
+];
 
 export function loadCuratedSources() {
   const payload = JSON.parse(readFileSync(SOURCES_PATH, "utf8"));
@@ -168,7 +192,7 @@ export async function buildNewsLivePayload({
         "Every item is a sourced claim unless an editor explicitly verified every copy in the cluster. One article or one X post is never a confirmed event.",
       xAccess: "not-polled",
       xAccessDetail:
-        "This server does not call the X API and has no X credentials. Accounts with ingest \"snapshot\" appear only after an updater writes data/news-live-snapshot.json. See docs/news-live.md.",
+        "This server does not call the X API and has no X credentials. Accounts with ingest \"snapshot\" appear when an updater writes data/news-live-snapshot.json. A checked-in UKMTO warning is included so the Iran map can show that source. See docs/news-live.md.",
       snapshotUpdatedAt: snapshot.updatedAt,
       snapshotItemCount: snapshotCount,
       rssFeedsAttempted: liveSources.length,
@@ -210,16 +234,21 @@ export default async function handler(request, response) {
 }
 
 export function snapshotItemToRecord(item, source) {
+  const postUrl = safeHttpUrl(item.postUrl || (source.kind === "x" ? item.url : ""));
   return {
     sourceId: source.id,
     name: source.displayName,
     url: item.url,
     publishedAt: item.publishedAt,
+    publishedAtPrecision: item.publishedAtPrecision === "date" ? "date" : "instant",
     headline: item.headline,
     summary: item.summary || "",
     kind: source.kind,
     role: source.role,
     handle: source.handle || null,
+    authorHandle: cleanHandle(item.authorHandle || source.handle),
+    postUrl,
+    media: normalizeMedia(item.media),
     official: isOfficialRole(source.role),
     editorVerified: item.editorVerified === true,
     editorNote: typeof item.editorNote === "string" ? item.editorNote : ""
@@ -243,6 +272,10 @@ function normalizeRecord(record, theater) {
     kind: record.kind || "rss",
     role: record.role || "journalism",
     handle: record.handle || null,
+    authorHandle: cleanHandle(record.authorHandle || record.handle),
+    postUrl: safeHttpUrl(record.postUrl || (record.kind === "x" ? record.url : "")),
+    media: normalizeMedia(record.media),
+    publishedAtPrecision: record.publishedAtPrecision === "date" ? "date" : "instant",
     official: Boolean(record.official),
     editorVerified: record.editorVerified === true,
     editorNote: cleanText(record.editorNote).slice(0, 240),
@@ -259,7 +292,12 @@ function dedupeRecords(records, theater) {
       const tokens = tokenSet(record.headline);
       const cluster = clusters.find((candidate) => {
         const timeGap = Math.abs(Date.parse(candidate.records[0].publishedAt) - Date.parse(record.publishedAt));
-        return timeGap <= 48 * 60 * 60 * 1000 && overlap(candidate.tokens, tokens) >= 0.72;
+        if (timeGap > 48 * 60 * 60 * 1000 || overlap(candidate.tokens, tokens) < 0.72) {
+          return false;
+        }
+        const leftPlace = locateText(candidate.records[0].headline)?.namedPlace;
+        const rightPlace = locateText(record.headline)?.namedPlace;
+        return !leftPlace || !rightPlace || leftPlace === rightPlace;
       });
       if (cluster) {
         cluster.records.push(record);
@@ -317,28 +355,70 @@ function clusterToItem(records, theater) {
     statusNote = "An editor note was present on one copy, but the cluster is still a sourced claim.";
   }
 
-  const location =
-    locateText(records.map((record) => record.headline).join(" ")) ||
-    locateText(
-      records.map((record) => record.summary).join(" "),
-      { minAliasLength: 12 }
-    );
+  const headlineText = records.map((record) => record.headline).join(" ");
+  const summaryText = records.map((record) => record.summary).join(" ");
+  const location = describeLocation(
+    locateText(headlineText) || locateText(summaryText, { minAliasLength: 12 }),
+    `${headlineText} ${summaryText}`
+  );
   const urls = uniqueSources.map((source) => source.url).sort();
+  const media = [];
+  const seenMedia = new Set();
+  records.forEach((record) => {
+    (record.media || []).forEach((item) => {
+      if (seenMedia.has(item.url)) {
+        return;
+      }
+      seenMedia.add(item.url);
+      media.push(item);
+    });
+  });
+  const xRecord = records.find((record) => record.kind === "x" && (record.postUrl || record.url));
+  const eventType = classifyNewsEventType(`${headlineText} ${summaryText}`);
   return {
     id: `nl_${stableHash(`${theater}|${tokenKey(newest.headline)}|${urls.join("|")}`)}`,
     theater,
     publishedAt: newest.publishedAt,
+    publishedAtPrecision: newest.publishedAtPrecision || "instant",
     headline: newest.headline,
     summary: newest.summary,
     status,
     statusLabel,
     statusNote,
+    eventType,
     sources: uniqueSources,
+    media,
+    post: xRecord
+      ? {
+          handle: xRecord.authorHandle || xRecord.handle || null,
+          url: xRecord.postUrl || xRecord.url
+        }
+      : null,
     plot: Boolean(location),
     location,
     locationNote: location
       ? location.uncertainty
       : "No specific place was named, or the named area was too broad. This item stays in the feed and is not placed on the map."
+  };
+}
+
+export function classifyNewsEventType(text) {
+  const haystack = ` ${cleanText(text).toLowerCase()} `;
+  const match = EVENT_TYPE_RULES.find(([, terms]) => terms.some((term) => containsTerm(haystack, term)));
+  return match ? match[0] : "claim";
+}
+
+function describeLocation(location, text) {
+  if (!location) {
+    return null;
+  }
+  if (!/\d+\s*(nm|nmi|nautical miles?)\b/i.test(text) || location.precision === "maritime") {
+    return location;
+  }
+  return {
+    ...location,
+    precision: "near-place",
+    uncertainty: UNCERTAINTY["near-place"]
   };
 }
 
@@ -388,7 +468,8 @@ function containsTerm(haystack, term) {
     return true;
   }
   const escaped = term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/'/g, "'");
-  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, "i").test(haystack);
+  const plural = term.length > 3 ? "s?" : "";
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}${plural}(?:$|[^a-z0-9])`, "i").test(haystack);
 }
 
 function tokenSet(text) {
@@ -548,6 +629,32 @@ function decodeXml(value) {
     .replace(/&#8211;/g, "-")
     .replace(/&#8216;|&#8217;/g, "'")
     .replace(/&#8220;|&#8221;/g, '"');
+}
+
+function normalizeMedia(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      const url = safeHttpUrl(item?.url);
+      if (!url) {
+        return null;
+      }
+      const type = ["image", "video", "document"].includes(item?.type) ? item.type : "document";
+      return {
+        type,
+        url,
+        label: cleanText(item?.label).slice(0, 120) || "Source document"
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function cleanHandle(value) {
+  const handle = cleanText(value).replace(/^@/, "");
+  return /^[A-Za-z0-9_]{1,15}$/.test(handle) ? handle : "";
 }
 
 function safeHttpUrl(value) {

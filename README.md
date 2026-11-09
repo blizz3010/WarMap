@@ -4,8 +4,8 @@ WarMap Live is a Liveuamap-style live news map and feed prototype.
 
 This rebuild shifts the project away from the original strike-only dashboard and toward a continuously updating news-map product:
 
-- region selector plus one-click theater strip for Middle East and Ukraine area presets, top navigation, time/key controls, and global search
-- dense map canvas with colored incident markers and zoom-aware marker clustering
+- public header with the date, Iran / Israel-Palestine / Yemen / Ukraine tabs, a region picker, News Live, language, time, and a key. Review desk, publish package, filters, layers, and pause stay behind Review mode
+- light street basemap with one typed marker per located claim. Markers stack into a count only when the map is zoomed far out, and separate again on zoom-in
 - reverse-chronological feed synchronized with selected map events and visible original source links
 - filter rail for verification, publication mode, source type, severity, category, granular event type, media, and viewport-only mode
 - event detail drawer with summary, source list, geocode precision, confidence, update trail, side color, review queue, and verification state
@@ -40,7 +40,7 @@ The check validates the static app files and the event, region, category, severi
 
 ## News Live
 
-The public map's right-hand panel is `/api/news-live`. It lists sourced claims from the curated feeds in `data/curated-sources.json`, with a relative time, a short headline, and a link to the original article. X accounts in that list are not polled. A later updater writes public posts into `data/news-live-snapshot.json`. The contract is in `docs/news-live.md`.
+The public map's right-hand panel is `/api/news-live`. It lists sourced claims from the curated feeds in `data/curated-sources.json`, with a relative time, a short headline, and a link to the original article. X accounts in that list are not polled. A later updater writes public posts into `data/news-live-snapshot.json`. The checked-in snapshot includes the UKMTO warning for the tanker northwest of Khasab so that post can appear as a naval marker and a News Live card. The contract is in `docs/news-live.md`.
 
 Items that only mention a country stay in the feed. A marker is drawn only when the text names a gazetteer place, and the marker says that the point is approximate. One source is never shown as a verified event. The panel does not fill itself with sample incidents when a feed is empty.
 
