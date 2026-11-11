@@ -4436,9 +4436,9 @@ body.public-map .live-shell {
 body.public-map .public-header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-height: 58px;
-  padding: 0 14px;
+  padding: 0 16px;
   border-bottom: 1px solid #d7e0e8;
   background: #ffffff;
   z-index: 20;
@@ -4616,14 +4616,15 @@ body.public-map:not(.desk-mode) .map-status label {
 }
 
 body.public-map .feed-header.news-live-header {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     "title time"
     "status status"
     "summary summary"
     "search search";
-  gap: 6px 12px;
-  padding: 12px 14px;
+  gap: 8px 12px;
+  padding: 12px 16px 14px;
   border-bottom: 1px solid #e2e8f0;
 }
 
@@ -4666,8 +4667,16 @@ body.public-map #openDeskButton {
 }
 
 body.public-map .news-live-button {
-  grid-template-columns: 48px 28px minmax(0, 1fr);
+  grid-template-columns: 40px 26px minmax(0, 1fr);
   align-items: start;
+  gap: 8px 10px;
+  padding: 10px 16px 6px;
+}
+
+body.public-map .news-live-button time {
+  overflow: hidden;
+  max-width: 40px;
+  line-height: 1.2;
 }
 
 body.public-map .feed-type-icon {
@@ -4677,6 +4686,7 @@ body.public-map .feed-type-icon {
   place-items: center;
   flex: 0 0 26px;
   overflow: hidden;
+  margin-top: 1px;
   border-radius: 999px;
   background: var(--marker-color, #475569);
   color: #ffffff;
@@ -4697,14 +4707,14 @@ body.public-map .news-media-chip {
 }
 
 body.public-map .news-live-sources {
-  padding-left: 98px;
+  padding: 0 16px 12px 102px;
 }
 
 body.public-map .news-live-media {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 12px 8px 98px;
+  padding: 0 16px 8px 102px;
 }
 
 body.public-map .news-media-chip {

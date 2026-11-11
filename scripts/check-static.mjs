@@ -776,6 +776,9 @@ for (const eventType of Object.values(eventTypes)) {
     throw new Error(`Expected a marker glyph path for event icon "${icon}"`);
   }
 }
+if (!indexPageSource.includes('id="theaterSwitch" aria-label="Regions"></nav>')) {
+  throw new Error("Expected the region tabs nav to be a properly closed element");
+}
 
 const newsNow = new Date("2026-11-09T18:00:00.000Z");
 const newsFeed = buildNewsLiveFeed({
