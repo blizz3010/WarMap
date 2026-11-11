@@ -1294,36 +1294,79 @@ const NEWS_MARKER_STYLES = {
   drone: { icon: "drone", color: "#2563eb", label: "Drone", short: "UAV" },
   missile: { icon: "missile", color: "#dc2626", label: "Missile", short: "MSL" },
   strike: { icon: "blast", color: "#ea580c", label: "Airstrike / explosion", short: "EX" },
-  artillery: { icon: "blast", color: "#c2410c", label: "Artillery", short: "ART" },
-  "air-defense": { icon: "alert", color: "#1d4ed8", label: "Air defense", short: "AD" },
-  "ground-clash": { icon: "ground", color: "#b91c1c", label: "Ground fighting", short: "GND" },
-  protest: { icon: "protest", color: "#15803d", label: "Protest", short: "PRO" },
+  artillery: { icon: "artillery", color: "#c2410c", label: "Artillery", short: "ART" },
+  "air-defense": { icon: "air-defense", color: "#1d4ed8", label: "Air defense", short: "AD" },
+  "air-alert": { icon: "alert", color: "#1d4ed8", label: "Air alert", short: "ALT" },
+  "air-operations": { icon: "air", color: "#2563eb", label: "Air operations", short: "AIR" },
+  "ground-clash": { icon: "shield", color: "#b91c1c", label: "Ground fighting", short: "GND" },
+  "troop-movement": { icon: "route", color: "#b91c1c", label: "Troop movement", short: "MOV" },
+  "map-control": { icon: "frontline", color: "#9f1239", label: "Map control change", short: "MAP" },
+  protest: { icon: "crowd", color: "#15803d", label: "Protest", short: "PRO" },
   cyber: { icon: "cyber", color: "#7c3aed", label: "Cyber", short: "CYB" },
   fire: { icon: "fire", color: "#d97706", label: "Fire", short: "FIR" },
-  diplomacy: { icon: "statement", color: "#0f766e", label: "Diplomacy", short: "DIP" },
+  diplomacy: { icon: "diplomacy", color: "#0f766e", label: "Diplomacy", short: "DIP" },
   "official-statement": { icon: "statement", color: "#0f766e", label: "Official statement", short: "OF" },
-  claim: { icon: "claim", color: "#475569", label: "Sourced claim", short: "CL" }
+  claim: { icon: "claim", color: "#475569", label: "Sourced claim", short: "CL" },
+  "security-deployment": { icon: "police", color: "#7c3aed", label: "Security deployment", short: "SEC" },
+  "border-incident": { icon: "border", color: "#6d28d9", label: "Border incident", short: "BDR" },
+  "infrastructure-hit": { icon: "facility", color: "#d97706", label: "Infrastructure damage", short: "INF" },
+  casualty: { icon: "medical", color: "#0891b2", label: "Casualties", short: "CAS" },
+  displacement: { icon: "evacuation", color: "#0891b2", label: "Displacement", short: "EVAC" },
+  aid: { icon: "aid", color: "#0e7490", label: "Humanitarian aid", short: "AID" },
+  "media-evidence": { icon: "media", color: "#475569", label: "Photo / video evidence", short: "VID" }
 };
 
 function newsMarkerStyle(item) {
-  return NEWS_MARKER_STYLES[item?.eventType] || NEWS_MARKER_STYLES.claim;
+  const typeId = item?.eventType;
+  const preset = NEWS_MARKER_STYLES[typeId];
+  const eventType = eventTypes[typeId];
+  const category = categories[eventType?.category] ?? categories.other;
+  return {
+    icon: preset?.icon || eventType?.icon || "claim",
+    color: preset?.color || category.color,
+    label: preset?.label || eventType?.label || "Sourced claim",
+    short: preset?.short || eventType?.short || "CL"
+  };
 }
 
+// Keep one simple drawing for every taxonomy icon name so a missing key
+// cannot leave a blank chip. White fill is set on the SVG itself so the
+// glyph stays visible even if currentColor does not inherit.
+const MARKER_PATHS = {
+  ship: "M3.5 14.2 6.3 10h11.4l2.8 4.2v1.4H3.5v-1.4Zm3.2 2.2h2.2V19H6.7v-2.6Zm8.6 0h2.2V19h-2.2v-2.6ZM9 5.5h6l1 3.3H8L9 5.5Z",
+  drone: "M4.8 6.6a2.1 2.1 0 1 1 0 4.2H8.6L12 13l3.4-2.2h3.8a2.1 2.1 0 1 1 0-4.2 2.1 2.1 0 0 1 0 4.2h-3.1L12 11.6 7.9 10.8H4.8a2.1 2.1 0 0 1 0-4.2Zm6.1 7.6h2.2v2.2h-2.2zM6.2 14.6h2v3.2h-2zm9.6 0h2v3.2h-2z",
+  missile: "M12 2.6 16.4 13H7.6L12 2.6ZM8.4 14.4h7.2l.9 2.4H7.5l.9-2.4ZM11 17h2v4.2h-2z",
+  blast: "M12 2.2 13.7 8l6.3-1.2-3.7 5.2 5.5 3.4-6.4.7.3 6.4-3.7-5.3-3.7 5.3.3-6.4-6.4-.7 5.5-3.4-3.7-5.2 6.3 1.2z",
+  alert: "M12 3.2 22 20.2H2L12 3.2Zm0 5.4-.85 5.5h1.7L12 8.6Zm0 7.2a1 1 0 1 0 .02 2 1 1 0 0 0-.02-2Z",
+  "air-defense": "M12 2.6 20 6v5.4c0 4.4-3.3 7.6-8 9-4.7-1.4-8-4.6-8-9V6l8-3.4Zm0 4.8-2 2.4h1.4V15h1.2V9.8H14L12 7.4Z",
+  air: "M21 15.8v-2l-8-5V3.6A1.5 1.5 0 0 0 11.5 2.1 1.5 1.5 0 0 0 10 3.6v5.2l-8 5v2l8-2.4V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.6l8 2.4Z",
+  shield: "M12 2.6 4.8 5.6v6.4c0 4.5 3.1 7.8 7.2 9.5 4.1-1.7 7.2-5 7.2-9.5V5.6L12 2.6Z",
+  ground: "M12 2.6 4.8 5.6v6.4c0 4.5 3.1 7.8 7.2 9.5 4.1-1.7 7.2-5 7.2-9.5V5.6L12 2.6Z",
+  route: "M6 5h2.4v8.4c0 1.5 1.2 2.6 2.6 2.6h2.8l-1.7-1.7 1.3-1.3 4 4-4 4-1.3-1.3 1.7-1.7H11c-2.9 0-5-2.3-5-5.1V5Z",
+  artillery: "M4.2 16.6a3.3 3.3 0 1 1 6.6 0 3.3 3.3 0 0 1-6.6 0ZM9.2 14.2 19.8 6l1.3 1.5-10.6 8.2-1.3-1.5ZM6.4 15.2h2.4v4.2H6.4z",
+  frontline: "M4.8 4.4h2.2v15.2H4.8zm3.2 0 10.6 4.4-10.6 4.4V4.4zm0 9.6 10.6 4.4-10.6 4.4v-8.8z",
+  police: "M12 2.6 14.2 7l4.8.7-3.5 3.4.8 4.8L12 13.7 7.7 15.9l.8-4.8-3.5-3.4 4.8-.7L12 2.6Z",
+  border: "M4 5.2h3.2v13.6H4zm12.8 0H20v13.6h-3.2zM8.4 10.4h7.2v2.6H8.4z",
+  facility: "M5 20V9.2L12 4.4l7 4.8V20h-5.2v-6.2h-3.6V20H5z",
+  fire: "M12 2.6c4.8 4.6 7 7.8 7 11.2A7 7 0 1 1 7.2 8.4C8.8 10.6 11 11.4 11 11.4 11 8.6 12 5.4 12 2.6Z",
+  medical: "M10 3.4h4v6.2h6.2v4H14v6.4h-4v-6.4H3.8v-4H10V3.4Z",
+  evacuation: "M4 4.4h8.2v3H6.6v9h5.6v3H4V4.4Zm7.6 5.3h6.2l-2-2 1.4-1.4 4.4 4.4-4.4 4.4-1.4-1.4 2-2H11.6V9.7Z",
+  aid: "M12 3.2a8.8 8.8 0 1 1 0 17.6 8.8 8.8 0 0 1 0-17.6ZM10.7 8v3.2H7.5v2.4h3.2V16.8h2.6v-3.2h3.2v-2.4h-3.2V8h-2.6Z",
+  crowd: "M8 8.2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm8 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM12 6.4a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4ZM4.8 18.8c.4-2.4 2-3.8 4-3.8 1 0 1.8.4 2.4 1.1.6-.8 1.6-1.3 2.8-1.3 2.2 0 3.6 1.5 4 3.9h-2.2c-.3-1.3-1-2-2-2s-1.7.6-2 1.7l-.4.9H9.2c-.4-1.2-1.1-1.8-2-1.8-.9 0-1.5.6-1.8 1.7H4.8Z",
+  protest: "M8 8.2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm8 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM12 6.4a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4ZM4.8 18.8c.4-2.4 2-3.8 4-3.8 1 0 1.8.4 2.4 1.1.6-.8 1.6-1.3 2.8-1.3 2.2 0 3.6 1.5 4 3.9h-2.2c-.3-1.3-1-2-2-2s-1.7.6-2 1.7l-.4.9H9.2c-.4-1.2-1.1-1.8-2-1.8-.9 0-1.5.6-1.8 1.7H4.8Z",
+  statement: "M4.5 5.4h12.6v8.4H9.1L4.5 18V5.4Zm14.2 1.5h2.2v7.2h-2.2z",
+  diplomacy: "M6 4.5h7.6v10.6H8.2L6 17.4V4.5Zm9.2 3.2h3.2v8.2h-3.2zM8 19.2h11.4v1.6H8z",
+  cyber: "M8 5.4h8v2.1H8V5.4ZM5.5 9h13v10.2H5.5V9Zm3 2.4v5.2h7v-5.2h-7Zm1.4 1.5h1.8v2.1H9.9zm2.7 0h1.8v2.1h-1.8z",
+  claim: "M12 3.2a8.8 8.8 0 1 1 0 17.6 8.8 8.8 0 0 1 0-17.6Zm0 3.2a5.6 5.6 0 1 0 0 11.2 5.6 5.6 0 0 0 0-11.2Z",
+  media: "M5 6.5h14v11H5V6.5Zm4.1 2.4 6.4 3.1-6.4 3.1V8.9Z"
+};
+
+const MARKER_EVENODD = new Set(["alert", "air-defense", "aid", "claim", "media"]);
+
 function markerGlyph(icon) {
-  const paths = {
-    ship: '<path fill="currentColor" d="M4 14.5 6.2 9h11.6L20 14.5v1.2H4v-1.2Zm2.2 2.2h2.1V19H6.2v-2.3Zm9.5 0h2.1V19h-2.1v-2.3ZM9 5.5h6l.8 2.5H8.2L9 5.5Z"/>',
-    drone: '<path fill="currentColor" d="M6 7.2a2.2 2.2 0 1 1 .4 4.4H9l2 2-2 2h-2.6a2.2 2.2 0 1 1-.4-4.4H8l1.2-1.2L8 8.8H6.4A2.2 2.2 0 0 1 6 7.2Zm12 0a2.2 2.2 0 1 1-.4 4.4H16l-1.2 1.2L16 14h1.6a2.2 2.2 0 1 1 .4 4.4A2.2 2.2 0 0 1 16 14.8H15l-2-2 2-2h1.6A2.2 2.2 0 0 1 18 7.2ZM11 11h2v2h-2v-2Z"/>',
-    missile: '<path fill="currentColor" d="M13 3.5c2.8 1.2 5.2 4.6 5.2 8.2 0 1.2-.2 2.2-.5 3.1L14 13.2V11h-2v3.4l-4.2 2.6c.2 1.4.8 2.4 1.7 3 .6-1.6 2-2.8 3.5-3.2l2.7 2.7c-1.6.6-3.4.8-5 .4-2-.5-3.4-1.8-4.2-3.6L4 18.5v-2l3.2-2C6.4 12.2 6 10.4 6 8.8 6 6.2 7.6 4.2 9.4 3.2L13 3.5Z"/>',
-    blast: '<path fill="currentColor" d="M12 2.8 13.4 7l4.4-1.2-2 4.1 4.2 1.6-4.2 1.2 2.2 4-4.4-.8L12 20.2 10.4 16l-4.4.6 2.2-4-4.2-1.2 4.2-1.6-2-4.1L10.6 7 12 2.8Z"/>',
-    alert: '<path fill="currentColor" d="M12 3.2 21 19.2H3L12 3.2Zm0 5.2-.1 5.2h.2L12 8.4Zm0 7.2a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z"/>',
-    ground: '<path fill="currentColor" d="M12 3.5 5 6.4v5.2c0 4.1 2.8 7.2 7 8.9 4.2-1.7 7-4.8 7-8.9V6.4L12 3.5Zm0 2.3 5 2.2v3.4c0 2.8-1.8 5.1-5 6.6-3.2-1.5-5-3.8-5-6.6V8l5-2.2Z"/>',
-    protest: '<path fill="currentColor" d="M8 10.5a1.7 1.7 0 1 1 0-3.4 1.7 1.7 0 0 1 0 3.4Zm4.2-.4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm4.1.5a1.6 1.6 0 1 1 0-3.2 1.6 1.6 0 0 1 0 3.2ZM4.8 18.8c.4-2.4 2-3.8 4-3.8 1.1 0 2 .4 2.7 1.1.6-.8 1.6-1.3 2.8-1.3 2.2 0 3.6 1.5 4 3.9h-2c-.3-1.3-1-2-2-2s-1.7.6-2 1.6l-.8 1.6H9.2c-.4-1.2-1.1-1.8-2-1.8-.9 0-1.5.6-1.8 1.7h-2.6Z"/>',
-    cyber: '<path fill="currentColor" d="M7 6.5h10v2H7v-2Zm-1 3.5h12v8H6v-8Zm2 2v4h8v-4H8Zm1.5 1.2h2v1.6h-2v-1.6Zm3 0h2v1.6h-2v-1.6Z"/>',
-    fire: '<path fill="currentColor" d="M12 3s3.2 3.2 3.2 6.1c0 1.2-.5 2.1-1.2 2.8.2-1.6-1-2.6-1-2.6s-2.8 2-2.8 4.4c0 2.6 2 4.5 4.6 4.5 3.2 0 5.4-2.6 5.4-6.1C20.2 7.4 12 3 12 3ZM8.2 14.2c0 2.4 1.8 4.6 4.3 4.6.4 0 .7 0 1-.1-2 .2-3.6-1.2-3.6-3.1 0-1.4.8-2.6 1.5-3.4-1.8.8-3.2 2.2-3.2 2Z"/>',
-    statement: '<path fill="currentColor" d="M5 6.5h10.5v7H8.2L5 16.2V6.5Zm12 .8h2v7h-2v-7Z"/>',
-    claim: '<path fill="currentColor" d="M12 5.2a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Zm0 2.2a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Z"/>'
-  };
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[icon] || paths.claim}</svg>`;
+  const path = MARKER_PATHS[icon] || MARKER_PATHS.claim;
+  const evenodd = MARKER_EVENODD.has(icon) ? ' fill-rule="evenodd"' : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15" fill="#ffffff" aria-hidden="true"><path${evenodd} d="${path}"/></svg>`;
 }
 
 function fanOverlappingMarkers(markerItems) {
