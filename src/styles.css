@@ -1064,7 +1064,8 @@ input[type="radio"] {
 
 .news-live-button {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: 48px 28px minmax(0, 1fr);
+  align-items: start;
   gap: 10px;
   width: 100%;
   padding: 12px 12px 4px;
@@ -1073,6 +1074,28 @@ input[type="radio"] {
   color: inherit;
   text-align: left;
 }
+
+
+.feed-type-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  flex: 0 0 26px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--marker-color, #475569);
+  color: #ffffff;
+}
+
+.feed-type-icon svg,
+.icon-marker svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: #ffffff;
+}
+
 
 .news-live-button time {
   color: var(--text);
@@ -4652,8 +4675,10 @@ body.public-map .feed-type-icon {
   width: 26px;
   height: 26px;
   place-items: center;
+  flex: 0 0 26px;
+  overflow: hidden;
   border-radius: 999px;
-  background: var(--marker-color);
+  background: var(--marker-color, #475569);
   color: #ffffff;
 }
 
@@ -4662,6 +4687,7 @@ body.public-map .icon-marker svg {
   width: 15px;
   height: 15px;
   display: block;
+  fill: #ffffff;
 }
 
 body.public-map .news-live-sources,
@@ -4716,9 +4742,13 @@ body.public-map .news-live-card.is-active {
 
 body.public-map .icon-marker,
 body.public-map .incident-cluster {
+  display: grid;
+  place-items: center;
   width: 30px;
   height: 30px;
   border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--marker-color, #475569);
   color: #ffffff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.35), 0 6px 14px rgba(15, 23, 42, 0.18);
 }

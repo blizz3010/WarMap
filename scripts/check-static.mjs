@@ -764,6 +764,18 @@ if (PRIMARY_THEATERS.map((theater) => theater.label).join("|") !== "Iran|Israel-
 if (!appSource.includes("PRIMARY_THEATERS")) {
   throw new Error("Expected primary region tabs for the conflict map");
 }
+if (!appSource.includes("function markerGlyph(") || !appSource.includes('class="feed-type-icon"') || !appSource.includes("const MARKER_PATHS")) {
+  throw new Error("Expected News Live cards to render an inline type icon");
+}
+if (!stylesSource.includes(".feed-type-icon") || !stylesSource.includes("var(--marker-color, #475569)")) {
+  throw new Error("Expected feed type icons to use a visible marker color with a fallback");
+}
+for (const eventType of Object.values(eventTypes)) {
+  const icon = eventType.icon;
+  if (!appSource.includes(`${icon}: "M`) && !appSource.includes(`"${icon}": "M`)) {
+    throw new Error(`Expected a marker glyph path for event icon "${icon}"`);
+  }
+}
 
 const newsNow = new Date("2026-11-09T18:00:00.000Z");
 const newsFeed = buildNewsLiveFeed({
